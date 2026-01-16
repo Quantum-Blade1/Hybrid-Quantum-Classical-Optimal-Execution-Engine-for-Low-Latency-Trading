@@ -6,6 +6,9 @@
 > **🚀 [READ THIS FIRST: 10 Extreme Performance Use Cases](EXTREME_CAPABILITIES.md)**  
 > *Discover how this system outperforms traditional algorithms in Flash Crashes, HFT Evasion, and Massive Block Trades.*
 
+> **🧠 [Creator's Insights & Deep-Dive FAQ](creator_docs/)**
+> *Read the Founder's candid thoughts on the architecture and the Top 30 technical questions (with proofs).*
+
 A research-grade hybrid architecture for optimal trade execution, combining low-latency classical execution with quantum-inspired optimization (QUBO/QAOA) to minimize implementation shortfall.
 
 ![Architecture](figure1_architecture.png)
