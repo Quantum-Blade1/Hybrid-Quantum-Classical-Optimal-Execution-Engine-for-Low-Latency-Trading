@@ -560,9 +560,23 @@ def create_visualization(
     plt.suptitle('Hybrid Quantum-Classical Trading Execution Demo\n50,000 Shares over 60 Minutes',
                  fontsize=14, fontweight='bold')
     
-    plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    print(f"Dashboard saved to: {save_path}")
-    plt.show()
+    try:
+        # Try high quality first
+        plt.savefig(save_path, dpi=100, bbox_inches='tight')
+        print(f"Dashboard saved to: {save_path}")
+    except MemoryError:
+        print("Warning: MemoryError during high-res plot save. Retrying with low-res...")
+        try:
+            plt.savefig(save_path, dpi=72, bbox_inches='tight')
+            print(f"Dashboard saved (Low Res) to: {save_path}")
+        except Exception as e:
+            print(f"Error saving plot: {e}")
+    except Exception as e:
+        print(f"Error generating visualization: {e}")
+    finally:
+        plt.close(fig) # Important: Release memory
+    
+    # plt.show() # skipped for headless safety
 
 
 # =============================================================================
