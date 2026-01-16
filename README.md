@@ -23,6 +23,16 @@ A research-grade hybrid architecture for optimal trade execution, combining low-
 *   **Robustness**: Built-in resilience against solver timeouts and crashes with exponential backoff and classical fallback.
 *   **Advanced Analytics**: Implementation Shortfall decomposition (Delay, Impact, Timing Risk).
 
+## 💻 System Requirements
+
+*   **OS**: Windows 10/11, Linux (Ubuntu 20.04+), or macOS (M1/Intel).
+*   **Python**: Version 3.9 or higher (3.10+ recommended).
+*   **RAM**: Minimum 8GB (16GB recommended for heavy simulations).
+*   **CPU**: Multi-core processor (Hybrid engine is multi-threaded).
+*   **Optional**:
+    *   **GPU**: For Qiskit Aer GPU support (CUDA 11+).
+    *   **IBMQ Account**: For running on real Quantum Hardware.
+
 ## 🛠️ Installation
 
 ```bash
