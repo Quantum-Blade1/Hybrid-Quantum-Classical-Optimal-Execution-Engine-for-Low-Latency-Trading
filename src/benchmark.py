@@ -584,7 +584,10 @@ def run_benchmark_demo():
         SABenchmarkSolver(num_sweeps=500),
         QASMSimulatorSolver(shots=2000, p=1),
         QASMSimulatorSolver(shots=2000, p=2),
+        QASMSimulatorSolver(shots=2000, p=2),
         StatevectorSolver(p=1),
+        SimulatedDQCSolver(workers=4),
+        SimulatedDQCSolver(workers=16),
     ]
     
     # Check Gurobi
