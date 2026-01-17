@@ -95,5 +95,37 @@ $$ |\psi(\gamma, \beta)\rangle = e^{-i\beta H_B} e^{-i\gamma H_C} \dots e^{-i\be
 
 ---
 
+## 📐 Appendix: Key Mathematical Concepts Used
+
+### 1. Linear Algebra (The Core)
+*   **Matrix Multiplication**: Used to calculate the cost energy ($x^T Q x$).
+*   **Symmetric Matrices**: The $Q$ matrix must be symmetric ($Q_{ij} = Q_{ji}$) for QUBO solvers.
+*   **Eigenvalues & Eigenvectors**: In Quantum Mechanics, the "optimal solution" is the eigenvector with the lowest eigenvalue (Ground State) of the Hamiltonian matrix.
+*   **Hilbert Space**: The complex vector space where quantum states $|\psi\rangle$ live ($2^N$ dimensions).
+
+### 2. Optimization Theory
+*   **Combinatorial Optimization**: Solving problems where variables are discrete (0 or 1).
+*   **Lagrangian Multipliers (Penalty Method)**: Converting "hard constraints" ($\sum x = S$) into "soft penalties" in the objective function.
+*   **Heuristics**: Algorithms like **Simulated Annealing** that find "good enough" solutions when the perfect one takes too long.
+*   **Gradient Descent**: Used in QAOA to find the optimal angles $(\beta, \gamma)$ for the quantum circuit.
+
+### 3. Statistics & Stochastic Calculus
+*   **Geometric Brownian Motion (GBM)**: The math used to simulate stock price paths ($dS_t = \mu S_t dt + \sigma S_t dW_t$).
+*   **Variance & Covariance**: Used to model **Timing Risk**. The "Risk" term in the objective function basically minimizes the variance of the execution schedule.
+*   **Expected Value**: We optimize for the *Expected* Implementation Shortfall.
+
+### 4. Quantum Physics / Mechanics
+*   **Ising Model**: A physics model of magnetism used to map the problem to qubits.
+*   **Hamiltonians**: The total energy operator of the system.
+    *   **Cost Hamiltonian ($H_C$)**: Encodes the problem.
+    *   **Mixer Hamiltonian ($H_M$)**: Helps explore the solution space.
+*   **Adiabatic Theorem**: The proof that if you evolve a quantum system slowly enough, it stays in its ground state (finds the answer).
+
+### 5. Financial Mathematics
+*   **Market Impact Models**: Specifically the **Square-Root Law** (Impact $\propto \sqrt{\text{Volume}}$).
+*   **Almgren-Chriss Framework**: The fundamental differential equations for optimal execution strategies.
+
+---
+
 **Summary:**
 This project is not just "coding." It is translating **Financial Theory** (Almgren-Chriss) into **Statistical Physics** (Ising Model), solving it with **Quantum Mechanics** (QAOA/Annealing), and executing it on **Software Engineering** (AsyncIO).
