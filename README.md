@@ -6,12 +6,12 @@
 > **🚀 [READ THIS FIRST: 10 Extreme Performance Use Cases](EXTREME_CAPABILITIES.md)**  
 > *Discover how this system outperforms traditional algorithms in Flash Crashes, HFT Evasion, and Massive Block Trades.*
 
-> **🧠 [Creator's Insights & Deep-Dive FAQ](creator_docs/)**
+> **🧠 [Creator's Insights & Deep-Dive FAQ](docs/)**
 > *Read the Founder's candid thoughts on the architecture and the Top 30 technical questions (with proofs).*
 
 A research-grade hybrid architecture for optimal trade execution, combining low-latency classical execution with quantum-inspired optimization (QUBO/QAOA) to minimize implementation shortfall.
 
-![Architecture](figure1_architecture.png)
+![Architecture](assets/figure1_architecture.png)
 
 ## 🚀 Key Features
 
@@ -56,7 +56,7 @@ streamlit run src/dashboard.py
 ### 2. Headless Demo
 Run a standard execution simulation:
 ```bash
-python hybrid_demo.py
+python examples/hybrid_demo.py
 ```
 
 ### 3. Walk-Forward Analysis
@@ -86,16 +86,20 @@ The system operates on two timescales:
 
 ```
 c:\Engine\
-├── src/
-│   ├── hybrid_async.py        # Core Hybrid Controller & Async Engine
-│   ├── qubo_execution.py      # QUBO Problem Formulation
-│   ├── qubo_solvers.py        # SA, Brute Force, Qiskit Solvers
-│   ├── dashboard.py           # Streamlit UI
-│   ├── market_data.py         # GBM & Volume Profile Simulator
-│   ├── optimizer_resilience.py # Fault Tolerance Layer
+├── src/               # Core Source Code
+│   ├── hybrid_async.py
+│   ├── qubo_execution.py
 │   └── ...
-├── tests/                     # Unit & Integration Tests
-├── results_paper.md           # Research Summary
+├── examples/          # Demo Scripts
+│   ├── hybrid_demo.py
+│   ├── solver_demo.py
+│   └── ...
+├── docs/              # Documentation & Founder's Notes
+│   ├── CREATOR_THOUGHTS.md
+│   └── MATHEMATICAL_MODEL.md
+├── assets/            # Images & Figures
+├── tests/             # Unit Tests
+├── results_paper.md   # Research Summary
 └── requirements.txt
 ```
 

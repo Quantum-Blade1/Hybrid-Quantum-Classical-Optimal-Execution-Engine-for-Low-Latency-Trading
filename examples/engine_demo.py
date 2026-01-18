@@ -7,7 +7,9 @@ Demonstrates the modular execution engine with comprehensive reporting.
 import sys
 from datetime import datetime
 
-sys.path.insert(0, ".")
+import os
+# Add src to path for imports
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.market_data import MarketDataSimulator, MarketParams
 from src.execution_engine import ExecutionEngine, ParentOrder, OrderSide

@@ -8,7 +8,9 @@ shows how to interpret solutions.
 import sys
 import numpy as np
 
-sys.path.insert(0, ".")
+import os
+# Add src to path for imports
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.qubo_execution import (
     QUBOConfig,

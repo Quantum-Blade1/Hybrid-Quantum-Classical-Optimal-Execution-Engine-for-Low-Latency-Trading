@@ -8,7 +8,9 @@ on the execution QUBO with N=8 time slices.
 import sys
 import numpy as np
 
-sys.path.insert(0, ".")
+import os
+# Add src to path for imports
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.qubo_execution import QUBOConfig, ExecutionQUBO
 from src.qubo_solvers import (

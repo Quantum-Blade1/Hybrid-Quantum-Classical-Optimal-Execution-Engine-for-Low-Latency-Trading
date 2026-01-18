@@ -10,8 +10,9 @@ from datetime import datetime
 
 import numpy as np
 
+import os
 # Add src to path for imports
-sys.path.insert(0, ".")
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.market_data import MarketDataSimulator, MarketParams
 from src.vwap_strategy import VWAPStrategy

@@ -40,7 +40,7 @@ In "Walk-Forward" backtesting (Phase 7.3):
 - **Market Stress**: Maintained execution consistency during simulated "Flash Crash" scenarios (-5% price drop in 1 min).
 
 ## 5. Visual Analysis
-(Refer to generated figures in `src/generate_academic_plots.py`)
+(Refer to generated figures in `assets/` folder)
 
 - **Figure 1 (Architecture)**: Demonstrates the robust separation of concerns critical for production deployment.
 - **Figure 2 (Performance)**: Shows the Hybrid trajectory successfully deviating from TWAP to capture liquidity pockets.

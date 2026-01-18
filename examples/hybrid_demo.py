@@ -20,6 +20,11 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.WARNING)
 
+import sys
+import os
+# Add project root to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 # Local imports
 from src.market_data import MarketDataSimulator, MarketParams
 from src.execution_engine import ExecutionEngine, ParentOrder, OrderSide
