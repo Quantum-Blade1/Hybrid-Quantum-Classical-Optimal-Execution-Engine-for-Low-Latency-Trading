@@ -3,17 +3,17 @@
 ![Status](https://img.shields.io/badge/Status-Project%20Complete-success)
 ![Quantum](https://img.shields.io/badge/Quantum-Ready-blueviolet)
 
-> **🚀 [READ THIS FIRST: 10 Extreme Performance Use Cases](EXTREME_CAPABILITIES.md)**  
+> ** [READ THIS FIRST: 10 Extreme Performance Use Cases](EXTREME_CAPABILITIES.md)**  
 > *Discover how this system outperforms traditional algorithms in Flash Crashes, HFT Evasion, and Massive Block Trades.*
 
-> **🧠 [Creator's Insights & Deep-Dive FAQ](docs/)**
+> ** [Creator's Insights & Deep-Dive FAQ](docs/)**
 > *Read the Founder's candid thoughts on the architecture and the Top 30 technical questions (with proofs).*
 
 A research-grade hybrid architecture for optimal trade execution, combining low-latency classical execution with quantum-inspired optimization (QUBO/QAOA) to minimize implementation shortfall.
 
 ![Architecture](assets/figure1_architecture.png)
 
-## 🚀 Key Features
+##  Key Features
 
 *   **Hybrid Architecture**: Decoupled "Fast Path" (Execution Engine, <10ms delay) and "Slow Path" (Quantum/Classical Optimizer, 1-5s update).
 *   **Asynchronous Optimization**: Trading never blocks; execution policy is updated in real-time via a thread-safe queue.
@@ -23,7 +23,7 @@ A research-grade hybrid architecture for optimal trade execution, combining low-
 *   **Robustness**: Built-in resilience against solver timeouts and crashes with exponential backoff and classical fallback.
 *   **Advanced Analytics**: Implementation Shortfall decomposition (Delay, Impact, Timing Risk).
 
-## 💻 System Requirements
+##  System Requirements
 
 *   **OS**: Windows 10/11, Linux (Ubuntu 20.04+), or macOS (M1/Intel).
 *   **Python**: Version 3.9 or higher (3.10+ recommended).
@@ -33,7 +33,7 @@ A research-grade hybrid architecture for optimal trade execution, combining low-
     *   **GPU**: For Qiskit Aer GPU support (CUDA 11+).
     *   **IBMQ Account**: For running on real Quantum Hardware.
 
-## 🛠️ Installation
+##  Installation
 
 ```bash
 # Clone repository
@@ -44,7 +44,7 @@ cd quantum-trading-engine
 pip install -r requirements.txt
 ```
 
-## ⚡ Quick Start
+##  Quick Start
 
 ### 1. Interactive Dashboard (Recommended)
 Launch the real-time control center:
@@ -65,13 +65,13 @@ Run the rolling window backtest:
 python -m src.walk_forward
 ```
 
-## 🏗️ System Architecture
+##  System Architecture
 
 The system operates on two timescales:
 1.  **Fast Loop (100ms)**: The `ExecutionEngine` consumes tick data and executes orders based on the current *Execution Policy*.
 2.  **Slow Loop (1s+)**: The `HybridController` aggregates market state, formulates a QUBO problem, solves it (SA/Quantum), and pushes a new *Execution Policy*.
 
-## 📊 Benchmarks & Results
+##  Benchmarks & Results
 
 | Metric | VWAP | TWAP | Hybrid (Quantum) |
 | :--- | :--- | :--- | :--- |
@@ -82,7 +82,7 @@ The system operates on two timescales:
 
 *See `results_paper.md` for detailed research findings.*
 
-## 📂 Project Structure
+##  Project Structure
 
 ```
 c:\Engine\
@@ -103,5 +103,5 @@ c:\Engine\
 └── requirements.txt
 ```
 
-## 📜 License
+##  License
 Research Use Only.
