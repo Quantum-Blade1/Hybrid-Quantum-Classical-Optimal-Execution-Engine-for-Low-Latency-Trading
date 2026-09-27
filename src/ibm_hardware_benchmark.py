@@ -289,13 +289,21 @@ def solve_with_ibm_hardware(
     maxiter: int = 30,
     token: str = None,
     backend_name: str = "ibm_brisbane",
-    seed: int = 42
+    seed: int = 42,
+    instance: str = None,
+    channel: str = None,
 ) -> Tuple[SingleRunResult, Dict]:
     """
     Solve QUBO with QAOA on real IBM quantum hardware.
 
-    Requires a valid IBM Quantum API token. Uses the SamplerV2 primitive
-    from qiskit-ibm-runtime for efficient execution.
+    Supports both IBM Quantum Platform (channel="ibm_quantum") and
+    IBM Cloud Quantum (channel="ibm_cloud" with instance CRN).
+
+    Args:
+        token: IBM API key/token
+        backend_name: Backend processor name
+        instance: IBM Cloud CRN (required for ibm_cloud channel)
+        channel: "ibm_quantum" or "ibm_cloud" (auto-detected from instance)
     """
     from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2
     from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
@@ -308,7 +316,14 @@ def solve_with_ibm_hardware(
     rng = np.random.default_rng(seed)
     start = time.time()
 
-    service = QiskitRuntimeService(channel="ibm_quantum", token=token)
+    if channel is None:
+        channel = "ibm_cloud" if instance else "ibm_quantum"
+
+    service_kwargs = {"channel": channel, "token": token}
+    if instance:
+        service_kwargs["instance"] = instance
+
+    service = QiskitRuntimeService(**service_kwargs)
     backend = service.backend(backend_name)
 
     backend_props = {
@@ -396,13 +411,21 @@ def solve_with_ibm_hardware(
 
 def run_hardware_benchmark(
     token: Optional[str] = None,
-    config: Optional[HardwareBenchmarkConfig] = None
+    config: Optional[HardwareBenchmarkConfig] = None,
+    instance: Optional[str] = None,
+    channel: Optional[str] = None,
 ) -> HardwareBenchmarkResult:
     """
     Run the full IBM hardware benchmark suite.
 
     When token is None, runs simulator-only benchmarks (ideal + noisy).
     When token is provided, also runs on real IBM quantum hardware.
+
+    Args:
+        token: IBM API key (ibm_cloud) or token (ibm_quantum)
+        config: Benchmark configuration
+        instance: IBM Cloud CRN for ibm_cloud channel
+        channel: "ibm_quantum" or "ibm_cloud" (auto-detected from instance)
     """
     if config is None:
         config = HardwareBenchmarkConfig()
@@ -463,7 +486,8 @@ def run_hardware_benchmark(
                             Q, opt_energy, p=p_depth, shots=config.shots,
                             maxiter=min(config.optimizer_maxiter, 30),
                             token=token, backend_name=config.backend_name,
-                            seed=run_seed
+                            seed=run_seed, instance=instance,
+                            channel=channel,
                         )
                         hw.run_id = run_id
                         result.runs.append(hw)
@@ -781,7 +805,12 @@ def generate_hardware_figures(
     return saved
 
 
-def run_quick_benchmark(output_dir: str = "figures") -> HardwareBenchmarkResult:
+def run_quick_benchmark(
+    output_dir: str = "figures",
+    token: Optional[str] = None,
+    instance: Optional[str] = None,
+    channel: Optional[str] = None,
+) -> HardwareBenchmarkResult:
     """Quick benchmark for testing (smaller parameters)."""
     config = HardwareBenchmarkConfig(
         num_qubits_range=[4, 6, 8],
@@ -791,10 +820,18 @@ def run_quick_benchmark(output_dir: str = "figures") -> HardwareBenchmarkResult:
         sa_sweeps=500,
         num_runs_per_config=3,
     )
-    result = run_hardware_benchmark(token=None, config=config)
+    result = run_hardware_benchmark(
+        token=token, config=config,
+        instance=instance, channel=channel,
+    )
     generate_hardware_figures(result, output_dir=output_dir)
     return result
 
 
 if __name__ == "__main__":
-    result = run_quick_benchmark()
+    import os
+    ibm_token = os.environ.get("IBM_QUANTUM_TOKEN") or os.environ.get("IBM_CLOUD_API_KEY")
+    ibm_instance = os.environ.get("IBM_CLOUD_CRN")
+    result = run_quick_benchmark(
+        token=ibm_token, instance=ibm_instance,
+    )
