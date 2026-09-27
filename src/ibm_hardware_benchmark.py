@@ -32,6 +32,22 @@ from collections import Counter
 logger = logging.getLogger(__name__)
 
 
+def _extract_counts(pub_result):
+    """Extract measurement counts from a SamplerV2 PubResult, handling different DataBin attribute names."""
+    data = pub_result.data
+    for attr in ('meas', 'c', 'cr'):
+        if hasattr(data, attr):
+            return getattr(data, attr).get_counts()
+    for attr in dir(data):
+        if not attr.startswith('_'):
+            obj = getattr(data, attr)
+            if hasattr(obj, 'get_counts'):
+                return obj.get_counts()
+    raise AttributeError(
+        f"No measurement data found in DataBin. Attributes: {[a for a in dir(data) if not a.startswith('_')]}"
+    )
+
+
 @dataclass
 class HardwareBenchmarkConfig:
     """Configuration for IBM hardware benchmarks."""
@@ -347,7 +363,7 @@ def solve_with_ibm_hardware(
         result = job.result()
         pub_result = result[0]
 
-        counts = pub_result.data.meas.get_counts()
+        counts = _extract_counts(pub_result)
 
         exp_energy = 0.0
         total = sum(counts.values())
@@ -375,7 +391,7 @@ def solve_with_ibm_hardware(
     job = sampler.run([isa_circuit], shots=shots * 5)
     result = job.result()
     pub_result = result[0]
-    counts = pub_result.data.meas.get_counts()
+    counts = _extract_counts(pub_result)
 
     best_energy = float('inf')
     best_bs = None
