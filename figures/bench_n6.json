@@ -78,19 +78,6 @@
     }
   },
   {
-    "solver": "QAOA_Hardware",
-    "num_qubits": 6,
-    "qaoa_depth": 1,
-    "energy": NaN,
-    "optimal_energy": -89.4,
-    "approximation_ratio": 0.0,
-    "solve_time_s": 0.0,
-    "success_probability": 0.0,
-    "run_id": 0,
-    "counts": {},
-    "error": "'Unable to retrieve instances. Please check that you are using a valid API token.'"
-  },
-  {
     "solver": "QAOA_Ideal",
     "num_qubits": 6,
     "qaoa_depth": 2,
@@ -155,19 +142,6 @@
       "101000": 166,
       "000101": 165
     }
-  },
-  {
-    "solver": "QAOA_Hardware",
-    "num_qubits": 6,
-    "qaoa_depth": 2,
-    "energy": NaN,
-    "optimal_energy": -89.4,
-    "approximation_ratio": 0.0,
-    "solve_time_s": 0.0,
-    "success_probability": 0.0,
-    "run_id": 0,
-    "counts": {},
-    "error": "'Unable to retrieve instances. Please check that you are using a valid API token.'"
   },
   {
     "solver": "SA",
@@ -248,19 +222,6 @@
     }
   },
   {
-    "solver": "QAOA_Hardware",
-    "num_qubits": 6,
-    "qaoa_depth": 1,
-    "energy": NaN,
-    "optimal_energy": -89.4,
-    "approximation_ratio": 0.0,
-    "solve_time_s": 0.0,
-    "success_probability": 0.0,
-    "run_id": 1,
-    "counts": {},
-    "error": "'Unable to retrieve instances. Please check that you are using a valid API token.'"
-  },
-  {
     "solver": "QAOA_Ideal",
     "num_qubits": 6,
     "qaoa_depth": 2,
@@ -325,19 +286,6 @@
       "000100": 163,
       "101110": 161
     }
-  },
-  {
-    "solver": "QAOA_Hardware",
-    "num_qubits": 6,
-    "qaoa_depth": 2,
-    "energy": NaN,
-    "optimal_energy": -89.4,
-    "approximation_ratio": 0.0,
-    "solve_time_s": 0.0,
-    "success_probability": 0.0,
-    "run_id": 1,
-    "counts": {},
-    "error": "'Unable to retrieve instances. Please check that you are using a valid API token.'"
   },
   {
     "solver": "SA",
@@ -418,19 +366,6 @@
     }
   },
   {
-    "solver": "QAOA_Hardware",
-    "num_qubits": 6,
-    "qaoa_depth": 1,
-    "energy": NaN,
-    "optimal_energy": -89.4,
-    "approximation_ratio": 0.0,
-    "solve_time_s": 0.0,
-    "success_probability": 0.0,
-    "run_id": 2,
-    "counts": {},
-    "error": "'Unable to retrieve instances. Please check that you are using a valid API token.'"
-  },
-  {
     "solver": "QAOA_Ideal",
     "num_qubits": 6,
     "qaoa_depth": 2,
@@ -499,14 +434,17 @@
   {
     "solver": "QAOA_Hardware",
     "num_qubits": 6,
-    "qaoa_depth": 2,
-    "energy": NaN,
+    "qaoa_depth": 1,
+    "energy": -89.4,
     "optimal_energy": -89.4,
-    "approximation_ratio": 0.0,
-    "solve_time_s": 0.0,
+    "approximation_ratio": 1.0,
+    "solve_time_s": 363.8,
     "success_probability": 0.0,
-    "run_id": 2,
+    "run_id": 0,
     "counts": {},
-    "error": "'Unable to retrieve instances. Please check that you are using a valid API token.'"
+    "backend_properties": {
+      "name": "ibm_fez",
+      "num_qubits": 156
+    }
   }
 ]

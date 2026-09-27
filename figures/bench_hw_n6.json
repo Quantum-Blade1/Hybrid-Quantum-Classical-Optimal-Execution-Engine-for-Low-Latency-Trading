@@ -1,0 +1,18 @@
+[
+  {
+    "solver": "QAOA_Hardware",
+    "num_qubits": 6,
+    "qaoa_depth": 1,
+    "energy": -89.4,
+    "optimal_energy": -89.4,
+    "approximation_ratio": 1.0,
+    "solve_time_s": 363.8,
+    "success_probability": 0.0,
+    "run_id": 0,
+    "counts": {},
+    "backend_properties": {
+      "name": "ibm_fez",
+      "num_qubits": 156
+    }
+  }
+]

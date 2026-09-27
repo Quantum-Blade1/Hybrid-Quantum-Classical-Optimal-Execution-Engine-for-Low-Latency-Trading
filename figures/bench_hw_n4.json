@@ -1,0 +1,50 @@
+[
+  {
+    "solver": "QAOA_Hardware",
+    "num_qubits": 4,
+    "qaoa_depth": 1,
+    "energy": -39.65,
+    "optimal_energy": -39.65,
+    "approximation_ratio": 1.0,
+    "solve_time_s": 211.3,
+    "success_probability": 0.0,
+    "run_id": 0,
+    "counts": {},
+    "backend_properties": {
+      "name": "ibm_fez",
+      "num_qubits": 156
+    }
+  },
+  {
+    "solver": "QAOA_Hardware",
+    "num_qubits": 4,
+    "qaoa_depth": 1,
+    "energy": -39.65,
+    "optimal_energy": -39.65,
+    "approximation_ratio": 1.0,
+    "solve_time_s": 191.2,
+    "success_probability": 0.0,
+    "run_id": 1,
+    "counts": {},
+    "backend_properties": {
+      "name": "ibm_fez",
+      "num_qubits": 156
+    }
+  },
+  {
+    "solver": "QAOA_Hardware",
+    "num_qubits": 4,
+    "qaoa_depth": 1,
+    "energy": -39.65,
+    "optimal_energy": -39.65,
+    "approximation_ratio": 1.0,
+    "solve_time_s": 232.5,
+    "success_probability": 0.0,
+    "run_id": 2,
+    "counts": {},
+    "backend_properties": {
+      "name": "ibm_fez",
+      "num_qubits": 156
+    }
+  }
+]
