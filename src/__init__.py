@@ -71,6 +71,13 @@ from .hft_pipeline import (
     HFTPipelineConfig,
     HFTExecutionResult,
 )
+from .ibm_hardware_benchmark import (
+    HardwareBenchmarkConfig,
+    HardwareBenchmarkResult,
+    run_hardware_benchmark,
+    run_quick_benchmark,
+    generate_hardware_figures,
+)
 
 __version__ = "1.0.0"
 __all__ = [
@@ -133,6 +140,12 @@ __all__ = [
     "HFTQuantumPipeline",
     "HFTPipelineConfig",
     "HFTExecutionResult",
+    # IBM Hardware Benchmark
+    "HardwareBenchmarkConfig",
+    "HardwareBenchmarkResult",
+    "run_hardware_benchmark",
+    "run_quick_benchmark",
+    "generate_hardware_figures",
     # Utilities
     "ExecutionMetrics",
     "ExecutionSlice",
