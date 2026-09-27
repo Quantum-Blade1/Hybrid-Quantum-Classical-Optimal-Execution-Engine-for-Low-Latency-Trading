@@ -1,9 +1,9 @@
 """
-Quantum-Classical Trading Execution System
-Phase 1: Classical Baseline + Phase 2: Quantum Optimization
+Hybrid Quantum-Classical Optimal Execution Engine for Low-Latency Trading
 
-Core modules for market data simulation, execution strategies, 
-execution engine, and quantum optimization formulation.
+Core modules for market data simulation, execution strategies,
+execution engine, quantum optimization, HFT microstructure analysis,
+adaptive risk management, and latency-decoupled architecture.
 """
 
 from .market_data import MarketDataSimulator, IntraDayPriceGenerator, VolumeProfileGenerator
@@ -41,7 +41,38 @@ from .qubo_integration import (
     plot_strategy_comparison
 )
 
-__version__ = "0.5.0"
+from .hft_microstructure import (
+    MicrostructureAnalyzer,
+    MicrostructureState,
+    KyleLambdaEstimator,
+    VPINEstimator,
+    AdverseSelectionModel,
+    QueuePositionModel,
+)
+from .adaptive_risk import (
+    AdaptiveRiskManager,
+    VolatilityEstimator,
+    RegimeState,
+    VolatilityRegime,
+    SpreadRegime,
+)
+from .hft_qubo import (
+    HFTQUBOConfig,
+    HFTExecutionQUBO,
+)
+from .latency_monitor import (
+    LatencyMonitor,
+    LatencySpan,
+    LatencyStats,
+    get_latency_monitor,
+)
+from .hft_pipeline import (
+    HFTQuantumPipeline,
+    HFTPipelineConfig,
+    HFTExecutionResult,
+)
+
+__version__ = "1.0.0"
 __all__ = [
     # Market Data
     "MarketDataSimulator",
@@ -77,6 +108,31 @@ __all__ = [
     "StrategyComparison",
     "run_integrated_comparison",
     "plot_strategy_comparison",
+    # HFT Microstructure
+    "MicrostructureAnalyzer",
+    "MicrostructureState",
+    "KyleLambdaEstimator",
+    "VPINEstimator",
+    "AdverseSelectionModel",
+    "QueuePositionModel",
+    # Adaptive Risk
+    "AdaptiveRiskManager",
+    "VolatilityEstimator",
+    "RegimeState",
+    "VolatilityRegime",
+    "SpreadRegime",
+    # HFT QUBO
+    "HFTQUBOConfig",
+    "HFTExecutionQUBO",
+    # Latency Monitor
+    "LatencyMonitor",
+    "LatencySpan",
+    "LatencyStats",
+    "get_latency_monitor",
+    # HFT Pipeline
+    "HFTQuantumPipeline",
+    "HFTPipelineConfig",
+    "HFTExecutionResult",
     # Utilities
     "ExecutionMetrics",
     "ExecutionSlice",

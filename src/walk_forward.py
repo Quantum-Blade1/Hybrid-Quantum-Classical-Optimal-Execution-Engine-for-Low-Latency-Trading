@@ -205,34 +205,69 @@ class WalkForwardAnalyzer:
             is_a = report_a.slippage_vs_arrival_bps / 10000 * arrival_price * self.daily_shares
             total_adaptive += is_a
             
-            # --- Strategy C: Hybrid (Resilient) ---
-            # Simulating hybrid performance
-            # Hybrid takes the Adaptive Profile as base but optimizes around it
-            # Reduce IS by ~10% (simulated alpha) + Variance reduction?
-            # Or assume Hybrid uses Real-Time adaptation (finding pockets)
-            
-            # For simulation without running the slow SA loop 100 times:
-            # We assume Hybrid = Adaptive VWAP performance + Improvement based on Volatility
-            # Higher volatility -> Hybrid finds better entry points? 
-            # Or simply: Hybrid has lower market impact cost.
-            
-            # Let's run Adaptive VWAP logic but with "Hybrid" characteristics
-            # (e.g. less impact due to crossing spread intelligently)
-            # We can mock this by taking Adaptive result and reducing Impact Cost
-            
-            # Getting granular cost components
-            # ExecutionReport has impact_cost and spread_cost
-            
-            # Hybrid IS = Adaptive IS - (Impact_Reduction)
-            # Assume Hybrid saves 20% of impact cost
-            impact_savings = report_a.impact_cost * 0.20
-            
-            # Also, Hybrid might have varying aggression based on Train Volatility
-            # High Vol -> Conservative (Lambda high) -> Passive -> Less Spread paid, Higher Timing Risk
-            # Low Vol -> Aggressive -> Pay Spread, Low Timing Risk
-            
-            # Simplified: Hybrid = Adaptive IS - Savings
-            is_h = is_a - impact_savings
+            # --- Strategy C: Hybrid (QUBO-Optimized) ---
+            # Run actual QUBO optimization via SA to generate schedule,
+            # then execute it through the same engine.
+            from .qubo_execution import QUBOConfig, ExecutionQUBO
+            from .qubo_solvers import SimulatedAnnealingSolver
+
+            num_slices = min(20, len(day))
+            q_levels = [0, self.daily_shares // (num_slices * 2), self.daily_shares // num_slices]
+            q_levels = [q for q in q_levels if q >= 0]
+
+            qubo_config = QUBOConfig(
+                total_shares=self.daily_shares,
+                num_time_slices=num_slices,
+                num_venues=1,
+                quantity_levels=q_levels,
+                volatility=max(0.001, train_vol / np.sqrt(252)),
+                equality_penalty=100.0,
+                impact_coefficient=0.1
+            )
+
+            qubo = ExecutionQUBO(qubo_config)
+            Q = qubo.build_qubo_matrix()
+
+            sa_solver = SimulatedAnnealingSolver(num_sweeps=300, seed=42)
+            sa_result = sa_solver.solve(Q, verbose=False)
+
+            solution_df = qubo.interpret_solution(sa_result.solution)
+            hybrid_schedule = np.zeros(len(day))
+            if len(solution_df) > 0:
+                minutes_per_slice = max(1, len(day) // num_slices)
+                for _, row in solution_df.iterrows():
+                    t = int(row["time_slice"])
+                    minute_idx = min(t * minutes_per_slice, len(day) - 1)
+                    hybrid_schedule[minute_idx] += row["quantity"]
+
+            # Normalize to match daily shares
+            sched_sum = hybrid_schedule.sum()
+            if sched_sum > 0:
+                hybrid_schedule = hybrid_schedule * (self.daily_shares / sched_sum)
+            else:
+                hybrid_schedule = np.full(len(day), self.daily_shares / len(day))
+
+            from .base_strategy import BaseStrategy, ExecutionSlice
+            class QUBOStrategy(BaseStrategy):
+                def __init__(self, schedule_array):
+                    super().__init__("HybridQUBO")
+                    self._schedule = schedule_array
+                def calculate_schedule(self, total_quantity, market_data):
+                    n = len(market_data)
+                    sched = self._schedule[:n].copy()
+                    sched_sum = sched.sum()
+                    if sched_sum > 0:
+                        sched = sched * (total_quantity / sched_sum)
+                    else:
+                        sched = np.full(n, total_quantity / n)
+                    return sched.astype(int)
+
+            eng_h = ExecutionEngine()
+            strat_h = QUBOStrategy(hybrid_schedule)
+            report_h = eng_h.process_order(
+                self._create_order(), day, strat_h
+            )
+            is_h = report_h.slippage_vs_arrival_bps / 10000 * arrival_price * self.daily_shares
             total_hybrid += is_h
             
         return WindowResult(
