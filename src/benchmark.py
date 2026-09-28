@@ -3,7 +3,6 @@ Hardware Comparison Benchmark
 
 Comprehensive benchmark comparing:
 - Quantum Simulators: QASM, Statevector
-- Real Quantum Hardware: IBM (placeholder)
 - Classical Solvers: Simulated Annealing, Brute Force, Gurobi (if available)
 
 Problem sizes: 4, 6, 8 qubits (execution slices)
@@ -586,8 +585,6 @@ def run_benchmark_demo():
         QASMSimulatorSolver(shots=2000, p=2),
         QASMSimulatorSolver(shots=2000, p=2),
         StatevectorSolver(p=1),
-        SimulatedDQCSolver(workers=4),
-        SimulatedDQCSolver(workers=16),
     ]
     
     # Check Gurobi

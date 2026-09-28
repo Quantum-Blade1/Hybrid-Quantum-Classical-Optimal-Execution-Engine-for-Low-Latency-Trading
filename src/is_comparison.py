@@ -1,7 +1,7 @@
 """
 IS Comparison Script
 
-Runs VWAP, TWAP, and Hybrid strategies.
+Runs VWAP and TWAP strategies.
 Calculates Implementation Shortfall for each.
 Generates stacked bar chart comparison.
 """
@@ -85,30 +85,7 @@ def run_is_comparison_demo():
     print(f"  TWAP IS: ${results['TWAP'].total_shortfall:,.0f}")
     
     # ---------------------------------------------------------
-    # 4. Run Hybrid
-    # ---------------------------------------------------------
-    print("\nRunning Hybrid...")
-    # Simulating Hybrid Execution (Impact Optimized)
-    # Hybrid typically achieves lower impact than TWAP but similar timing risk
-    
-    log_hybrid = log_twap.copy()
-    # Optimize: Reduce shares when spread/impact is high? 
-    # For demo, just add noise to prove we're analyzing a different schedule
-    np.random.seed(42)
-    noise = np.random.normal(0, 100, len(log_hybrid))
-    log_hybrid['shares'] = np.maximum(0, log_hybrid['shares'] + noise)
-    
-    # Re-simulated impact
-    # Use .values to ensure numpy array arithmetic without index alignment issues
-    log_hybrid['price'] = data.iloc[:len(log_hybrid)]['price'].values + \
-                          data.iloc[:len(log_hybrid)]['spread'].values/2 + \
-                          0.005 * np.sqrt(log_hybrid['shares'].values) # Lower impact coeff for hybrid
-                          
-    results['Hybrid'] = analyzer.analyze(log_hybrid, data)
-    print(f"  Hybrid IS: ${results['Hybrid'].total_shortfall:,.0f}")
-    
-    # ---------------------------------------------------------
-    # 5. Visualization
+    # 4. Visualization
     # ---------------------------------------------------------
     print("\nGenerating Chart...")
     plot_is_breakdown(results, "is_comparison.png")

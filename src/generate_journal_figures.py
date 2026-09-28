@@ -1,14 +1,18 @@
 """
 Comprehensive Benchmark & Figure Generation for Springer Journal Paper
 
-Generates 30 publication-quality figures (PDF, 300 DPI) covering:
+Generates publication-quality figures (PDF, 300 DPI) covering:
   1. System Architecture & QUBO Formulation  (Figs 1-4)
   2. Classical vs Quantum Solver Performance  (Figs 5-9)
-  3. Market Microstructure Analysis           (Figs 10-14)
+  3. Market Microstructure Analysis           (Figs 10-12)
   4. Adaptive Risk Aversion                   (Figs 15-18)
-  5. Execution Performance & Walk-Forward     (Figs 19-23)
-  6. Latency & HFT Pipeline                   (Figs 24-27)
-  7. IBM Hardware / Quantum-Specific           (Figs 28-30)
+  5. Execution Performance & Walk-Forward     (Figs 19-21)
+  6. HFT Pipeline                             (Fig 27)
+  7. Quantum-Specific                         (Fig 28)
+
+Figures 13, 14, 22-26, 29 and 30 were removed because they plotted
+hand-typed or randomly generated numbers rather than experiment output
+(see docs/CLAIMS_AUDIT.md). Numbering is kept to avoid renaming files.
 
 Springer formatting:
   - Single column: 3.5 in wide
@@ -669,71 +673,6 @@ def fig12_microstructure_dashboard():
     return save_fig(fig, "fig12_microstructure_dashboard.pdf")
 
 
-def fig13_adverse_selection_by_venue():
-    """Fig 13: Adverse selection cost comparison across venue types."""
-    np.random.seed(SEED)
-    venues = ['Lit Exchange', 'Dark Pool', 'ECN', 'Midpoint\nDark']
-    as_costs = [0.45, 0.12, 0.28, 0.08]
-    fill_probs = [0.95, 0.55, 0.82, 0.40]
-    info_leakage = [0.8, 0.15, 0.5, 0.05]
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7, 2.8))
-
-    x = np.arange(len(venues))
-    w = 0.25
-    b1 = ax1.bar(x - w, as_costs, w, label='Adverse Selection',
-                  color='#D32F2F', alpha=0.7, edgecolor='black', linewidth=0.5)
-    b2 = ax1.bar(x, fill_probs, w, label='Fill Probability',
-                  color='#4CAF50', alpha=0.7, edgecolor='black', linewidth=0.5)
-    b3 = ax1.bar(x + w, info_leakage, w, label='Info Leakage',
-                  color='#FF9800', alpha=0.7, edgecolor='black', linewidth=0.5)
-    ax1.set_xticks(x)
-    ax1.set_xticklabels(venues, fontsize=7)
-    ax1.set_ylabel("Normalized Score")
-    ax1.set_title("Venue Characteristics")
-    ax1.legend(fontsize=6)
-
-    effective_as = [a / f for a, f in zip(as_costs, fill_probs)]
-    bars = ax2.barh(venues, effective_as, color=['#D32F2F', '#4CAF50', '#FF9800', '#2196F3'],
-                     alpha=0.7, edgecolor='black', linewidth=0.5)
-    ax2.set_xlabel("Effective AS Cost (AS / Fill Prob)")
-    ax2.set_title("QUBO Venue Penalty Weight")
-
-    fig.tight_layout()
-    return save_fig(fig, "fig13_adverse_selection_venue.pdf")
-
-
-def fig14_order_flow_imbalance():
-    """Fig 14: Order flow imbalance and its effect on QUBO parameters."""
-    np.random.seed(SEED)
-    n = 500
-    imbalances = np.cumsum(np.random.randn(n) * 0.1)
-    imbalances = np.clip(imbalances / np.max(np.abs(imbalances)), -1, 1)
-
-    impact_mult = 1.0 + 0.5 * np.abs(imbalances)
-    timing_mult = 1.0 + 0.3 * imbalances ** 2
-
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.5, 4), sharex=True)
-
-    ax1.fill_between(range(n), imbalances, 0,
-                      where=imbalances >= 0, color='#4CAF50', alpha=0.4, label='Buy pressure')
-    ax1.fill_between(range(n), imbalances, 0,
-                      where=imbalances < 0, color='#D32F2F', alpha=0.4, label='Sell pressure')
-    ax1.set_ylabel("Order Imbalance")
-    ax1.set_title("Order Flow Imbalance")
-    ax1.legend(fontsize=7)
-
-    ax2.plot(impact_mult, color='#1976D2', linewidth=0.8, label='Impact multiplier')
-    ax2.plot(timing_mult, color='#F57C00', linewidth=0.8, label='Timing multiplier')
-    ax2.set_xlabel("Tick")
-    ax2.set_ylabel("QUBO Weight Multiplier")
-    ax2.set_title("Dynamic QUBO Parameter Adjustment")
-    ax2.legend(fontsize=7)
-
-    fig.tight_layout()
-    return save_fig(fig, "fig14_order_flow_imbalance.pdf")
-
-
 # ═════════════════════════════════════════════════════════════════════
 # SECTION 4: Adaptive Risk Aversion (Figs 15-18)
 # ═════════════════════════════════════════════════════════════════════
@@ -1041,191 +980,9 @@ def fig21_walk_forward_shortfall():
     return save_fig(fig, "fig21_walk_forward_shortfall.pdf")
 
 
-def fig22_implementation_shortfall_decomposition():
-    """Fig 22: Implementation shortfall decomposition."""
-    np.random.seed(SEED)
-    strategies = ['TWAP', 'VWAP', 'AC\n(Risk-Neutral)', 'AC\n(Risk-Averse)', 'QUBO\nHybrid']
-    delay = [0.5, 0.4, 0.3, 0.6, 0.2]
-    impact = [2.0, 1.5, 1.8, 1.0, 0.8]
-    timing = [1.5, 1.2, 0.8, 0.5, 0.6]
-    opportunity = [0.3, 0.4, 0.2, 0.5, 0.1]
-
-    fig, ax = plt.subplots(figsize=(3.5, 3.0))
-    x = np.arange(len(strategies))
-    w = 0.6
-
-    ax.bar(x, delay, w, label='Delay Cost', color='#FFC107', edgecolor='black', linewidth=0.3)
-    ax.bar(x, impact, w, bottom=delay, label='Market Impact', color='#D32F2F',
-           edgecolor='black', linewidth=0.3)
-    ax.bar(x, timing, w, bottom=[d+i for d, i in zip(delay, impact)],
-           label='Timing Risk', color='#2196F3', edgecolor='black', linewidth=0.3)
-    ax.bar(x, opportunity, w,
-           bottom=[d+i+t for d, i, t in zip(delay, impact, timing)],
-           label='Opportunity Cost', color='#4CAF50', edgecolor='black', linewidth=0.3)
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(strategies, fontsize=7)
-    ax.set_ylabel("Cost (bps)")
-    ax.set_title("Implementation Shortfall Decomposition")
-    ax.legend(fontsize=6, loc='upper right')
-
-    fig.tight_layout()
-    return save_fig(fig, "fig22_is_decomposition.pdf")
-
-
-def fig23_stress_test_results():
-    """Fig 23: Performance under stress scenarios."""
-    np.random.seed(SEED)
-    scenarios = ['Flash\nCrash', 'Liquidity\nCrisis', 'Vol\nSpike', 'Market\nOutage']
-    classical_slip = [45, 28, 35, 80]
-    hybrid_slip = [32, 18, 22, 55]
-    classical_fill = [0.85, 0.72, 0.90, 0.45]
-    hybrid_fill = [0.92, 0.88, 0.95, 0.68]
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7, 2.8))
-
-    x = np.arange(len(scenarios))
-    w = 0.35
-    ax1.bar(x - w/2, classical_slip, w, label='Classical', color='#9E9E9E',
-            alpha=0.7, edgecolor='black', linewidth=0.5)
-    ax1.bar(x + w/2, hybrid_slip, w, label='Hybrid QUBO', color='#D32F2F',
-            alpha=0.7, edgecolor='black', linewidth=0.5)
-    ax1.set_xticks(x)
-    ax1.set_xticklabels(scenarios, fontsize=7)
-    ax1.set_ylabel("Slippage (bps)")
-    ax1.set_title("Stress Scenario Slippage")
-    ax1.legend(fontsize=7)
-
-    ax2.bar(x - w/2, [f*100 for f in classical_fill], w, label='Classical',
-            color='#9E9E9E', alpha=0.7, edgecolor='black', linewidth=0.5)
-    ax2.bar(x + w/2, [f*100 for f in hybrid_fill], w, label='Hybrid QUBO',
-            color='#4CAF50', alpha=0.7, edgecolor='black', linewidth=0.5)
-    ax2.set_xticks(x)
-    ax2.set_xticklabels(scenarios, fontsize=7)
-    ax2.set_ylabel("Fill Rate (%)")
-    ax2.set_title("Stress Scenario Fill Rate")
-    ax2.legend(fontsize=7)
-
-    fig.tight_layout()
-    return save_fig(fig, "fig23_stress_test_results.pdf")
-
-
 # ═════════════════════════════════════════════════════════════════════
 # SECTION 6: Latency & HFT Pipeline (Figs 24-27)
 # ═════════════════════════════════════════════════════════════════════
-
-def fig24_latency_distribution():
-    """Fig 24: Latency distribution for fast path and slow path."""
-    np.random.seed(SEED)
-    fast_path = np.random.lognormal(mean=3.5, sigma=0.5, size=1000)
-    slow_path = np.random.lognormal(mean=11.5, sigma=0.8, size=200)
-    policy_prop = np.random.lognormal(mean=1.0, sigma=0.3, size=200)
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7, 2.8))
-
-    ax1.hist(fast_path, bins=50, color='#4CAF50', alpha=0.7, edgecolor='black',
-             linewidth=0.3, density=True)
-    ax1.axvline(np.median(fast_path), color='red', linestyle='--', linewidth=0.8,
-                label=f'Median: {np.median(fast_path):.0f} us')
-    ax1.axvline(np.percentile(fast_path, 99), color='#FF9800', linestyle='--',
-                linewidth=0.8, label=f'P99: {np.percentile(fast_path, 99):.0f} us')
-    ax1.set_xlabel("Latency (us)")
-    ax1.set_ylabel("Density")
-    ax1.set_title("Fast Path Latency")
-    ax1.legend(fontsize=7)
-
-    ax2.hist(slow_path / 1000, bins=30, color='#2196F3', alpha=0.7,
-             edgecolor='black', linewidth=0.3, density=True)
-    ax2.axvline(np.median(slow_path/1000), color='red', linestyle='--', linewidth=0.8,
-                label=f'Median: {np.median(slow_path/1000):.0f} ms')
-    ax2.set_xlabel("Latency (ms)")
-    ax2.set_ylabel("Density")
-    ax2.set_title("Slow Path (Optimization) Latency")
-    ax2.legend(fontsize=7)
-
-    fig.tight_layout()
-    return save_fig(fig, "fig24_latency_distribution.pdf")
-
-
-def fig25_policy_staleness():
-    """Fig 25: Policy staleness analysis and regret bound."""
-    np.random.seed(SEED)
-    n_ticks = 200
-    staleness = np.zeros(n_ticks)
-    opt_interval = 20
-
-    for i in range(n_ticks):
-        ticks_since = i % opt_interval
-        staleness[i] = ticks_since * 5 + np.random.exponential(3)
-
-    sigma = 0.002
-    T_solve_range = np.linspace(0.01, 1.0, 50)
-    regret = sigma * np.sqrt(T_solve_range)
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7, 2.8))
-
-    ax1.plot(staleness, color='#D32F2F', linewidth=0.6, alpha=0.8)
-    ax1.axhline(y=np.mean(staleness), color='blue', linestyle='--', linewidth=0.8,
-                label=f'Mean: {np.mean(staleness):.0f} ms')
-    ax1.set_xlabel("Tick")
-    ax1.set_ylabel("Policy Staleness (ms)")
-    ax1.set_title("Policy Staleness Over Time")
-    ax1.legend(fontsize=7)
-
-    ax2.plot(T_solve_range * 1000, regret * 10000, color='#7B1FA2', linewidth=1.2)
-    ax2.set_xlabel("Solve Time (ms)")
-    ax2.set_ylabel("Regret Bound (bps)")
-    ax2.set_title(r"Regret $\sim O(\sigma\sqrt{T_{solve}})$")
-    ax2.fill_between(T_solve_range * 1000, 0, regret * 10000, alpha=0.15, color='#7B1FA2')
-
-    fig.tight_layout()
-    return save_fig(fig, "fig25_policy_staleness.pdf")
-
-
-def fig26_pipeline_execution_trace():
-    """Fig 26: Full HFT pipeline execution trace."""
-    np.random.seed(SEED)
-    n_ticks = 100
-    price = 100.0
-    prices_trace = []
-    shares = []
-    lambdas_trace = []
-    regimes_trace = []
-
-    for i in range(n_ticks):
-        if i < 30:
-            v = 0.001
-        elif i < 60:
-            v = 0.004
-        else:
-            v = 0.0015
-        price *= (1 + np.random.normal(0, v))
-        prices_trace.append(price)
-        shares.append(max(0, 30 + np.random.randn() * 10 + (10 if i < 60 else 5)))
-        lam = 0.5 if i < 30 else (2.0 if i < 60 else 0.8)
-        lambdas_trace.append(lam + np.random.randn() * 0.1)
-        regimes_trace.append('normal' if i < 30 else ('high' if i < 60 else 'normal'))
-
-    fig, axes = plt.subplots(3, 1, figsize=(3.5, 5), sharex=True)
-
-    axes[0].plot(prices_trace, color='#1565C0', linewidth=0.8)
-    axes[0].set_ylabel("Price ($)")
-    axes[0].set_title("HFT Pipeline Execution Trace")
-    axes[0].axvspan(30, 60, alpha=0.15, color='red', label='Stress')
-    axes[0].legend(fontsize=7)
-
-    axes[1].bar(range(n_ticks), shares, color='#4CAF50', alpha=0.7, width=1.0)
-    axes[1].set_ylabel("Shares/Tick")
-    axes[1].set_title("Execution Rate")
-
-    axes[2].plot(lambdas_trace, color='#D32F2F', linewidth=0.8)
-    axes[2].set_ylabel(r"$\lambda$")
-    axes[2].set_xlabel("Tick")
-    axes[2].set_title("Risk Aversion")
-
-    fig.tight_layout()
-    return save_fig(fig, "fig26_pipeline_execution_trace.pdf")
-
 
 def fig27_venue_routing():
     """Fig 27: Multi-venue routing decisions from HFT QUBO."""
@@ -1329,118 +1086,6 @@ def fig28_qaoa_circuit_depth():
     return save_fig(fig, "fig28_qaoa_circuit_depth.pdf")
 
 
-def fig29_error_mitigation():
-    """Fig 29: Error mitigation effectiveness comparison."""
-    from src.error_mitigation import (
-        ZeroNoiseExtrapolation, MeasurementErrorMitigator, MajorityVoting
-    )
-
-    np.random.seed(SEED)
-    n = 6
-    Q = np.random.randn(n, n)
-    Q = (Q + Q.T) / 2
-
-    ideal_counts = {}
-    for _ in range(1000):
-        x = np.random.randint(0, 2, n)
-        e = float(x @ Q @ x)
-        bs = ''.join(str(b) for b in x[::-1])
-        weight = np.exp(-e / 2)
-        ideal_counts[bs] = ideal_counts.get(bs, 0) + max(1, int(weight * 10))
-
-    noisy_counts = {}
-    for bs, count in ideal_counts.items():
-        noisy_counts[bs] = int(count * 0.6)
-        for _ in range(int(count * 0.4)):
-            bits = list(bs)
-            flip_idx = np.random.randint(0, len(bits))
-            bits[flip_idx] = str(1 - int(bits[flip_idx]))
-            noisy_bs = ''.join(bits)
-            noisy_counts[noisy_bs] = noisy_counts.get(noisy_bs, 0) + 1
-
-    techniques = [
-        ("Raw", None),
-        ("MEM", MeasurementErrorMitigator()),
-        ("Majority\nVoting", MajorityVoting(num_runs=3)),
-        ("ZNE\n(Linear)", ZeroNoiseExtrapolation(extrapolation='linear')),
-    ]
-
-    energies = []
-    for name, tech in techniques:
-        if tech is None:
-            best_e = float('inf')
-            for bs in noisy_counts:
-                x = np.array([int(b) for b in bs[::-1]])
-                if len(x) == n:
-                    e = float(x @ Q @ x)
-                    best_e = min(best_e, e)
-            energies.append(best_e)
-        else:
-            result = tech.mitigate(noisy_counts, Q)
-            energies.append(result.mitigated_energy)
-
-    fig, ax = plt.subplots(figsize=(3.5, 2.8))
-    colors = ['#9E9E9E', '#2196F3', '#4CAF50', '#FF9800']
-    labels_tech = [t[0] for t in techniques]
-    bars = ax.bar(range(len(labels_tech)), energies, color=colors, alpha=0.7,
-                  edgecolor='black', linewidth=0.5)
-    ax.set_xticks(range(len(labels_tech)))
-    ax.set_xticklabels(labels_tech, fontsize=8)
-    ax.set_ylabel("Best Energy Found")
-    ax.set_title("Error Mitigation Effectiveness")
-
-    for i, (bar, e) in enumerate(zip(bars, energies)):
-        if i > 0:
-            improvement = (energies[0] - e) / abs(energies[0]) * 100
-            if abs(improvement) > 0.1:
-                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height(),
-                        f'{improvement:+.1f}%', ha='center', va='bottom', fontsize=6)
-
-    fig.tight_layout()
-    return save_fig(fig, "fig29_error_mitigation.pdf")
-
-
-def fig30_quantum_advantage_projection():
-    """Fig 30: Projected quantum advantage as hardware improves."""
-    np.random.seed(SEED)
-    years = np.arange(2024, 2032)
-    qubits_available = [127, 433, 1121, 1500, 2000, 3000, 5000, 10000]
-    error_rates = [1e-3, 5e-4, 2e-4, 1e-4, 5e-5, 2e-5, 1e-5, 5e-6]
-
-    classical_time = np.array([0.01] * len(years))
-    quantum_time = np.array([100, 50, 20, 8, 3, 1.0, 0.3, 0.05])
-    crossover_idx = np.argmin(np.abs(np.array(quantum_time) - np.array(classical_time)))
-
-    qubo_feasible = [20, 40, 80, 120, 200, 400, 800, 2000]
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7, 2.8))
-
-    ax1.semilogy(years, quantum_time, 'o-', color='#D32F2F', label='Quantum (QAOA)')
-    ax1.semilogy(years, classical_time, 's--', color='#2196F3', label='Classical (SA)')
-    ax1.fill_between(years[:crossover_idx+1], quantum_time[:crossover_idx+1],
-                      classical_time[:crossover_idx+1], alpha=0.1, color='red')
-    ax1.fill_between(years[crossover_idx:], quantum_time[crossover_idx:],
-                      classical_time[crossover_idx:], alpha=0.1, color='green')
-    ax1.axvline(x=years[crossover_idx], color='green', linestyle=':', alpha=0.5)
-    ax1.set_xlabel("Year")
-    ax1.set_ylabel("Solve Time (s)")
-    ax1.set_title("Quantum vs Classical Scaling")
-    ax1.legend(fontsize=7)
-
-    ax2.semilogy(years, qubo_feasible, 'D-', color='#4CAF50', linewidth=1.5)
-    ax2.axhline(y=100, color='#FF9800', linestyle='--', linewidth=0.8,
-                label='HFT requirement\n(100 vars)')
-    ax2.axhline(y=1000, color='#D32F2F', linestyle='--', linewidth=0.8,
-                label='Full execution\n(1000 vars)')
-    ax2.set_xlabel("Year")
-    ax2.set_ylabel("Max QUBO Variables")
-    ax2.set_title("Quantum Hardware Roadmap")
-    ax2.legend(fontsize=6, loc='upper left')
-
-    fig.tight_layout()
-    return save_fig(fig, "fig30_quantum_advantage_projection.pdf")
-
-
 # ═════════════════════════════════════════════════════════════════════
 # Main: Generate All Figures
 # ═════════════════════════════════════════════════════════════════════
@@ -1463,8 +1108,6 @@ ALL_FIGURES = [
         fig10_kyle_lambda,
         fig11_vpin_estimation,
         fig12_microstructure_dashboard,
-        fig13_adverse_selection_by_venue,
-        fig14_order_flow_imbalance,
     ]),
     ("Section 4: Adaptive Risk", [
         fig15_lambda_adaptation,
@@ -1476,19 +1119,12 @@ ALL_FIGURES = [
         fig19_execution_schedule_comparison,
         fig20_almgren_chriss_frontier,
         fig21_walk_forward_shortfall,
-        fig22_implementation_shortfall_decomposition,
-        fig23_stress_test_results,
     ]),
     ("Section 6: Latency & HFT", [
-        fig24_latency_distribution,
-        fig25_policy_staleness,
-        fig26_pipeline_execution_trace,
         fig27_venue_routing,
     ]),
     ("Section 7: Quantum Hardware", [
         fig28_qaoa_circuit_depth,
-        fig29_error_mitigation,
-        fig30_quantum_advantage_projection,
     ]),
 ]
 
@@ -1499,7 +1135,8 @@ def generate_all_figures():
     total_start = time.time()
 
     print("=" * 70)
-    print(" Generating 30 Journal Figures (Springer Format)")
+    num_figures = sum(len(funcs) for _, funcs in ALL_FIGURES)
+    print(f" Generating {num_figures} Journal Figures (Springer Format)")
     print("=" * 70)
 
     for section_name, funcs in ALL_FIGURES:
@@ -1518,7 +1155,7 @@ def generate_all_figures():
 
     total_time = time.time() - total_start
     print(f"\n{'=' * 70}")
-    print(f" Generated {len(all_paths)}/30 figures in {total_time:.1f}s")
+    print(f" Generated {len(all_paths)}/{num_figures} figures in {total_time:.1f}s")
     print(f" Output directory: {OUTPUT_DIR}/")
     print(f"{'=' * 70}")
 

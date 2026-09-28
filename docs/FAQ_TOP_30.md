@@ -108,7 +108,7 @@ Physical QPUs have limited connectivity (e.g., qubit 1 connects to 2, but not 3)
 Yes, but the matrix size scales quadratically.
 *   Portfolio Optimization (Markowitz): Minimize $w^T \Sigma w$.
 *   If we have $M$ assets and $N$ time slots, variables = $M \times N$.
-*   Limit: 100 assets $\times$ 10 slots = 1000 variables. This is the upper limit of today's DQC capability.
+*   Example: 100 assets $\times$ 10 slots = 1000 variables.
 
 ### 23. What is the Theoretical Quantum Advantage here?
 **Grover's Search** offers quadratic speedup ($\sqrt{N}$).
@@ -127,13 +127,11 @@ This is the hardest part. A constraint $\sum x = K$ is "global" (involves all qu
 *   This ensures we never waste time exploring invalid states where $\sum x \neq K$.
 
 ### 26. Is "Quantum Error Correction" needed?
-For QAOA with large `p`, yes. For DQC/Annealing, no.
+For QAOA with large `p`, yes. For annealing, no.
 *   **NISQ (Noisy Intermediate-Scale Quantum)** era relies on *error mitigation* (repeating shots 1000x and averaging) rather than perfect logical qubits. Our system is designed for NISQ.
 
 ### 27. What is the limit of DQC (Distributed Quantum)?
-The bottleneck shifts from QPU count to **Network Latency**.
-Decomposing a graph cut problem requires communication between nodes to resolve "boundary" edges. If communication > computation, DQC fails.
-Our `dqc_client.py` simulates this via `network_latency` parameter.
+Not implemented. An earlier simulated "DQC" backend (`dqc_client.py`) ran ordinary SA and applied a hardcoded 2% energy improvement; it was removed (see `docs/CLAIMS_AUDIT.md`).
 
 ### 28. Why Python? Why not C++?
 **Development Velocity.** Python has the best quantum libraries (Qiskit, D-Wave Ocean) and data libraries (Pandas).

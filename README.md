@@ -17,7 +17,7 @@ A research-grade hybrid architecture for optimal trade execution, combining low-
 
 *   **Hybrid Architecture**: Decoupled "Fast Path" (Execution Engine, <10ms delay) and "Slow Path" (Quantum/Classical Optimizer, 1-5s update).
 *   **Asynchronous Optimization**: Trading never blocks; execution policy is updated in real-time via a thread-safe queue.
-*   **Quantum Solvers**: Supports Simulated Annealing (SA), QAOA (via Qiskit), and **Distributed Quantum Computing (DQC)** backend for scaling >100 variables.
+*   **Quantum Solvers**: Supports Simulated Annealing (SA) and QAOA (via Qiskit).
 *   **Real Data Ready**: Includes `DataLoader` for NSE/Binance/NYSE tick data ingestion and backtesting.
 *   **Real-Time Dashboard**: Streamlit interface for live monitoring, strategy comparison, and quantum visualization.
 *   **Robustness**: Built-in resilience against solver timeouts and crashes with exponential backoff and classical fallback.
@@ -78,7 +78,6 @@ The system operates on two timescales:
 | **Market Impact** | High | Medium | **Low** |
 | **Timing Risk** | Low | Low | **Low** |
 | **Robustness** | Low | High | **High** |
-| **Avg Shortfall** | +15 bps | +8 bps | **+5 bps** |
 
 *See `results_paper.md` for detailed research findings.*
 

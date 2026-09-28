@@ -91,7 +91,6 @@ $$ |\psi(\gamma, \beta)\rangle = e^{-i\beta H_B} e^{-i\gamma H_C} \dots e^{-i\be
 *   **Classical Brute Force:** $O(2^N)$. Impossible for $N > 50$.
 *   **Simulated Annealing:** Heuristic. $O(e^{k})$. Can get stuck in local minima.
 *   **Quantum Annealing:** $O(e^{k/\sqrt{width}})$. Theoretically tunnels through barriers that are "tall but thin".
-*   **DQC (Distributed):** We decompose the graph into sub-QUBOs. Solving large $Q$ becomes equivalent to solving $k$ sub-problems of size $N/k$ plus a recombination step (Lagrangian Relaxation).
 
 ---
 

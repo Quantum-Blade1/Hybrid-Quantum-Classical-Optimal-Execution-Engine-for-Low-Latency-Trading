@@ -382,11 +382,7 @@ def main():
                  font=dict(color='white')
              )
              chart_qubo.plotly_chart(fig_qubo, use_container_width=True)
-             
-             # Metric: Solution Energy
-             # Mock energy based on variance
-             energy = -150.0 + np.std(schedule) 
-             st.metric("Latest Solution Energy", f"{energy:.1f}", delta=f"{energy - (-150):.1f}", delta_color="inverse")
+
 
         # Update Analytics Tab (Tab 2)
         if not df_hybrid.empty:

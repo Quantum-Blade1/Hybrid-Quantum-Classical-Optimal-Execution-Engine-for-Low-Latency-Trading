@@ -122,10 +122,15 @@ class AsyncOptimizer:
     def __init__(
         self,
         policy_queue: PolicyQueue,
-        optimizer_type: str = 'sa',  # 'sa' or 'qaoa'
+        optimizer_type: str = 'sa',  # 'sa' or 'uniform' (QAOA is offline-only: see qaoa_solver.py)
         update_interval: float = 1.0,  # Seconds between optimizations
         seed: Optional[int] = None
     ):
+        if optimizer_type not in ('sa', 'uniform'):
+            raise ValueError(
+                f"Unsupported optimizer_type {optimizer_type!r}; the async runtime "
+                "supports 'sa' or 'uniform'. QAOA is available offline via qaoa_solver.py."
+            )
         self.policy_queue = policy_queue
         self.optimizer_type = optimizer_type
         self.update_interval = update_interval
@@ -215,8 +220,6 @@ class AsyncOptimizer:
         def optimize_task():
             if self.optimizer_type == 'sa':
                 return self._optimize_sa(order_size, num_slices)
-            elif self.optimizer_type == 'qaoa':
-                return self._optimize_qaoa(order_size, num_slices)
             else:
                 return self._optimize_uniform(order_size, num_slices)
         
@@ -286,11 +289,6 @@ class AsyncOptimizer:
                 schedule[t] += row["quantity"]
         
         return schedule
-    
-    def _optimize_qaoa(self, order_size: int, num_slices: int) -> np.ndarray:
-        """Optimize using QAOA (expensive, use sparingly)."""
-        # For now, fall back to SA (QAOA too slow for real-time)
-        return self._optimize_sa(order_size, num_slices)
 
 
 # =============================================================================
