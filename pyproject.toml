@@ -63,9 +63,10 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["PLR0915", "PLC0415"]
+# qiskit-ibm-runtime is the optional `hardware` extra, so it is imported only when used.
+"src/qexec/hardware/ibm.py" = ["PLC0415"]
 
 [tool.mypy]
-python_version = "3.10"
 strict = false
 warn_unused_ignores = true
 warn_redundant_casts = true

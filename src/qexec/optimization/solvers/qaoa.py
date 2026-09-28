@@ -1,57 +1,51 @@
-"""
-QAOA for QUBO problems.
+"""QAOA for QUBO problems with a pluggable sampler (ideal Aer, noisy Aer or IBM hardware).
 
-QUBO -> Ising -> parameterised QAOA circuit; parameters are optimised
-classically (COBYLA by default) against the sampled expectation value, then
-the circuit is sampled once more with more shots and the lowest-energy
-bitstring is returned.
-
-`run_qaoa` is the single variational loop. It takes a `sample` callable
-(circuit, shots) -> counts, so the same loop runs on the ideal Aer
-simulator (QAOASolver), on a noisy Aer backend and on IBM hardware
-(qexec.hardware.ibm).
+QUBO -> Ising -> p-layer QAOA circuit; the 2p angles are optimised classically
+(COBYLA by default) on the sampled mean energy, then the optimised circuit is
+sampled once more and the lowest-energy measured bitstring is returned.
 """
+
+import logging
+from collections.abc import Callable
+from dataclasses import dataclass
+from time import perf_counter
 
 import numpy as np
-from typing import Callable, Dict, List, Optional
-from dataclasses import dataclass
-from time import time
+from numpy.typing import NDArray
+from qiskit import QuantumCircuit, transpile
+from qiskit.providers import BackendV2
+from qiskit_aer import AerSimulator
+from scipy.optimize import minimize
 
-from qexec.optimization.ising import qubo_to_ising, build_qaoa_circuit_from_ising
+from qexec.optimization.ising import build_qaoa_circuit_from_ising, qubo_to_ising
 
+logger = logging.getLogger(__name__)
 
-Counts = Dict[str, int]
-Sampler = Callable[[object, int], Counts]
+Counts = dict[str, int]
+Sampler = Callable[[QuantumCircuit, int], Counts]
 
-
-# =============================================================================
-# QAOA Result
-# =============================================================================
 
 @dataclass
 class QAOAResult:
-    """Result from QAOA optimization."""
-    solution: np.ndarray
+    """Lowest-energy sampled solution and the variational run that produced it."""
+
+    solution: NDArray[np.int_]
     energy: float
-    optimal_params: np.ndarray
+    optimal_params: NDArray[np.float64]
     num_iterations: int
     solve_time: float
-    counts: Dict[str, int]
-    history: List[float]
+    counts: Counts
+    history: list[float]
     success_probability: float
 
 
-# =============================================================================
-# Counts post-processing
-# =============================================================================
-
-def bitstring_to_binary(bitstring: str, n: int) -> np.ndarray:
-    """Qiskit bitstring (qubit 0 rightmost) -> binary vector of the first n qubits."""
+def bitstring_to_binary(bitstring: str, n: int) -> NDArray[np.int_]:
+    """Qiskit bitstring (qubit 0 rightmost) to the binary vector of the first n qubits."""
     return np.array([int(b) for b in bitstring[::-1]])[:n]
 
 
-def expected_energy(counts: Counts, Q: np.ndarray) -> float:
-    """Sample mean of x^T Q x over measured bitstrings."""
+def expected_energy(counts: Counts, Q: NDArray[np.float64]) -> float:
+    """Sample mean of x^T Q x over the measured bitstrings."""
     n = Q.shape[0]
     total = sum(counts.values())
     energy = 0.0
@@ -61,11 +55,11 @@ def expected_energy(counts: Counts, Q: np.ndarray) -> float:
     return energy
 
 
-def best_bitstring(counts: Counts, Q: np.ndarray) -> tuple:
-    """Lowest-energy measured bitstring: (bitstring, energy)."""
+def best_bitstring(counts: Counts, Q: NDArray[np.float64]) -> tuple[str | None, float]:
+    """Lowest-energy measured bitstring and its energy; (None, inf) for empty counts."""
     n = Q.shape[0]
     best_bs = None
-    best_energy = float('inf')
+    best_energy = float("inf")
     for bitstring in counts:
         binary = bitstring_to_binary(bitstring, n)
         energy = float(binary @ Q @ binary)
@@ -75,121 +69,90 @@ def best_bitstring(counts: Counts, Q: np.ndarray) -> tuple:
     return best_bs, best_energy
 
 
-def aer_sampler(backend) -> Sampler:
+def aer_sampler(backend: BackendV2) -> Sampler:
     """Sampler that transpiles for and runs on an Aer backend."""
-    from qiskit import transpile
 
-    def sample(circuit, shots: int) -> Counts:
+    def sample(circuit: QuantumCircuit, shots: int) -> Counts:
         compiled = transpile(circuit, backend)
-        return backend.run(compiled, shots=shots).result().get_counts()
+        counts: Counts = backend.run(compiled, shots=shots).result().get_counts()
+        return counts
 
     return sample
 
 
-# =============================================================================
-# Variational loop
-# =============================================================================
-
 def run_qaoa(
-    Q: np.ndarray,
+    Q: NDArray[np.float64],
     p: int,
     sample: Sampler,
+    *,
     shots: int,
     maxiter: int,
     final_shots: int,
     rng: np.random.Generator,
-    method: str = 'COBYLA',
-    on_iteration: Optional[Callable[[int, float], None]] = None,
+    method: str = "COBYLA",
+    on_iteration: Callable[[int, float], None] | None = None,
 ) -> QAOAResult:
-    """
-    Optimise QAOA parameters for QUBO matrix Q and sample the final circuit.
+    """Optimise the QAOA angles for `Q` and sample the final circuit with `final_shots` shots.
 
-    Args:
-        Q: QUBO matrix
-        p: Number of QAOA layers
-        sample: (circuit, shots) -> counts
-        shots: Shots per expectation-value evaluation
-        maxiter: Maximum classical optimizer iterations
-        final_shots: Shots for the final sampling of the optimised circuit
-        rng: Generator for the initial parameters (gammas in [0, 2pi), betas in [0, pi))
-        method: scipy.optimize.minimize method
-        on_iteration: Called with (iteration, expectation) after each evaluation
+    Initial angles: gammas ~ U[0, 2pi), betas ~ U[0, pi) drawn from `rng`.
+    `on_iteration(k, energy)` is called after each expectation-value evaluation.
     """
-    from scipy.optimize import minimize
-
-    start_time = time()
+    start = perf_counter()
     ising = qubo_to_ising(Q)
-    history: List[float] = []
+    history: list[float] = []
 
-    def circuit(params, stage: str):
+    def circuit(params: NDArray[np.float64], stage: str) -> QuantumCircuit:
         qc = build_qaoa_circuit_from_ising(ising, params[:p], params[p:], p)
-        qc.metadata = {"stage": stage, "gammas": [float(g) for g in params[:p]],
-                       "betas": [float(b) for b in params[p:]]}
+        qc.metadata = {
+            "stage": stage,
+            "gammas": [float(g) for g in params[:p]],
+            "betas": [float(b) for b in params[p:]],
+        }
         return qc
 
-    def cost(params):
-        qc = circuit(params, "optimize")
-        energy = expected_energy(sample(qc, shots), Q)
+    def cost(params: NDArray[np.float64]) -> float:
+        energy = expected_energy(sample(circuit(params, "optimize"), shots), Q)
         history.append(energy)
         if on_iteration is not None:
             on_iteration(len(history), energy)
         return energy
 
-    x0 = np.concatenate([
-        rng.uniform(0, 2 * np.pi, p),  # gammas
-        rng.uniform(0, np.pi, p)       # betas
-    ])
-    opt = minimize(cost, x0, method=method, options={'maxiter': maxiter})
+    x0 = np.concatenate([rng.uniform(0, 2 * np.pi, p), rng.uniform(0, np.pi, p)])
+    opt = minimize(cost, x0, method=method, options={"maxiter": maxiter})
 
     counts = sample(circuit(opt.x, "final"), final_shots)
     best_bs, best_energy = best_bitstring(counts, Q)
-    success_prob = counts.get(best_bs, 0) / sum(counts.values()) if best_bs else 0.0
+    n = Q.shape[0]
+    if best_bs is None:
+        solution = np.zeros(n, dtype=int)
+        success_prob = 0.0
+    else:
+        solution = bitstring_to_binary(best_bs, n)
+        success_prob = counts[best_bs] / sum(counts.values())
 
     return QAOAResult(
-        solution=bitstring_to_binary(best_bs, Q.shape[0]) if best_bs else np.zeros(Q.shape[0], dtype=int),
+        solution=solution,
         energy=best_energy,
         optimal_params=opt.x,
         num_iterations=len(history),
-        solve_time=time() - start_time,
+        solve_time=perf_counter() - start,
         counts=counts,
         history=history,
         success_probability=success_prob,
     )
 
 
-# =============================================================================
-# QAOA Solver (ideal Aer simulator)
-# =============================================================================
-
 class QAOASolver:
-    """
-    QAOA solver for QUBO problems on the ideal Aer simulator.
-
-    Implements the full QAOA workflow:
-    1. Convert QUBO to Ising Hamiltonian
-    2. Build parameterized QAOA circuit
-    3. Optimize parameters using classical optimizer
-    4. Extract and decode solution
-    """
+    """QAOA on the ideal Aer simulator; final sampling uses 10x `shots`."""
 
     def __init__(
         self,
         p: int = 2,
         shots: int = 1000,
         maxiter: int = 100,
-        optimizer: str = 'COBYLA',
-        seed: Optional[int] = None
-    ):
-        """
-        Initialize QAOA solver.
-
-        Args:
-            p: Number of QAOA layers (circuit depth)
-            shots: Measurement shots per circuit
-            maxiter: Maximum optimizer iterations
-            optimizer: Classical optimizer ('COBYLA', 'SPSA', etc.)
-            seed: Random seed
-        """
+        optimizer: str = "COBYLA",
+        seed: int | None = None,
+    ) -> None:
         self.p = p
         self.shots = shots
         self.maxiter = maxiter
@@ -197,35 +160,10 @@ class QAOASolver:
         self.seed = seed
         self.rng = np.random.default_rng(seed)
 
-    def solve(
-        self,
-        Q: np.ndarray,
-        verbose: bool = True
-    ) -> QAOAResult:
-        """
-        Solve QUBO using QAOA.
-
-        Args:
-            Q: QUBO matrix
-            verbose: Print progress
-
-        Returns:
-            QAOAResult with solution and statistics
-        """
-        from qiskit_aer import AerSimulator
-
-        n = Q.shape[0]
-
-        if verbose:
-            print(f"\n{'='*60}")
-            print(f" QAOA Solver (p={self.p}, n={n})")
-            print(f"{'='*60}")
-            print(f" Converted to Ising: {qubo_to_ising(Q)}")
-            print(f" Optimizing {2*self.p} parameters...")
-
+    def solve(self, Q: NDArray[np.float64]) -> QAOAResult:
         def report(iteration: int, energy: float) -> None:
-            if verbose and iteration % 10 == 0:
-                print(f"   Iter {iteration}: E={energy:.4f}")
+            if iteration % 10 == 0:
+                logger.debug("QAOA iteration %d: E=%.4f", iteration, energy)
 
         result = run_qaoa(
             Q,
@@ -238,11 +176,12 @@ class QAOASolver:
             method=self.optimizer,
             on_iteration=report,
         )
-
-        if verbose:
-            print(f"\n Optimization complete!")
-            print(f" Best energy: {result.energy:.4f}")
-            print(f" Success probability: {result.success_probability:.1%}")
-            print(f" Time: {result.solve_time:.2f}s")
-
+        logger.info(
+            "QAOA p=%d n=%d: best %.4f, success probability %.3f, %.2fs",
+            self.p,
+            Q.shape[0],
+            result.energy,
+            result.success_probability,
+            result.solve_time,
+        )
         return result
