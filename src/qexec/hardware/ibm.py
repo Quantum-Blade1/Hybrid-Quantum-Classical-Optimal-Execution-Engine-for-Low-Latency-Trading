@@ -1,57 +1,48 @@
+"""IBM Quantum access via qiskit-ibm-runtime, persisting every job's ID and raw counts.
+
+Each hardware job is appended to a JSONL file as soon as its result returns, so the
+record survives a later crash or quota cut-off. Requires the `hardware` extra.
 """
-IBM Quantum hardware access via qiskit-ibm-runtime.
 
-    connect_service      QiskitRuntimeService for the ibm_quantum or ibm_cloud channel
-    get_backend          named backend, or the least busy one with enough qubits
-    backend_properties   name / qubit count / version of a backend
-    transpile_for        preset pass manager (ISA circuits) for a backend
-    extract_counts       counts from a SamplerV2 PubResult
-    run_sampler_job      run one circuit with SamplerV2 and persist job_id + raw counts
-    run_qaoa_on_hardware QAOA variational loop (qexec.optimization.solvers.qaoa.run_qaoa)
-                         with every job persisted as it returns
-
-Every hardware job is appended to a JSONL file as soon as its result comes
-back, so raw counts and job IDs survive a later crash or quota cut-off.
-
-Requires the optional dependency: pip install -e ".[hardware]"
-"""
+from __future__ import annotations
 
 import json
 import os
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from numpy.typing import NDArray
+from qiskit import QuantumCircuit
+from qiskit.providers import BackendV2
+from qiskit.transpiler import PassManager
+from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 
-from qexec.optimization.solvers.qaoa import QAOAResult, run_qaoa
+from qexec.optimization.solvers.qaoa import Counts, QAOAResult, run_qaoa
+
+if TYPE_CHECKING:
+    from qiskit_ibm_runtime import QiskitRuntimeService
 
 
 def save_account(token: str, channel: str = "ibm_quantum", overwrite: bool = True) -> None:
-    """Store IBM Quantum credentials locally (qiskit-ibm-runtime account file)."""
+    """Store IBM Quantum credentials in the qiskit-ibm-runtime account file."""
     from qiskit_ibm_runtime import QiskitRuntimeService
 
     QiskitRuntimeService.save_account(channel=channel, token=token, overwrite=overwrite)
 
 
 def connect_service(
-    token: Optional[str] = None,
-    channel: Optional[str] = None,
-    instance: Optional[str] = None,
-):
-    """
-    Create a QiskitRuntimeService.
-
-    Args:
-        token: API key/token; None uses the saved account.
-        channel: "ibm_quantum" or "ibm_cloud"; defaults to "ibm_cloud" when an
-            instance CRN is given, else "ibm_quantum".
-        instance: IBM Cloud CRN (ibm_cloud channel).
-    """
+    token: str | None = None,
+    channel: str | None = None,
+    instance: str | None = None,
+) -> QiskitRuntimeService:
+    """Runtime service; channel defaults to "ibm_cloud" when an instance CRN is given."""
     from qiskit_ibm_runtime import QiskitRuntimeService
 
     if channel is None:
         channel = "ibm_cloud" if instance else "ibm_quantum"
-    kwargs = {"channel": channel}
+    kwargs: dict[str, str] = {"channel": channel}
     if token is not None:
         kwargs["token"] = token
     if instance:
@@ -59,8 +50,10 @@ def connect_service(
     return QiskitRuntimeService(**kwargs)
 
 
-def get_backend(service, name: Optional[str] = None, min_qubits: int = 0):
-    """Named backend, or the least busy operational backend with >= min_qubits."""
+def get_backend(
+    service: QiskitRuntimeService, name: str | None = None, min_qubits: int = 0
+) -> BackendV2:
+    """Named backend, or the least busy operational backend with at least `min_qubits`."""
     if name:
         return service.backend(name)
     from qiskit_ibm_runtime import least_busy
@@ -71,127 +64,122 @@ def get_backend(service, name: Optional[str] = None, min_qubits: int = 0):
     return least_busy(backends)
 
 
-def backend_properties(backend) -> Dict[str, object]:
+def backend_properties(backend: BackendV2) -> dict[str, Any]:
     return {
         "name": backend.name,
         "num_qubits": backend.num_qubits,
-        "version": str(getattr(backend, 'version', 'unknown')),
+        "version": str(getattr(backend, "version", "unknown")),
     }
 
 
-def transpile_for(backend, optimization_level: int = 3):
-    """Preset pass manager producing ISA circuits for ``backend``."""
-    from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
-
+def transpile_for(backend: BackendV2, optimization_level: int = 3) -> PassManager:
+    """Preset pass manager producing ISA circuits for `backend`."""
     return generate_preset_pass_manager(optimization_level=optimization_level, backend=backend)
 
 
-def extract_counts(pub_result) -> Dict[str, int]:
-    """Extract measurement counts from a SamplerV2 PubResult, handling different DataBin attribute names."""
+def extract_counts(pub_result: Any) -> Counts:
+    """Counts from a SamplerV2 PubResult, whatever the classical register is called."""
     data = pub_result.data
-    for attr in ('meas', 'c', 'cr'):
+    for attr in ("meas", "c", "cr"):
         if hasattr(data, attr):
-            return getattr(data, attr).get_counts()
-    for attr in dir(data):
-        if not attr.startswith('_'):
-            obj = getattr(data, attr)
-            if hasattr(obj, 'get_counts'):
-                return obj.get_counts()
-    raise AttributeError(
-        f"No measurement data found in DataBin. Attributes: {[a for a in dir(data) if not a.startswith('_')]}"
-    )
+            counts: Counts = getattr(data, attr).get_counts()
+            return counts
+    public = [a for a in dir(data) if not a.startswith("_")]
+    for attr in public:
+        obj = getattr(data, attr)
+        if hasattr(obj, "get_counts"):
+            counts = obj.get_counts()
+            return counts
+    raise AttributeError(f"No measurement data found in DataBin. Attributes: {public}")
 
 
-def append_jsonl(path: str, record: Dict) -> None:
-    """Append one JSON record and fsync, so it is on disk before the caller continues."""
-    directory = os.path.dirname(path)
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-    with open(path, "a") as f:
-        f.write(json.dumps(record, default=_json_default) + "\n")
-        f.flush()
-        os.fsync(f.fileno())
-
-
-def _json_default(obj):
+def _json_default(obj: object) -> int | float | list[Any]:
     if isinstance(obj, np.integer):
         return int(obj)
     if isinstance(obj, np.floating):
         return float(obj)
     if isinstance(obj, np.ndarray):
-        return obj.tolist()
+        return list(obj.tolist())
     raise TypeError(f"not JSON serialisable: {type(obj)}")
 
 
+def append_jsonl(path: str | Path, record: dict[str, Any]) -> None:
+    """Append one JSON record and fsync, so it is on disk before the caller continues."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as f:
+        f.write(json.dumps(record, default=_json_default) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+
+
 def run_sampler_job(
-    isa_circuit,
-    backend,
+    isa_circuit: QuantumCircuit,
+    backend: BackendV2,
     shots: int,
-    log_path: str,
-    metadata: Optional[Dict] = None,
-) -> Tuple[Dict[str, int], str]:
-    """
-    Run one ISA circuit with SamplerV2 and persist the result immediately.
+    log_path: str | Path,
+    metadata: dict[str, Any] | None = None,
+) -> tuple[Counts, str]:
+    """Run one ISA circuit with SamplerV2 and append its record to `log_path`.
 
-    The JSONL record holds timestamps, job_id, backend, shots, transpiled
-    depth, the caller's metadata and the full raw counts.
-
-    Returns:
-        (counts, job_id)
+    The record holds submit/complete timestamps, job ID, backend, shots, transpiled
+    depth, `metadata` and the raw counts. Returns (counts, job_id).
     """
     from qiskit_ibm_runtime import SamplerV2
 
     submitted = datetime.now(timezone.utc).isoformat()
     job = SamplerV2(mode=backend).run([isa_circuit], shots=shots)
-    job_id = job.job_id()
-    result = job.result()
-    counts = extract_counts(result[0])
-    append_jsonl(log_path, {
-        "submitted_utc": submitted,
-        "completed_utc": datetime.now(timezone.utc).isoformat(),
-        "job_id": job_id,
-        "backend": backend.name,
-        "shots": shots,
-        "transpiled_depth": isa_circuit.depth(),
-        "metadata": metadata or {},
-        "counts": counts,
-    })
+    job_id: str = job.job_id()
+    counts = extract_counts(job.result()[0])
+    append_jsonl(
+        log_path,
+        {
+            "submitted_utc": submitted,
+            "completed_utc": datetime.now(timezone.utc).isoformat(),
+            "job_id": job_id,
+            "backend": backend.name,
+            "shots": shots,
+            "transpiled_depth": isa_circuit.depth(),
+            "metadata": metadata or {},
+            "counts": counts,
+        },
+    )
     return counts, job_id
 
 
 def run_qaoa_on_hardware(
-    Q: np.ndarray,
-    backend,
+    Q: NDArray[np.float64],
+    backend: BackendV2,
+    *,
     p: int,
     shots: int,
     maxiter: int,
     seed: int,
-    log_path: str,
-    metadata: Optional[Dict] = None,
-) -> Tuple[QAOAResult, List[str]]:
-    """
-    QAOA on an IBM backend: COBYLA over ``shots``-shot expectation values,
-    then one final sampling with ``5 * shots`` shots.
+    log_path: str | Path,
+    metadata: dict[str, Any] | None = None,
+) -> tuple[QAOAResult, list[str]]:
+    """QAOA on an IBM backend: COBYLA on `shots`-shot estimates, final sampling with 5x shots.
 
-    Every SamplerV2 job (optimisation and final) is appended to ``log_path``
-    with ``metadata`` plus the stage ("optimize"/"final"), evaluation index,
-    and the circuit's gammas and betas.
-
-    Returns:
-        (QAOAResult, job IDs in submission order)
+    Every job is logged with `metadata`, its stage ("optimize"/"final"), evaluation index
+    and angles. Returns (result, job IDs in submission order).
     """
     pm = transpile_for(backend)
-    job_ids: List[str] = []
+    job_ids: list[str] = []
     base_meta = dict(metadata or {}, num_qubits=int(Q.shape[0]), p=p)
 
-    def sample(circuit, n_shots: int) -> Dict[str, int]:
+    def sample(circuit: QuantumCircuit, n_shots: int) -> Counts:
         meta = dict(base_meta, **(circuit.metadata or {}), evaluation=len(job_ids))
         counts, job_id = run_sampler_job(pm.run(circuit), backend, n_shots, log_path, meta)
         job_ids.append(job_id)
         return counts
 
     result = run_qaoa(
-        Q, p=p, sample=sample, shots=shots, maxiter=maxiter,
-        final_shots=shots * 5, rng=np.random.default_rng(seed),
+        Q,
+        p=p,
+        sample=sample,
+        shots=shots,
+        maxiter=maxiter,
+        final_shots=shots * 5,
+        rng=np.random.default_rng(seed),
     )
     return result, job_ids
