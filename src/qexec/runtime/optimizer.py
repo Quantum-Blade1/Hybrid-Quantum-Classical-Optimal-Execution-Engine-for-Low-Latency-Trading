@@ -1,177 +1,126 @@
-"""
-Asynchronous optimizer (slow path).
+"""Slow path: background thread that re-solves the execution QUBO and publishes policies."""
 
-Runs in a background thread, re-solves the execution QUBO at a fixed
-interval and publishes the resulting schedule to a PolicyQueue.
-"""
+import logging
+from threading import Event, Lock, Thread
+from time import perf_counter
 
 import numpy as np
-import pandas as pd
-from typing import Optional
-from time import time
-from threading import Thread, Lock, Event
-import logging
+from numpy.typing import NDArray
 
 from qexec.optimization.qubo import ExecutionQUBO
 from qexec.optimization.schedule import optimize_schedule, slice_level_config
 from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
-from qexec.runtime.policy import ExecutionPolicy, PolicyQueue
+from qexec.runtime.policy import ExecutionPolicy, PolicyQueue, uniform_schedule
+from qexec.runtime.resilience import OptimizerResilience, ResilienceConfig, validate_schedule
 
 logger = logging.getLogger(__name__)
 
+SUPPORTED_OPTIMIZERS = ("sa", "uniform")
+_SA_SWEEPS = 200
+
 
 class AsyncOptimizer:
+    """Every `update_interval` seconds, solves for the current order and publishes a policy.
+
+    `optimizer_type` is "sa" (SA on `slice_level_config`) or "uniform" (TWAP). QAOA is
+    offline-only (`qexec.optimization.solvers.qaoa`). Failures fall back to TWAP.
     """
-    Asynchronous optimizer that runs in a background thread.
-    
-    Continuously optimizes execution schedule based on market conditions
-    and publishes updated policies to the queue.
-    """
-    
+
     def __init__(
         self,
         policy_queue: PolicyQueue,
-        optimizer_type: str = 'sa',  # 'sa' or 'uniform' (QAOA is offline-only: see qaoa_solver.py)
-        update_interval: float = 1.0,  # Seconds between optimizations
-        seed: Optional[int] = None
-    ):
-        if optimizer_type not in ('sa', 'uniform'):
+        optimizer_type: str = "sa",
+        update_interval: float = 1.0,
+        seed: int | None = None,
+    ) -> None:
+        if optimizer_type not in SUPPORTED_OPTIMIZERS:
             raise ValueError(
-                f"Unsupported optimizer_type {optimizer_type!r}; the async runtime "
-                "supports 'sa' or 'uniform'. QAOA is available offline via qaoa_solver.py."
+                f"Unsupported optimizer_type {optimizer_type!r}; the async runtime supports "
+                f"{SUPPORTED_OPTIMIZERS}. QAOA is available offline via "
+                "qexec.optimization.solvers.qaoa."
             )
         self.policy_queue = policy_queue
         self.optimizer_type = optimizer_type
         self.update_interval = update_interval
         self.seed = seed
-        
-        # Thread control
-        self._thread: Optional[Thread] = None
+
+        self._thread: Thread | None = None
         self._stop_event = Event()
         self._running = False
-        
-        # Current optimization context
-        self._current_order_size: int = 0
-        self._num_slices: int = 10
-        self._market_data: Optional[pd.DataFrame] = None
         self._context_lock = Lock()
-        
-        # Statistics
+        self._current_order_size = 0
+        self._num_slices = 10
+
         self.num_optimizations = 0
         self.total_optimization_time = 0.0
-        
-        # Resilience
-        from qexec.runtime.resilience import OptimizerResilience, ResilienceConfig
-        self.resilience = OptimizerResilience(ResilienceConfig(
-            timeout_seconds=5.0,
-            max_retries=3
-        ))
-    
+        self.resilience = OptimizerResilience(ResilienceConfig(timeout_seconds=5.0, max_retries=3))
+
     def start(self, order_size: int, num_slices: int) -> None:
-        """Start the optimizer thread."""
         if self._running:
             logger.warning("Optimizer already running")
             return
-        
         with self._context_lock:
             self._current_order_size = order_size
             self._num_slices = num_slices
-        
         self._stop_event.clear()
         self._thread = Thread(target=self._optimization_loop, daemon=True)
         self._thread.start()
         self._running = True
-        logger.info(f"Optimizer started ({self.optimizer_type})")
-    
+        logger.info("Optimizer started (%s)", self.optimizer_type)
+
     def stop(self) -> None:
-        """Stop the optimizer thread."""
         self._stop_event.set()
         if self._thread is not None:
             self._thread.join(timeout=5.0)
         self._running = False
         logger.info("Optimizer stopped")
-    
-    def update_market_data(self, market_data: pd.DataFrame) -> None:
-        """Update market data for next optimization."""
-        with self._context_lock:
-            self._market_data = market_data.copy()
-    
+
     def _optimization_loop(self) -> None:
-        """Main optimization loop running in background thread."""
         while not self._stop_event.is_set():
-            start = time()
-            
+            start = perf_counter()
+            # Keep the background thread alive whatever the solver or fallback raises.
             try:
                 policy = self._run_optimization()
-                if policy is not None:
-                    self.policy_queue.publish(policy)
-                    self.num_optimizations += 1
-                    self.total_optimization_time += policy.optimization_time
-            except Exception as e:
-                logger.error(f"Optimization error: {e}")
-            
-            # Wait for next interval
-            elapsed = time() - start
-            wait_time = max(0, self.update_interval - elapsed)
-            self._stop_event.wait(wait_time)
-    
-    def _run_optimization(self) -> Optional[ExecutionPolicy]:
-        """Run single optimization iteration."""
+            except Exception:
+                logger.exception("Optimization failed; keeping the previous policy")
+                policy = None
+            if policy is not None:
+                self.policy_queue.publish(policy)
+                self.num_optimizations += 1
+                self.total_optimization_time += policy.optimization_time
+            self._stop_event.wait(max(0.0, self.update_interval - (perf_counter() - start)))
+
+    def _run_optimization(self) -> ExecutionPolicy | None:
         with self._context_lock:
             order_size = self._current_order_size
             num_slices = self._num_slices
-        
         if order_size <= 0:
             return None
-        
-        start = time()
-        
-        def optimize_task():
-            if self.optimizer_type == 'sa':
-                return self._optimize_sa(order_size, num_slices)
-            else:
-                return self._optimize_uniform(order_size, num_slices)
-        
-        def validate(schedule):
-            from qexec.runtime.resilience import validate_schedule
-            return validate_schedule(schedule, order_size)
-        
-        try:
-            # Execute with resilience
-            schedule = self.resilience.execute(
-                optimize_task,
-                fallback_func=lambda: self._optimize_fallback(order_size, num_slices),
-                validation_func=validate
-            )
-            
-            opt_time = time() - start
-            
-            return ExecutionPolicy(
-                schedule=schedule,
-                optimizer_name=self.optimizer_type,
-                optimization_time=opt_time
-            )
-            
-        except Exception as e:
-            logger.error(f"Optimization failed permanently: {e}")
-            return None
 
-    def _optimize_fallback(self, order_size: int, num_slices: int) -> np.ndarray:
-        """Fallback optimization (TWAP)."""
-        logger.warning("Using fallback execution strategy")
-        return self._optimize_uniform(order_size, num_slices)
-    
-    def _optimize_uniform(self, order_size: int, num_slices: int) -> np.ndarray:
-        """Simple uniform distribution (TWAP-like)."""
-        base = order_size // num_slices
-        remainder = order_size % num_slices
-        schedule = np.full(num_slices, base)
-        schedule[:remainder] += 1
-        return schedule
-    
-    def _optimize_sa(self, order_size: int, num_slices: int) -> np.ndarray:
-        """Optimize using simulated annealing on QUBO."""
+        start = perf_counter()
+
+        def optimize() -> NDArray[np.float64]:
+            if self.optimizer_type == "sa":
+                return self._optimize_sa(order_size, num_slices)
+            return uniform_schedule(order_size, num_slices).astype(np.float64)
+
+        def fallback() -> NDArray[np.float64]:
+            logger.warning("Using fallback execution strategy")
+            return uniform_schedule(order_size, num_slices).astype(np.float64)
+
+        schedule = self.resilience.execute(
+            optimize,
+            fallback_func=fallback,
+            validation_func=lambda s: validate_schedule(s, order_size),
+        )
+        return ExecutionPolicy(
+            schedule=schedule,
+            optimizer_name=self.optimizer_type,
+            optimization_time=perf_counter() - start,
+        )
+
+    def _optimize_sa(self, order_size: int, num_slices: int) -> NDArray[np.float64]:
         qubo = ExecutionQUBO(slice_level_config(order_size, num_slices))
-        solver = SimulatedAnnealingSolver(num_sweeps=200, seed=self.seed)
+        solver = SimulatedAnnealingSolver(num_sweeps=_SA_SWEEPS, seed=self.seed)
         schedule, _ = optimize_schedule(qubo, solver)
         return schedule

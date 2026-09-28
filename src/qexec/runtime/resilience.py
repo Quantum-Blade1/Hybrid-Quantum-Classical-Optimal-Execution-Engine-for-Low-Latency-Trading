@@ -1,149 +1,115 @@
-"""
-Optimizer Resilience Module
+"""Timeout, retry with exponential backoff, validation and fallback around an optimizer call."""
 
-Provides robust error handling for quantum optimization:
-1. Timeout protection
-2. Retry logic with exponential backoff
-3. Solution validation
-4. Classical fallback
-
-Usage:
-    resilience = OptimizerResilience(timeout=5.0, max_retries=3)
-    result = resilience.execute(optimizer_func, args...)
-"""
-
-import time
 import logging
-import numpy as np
-from typing import Callable, Optional, Any, Tuple, List
+import queue
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from threading import Thread
-import queue
+from typing import TypeVar
+
+import numpy as np
+from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
 
 class OptimizerTimeoutError(Exception):
     pass
 
+
 class InvalidSolutionError(Exception):
     pass
 
-@dataclass
+
+@dataclass(frozen=True)
 class ResilienceConfig:
     timeout_seconds: float = 5.0
     max_retries: int = 3
     base_backoff_seconds: float = 0.5
     validate_solution: bool = True
 
+
 class OptimizerResilience:
-    """Manages resilient execution of optimization functions."""
-    
-    def __init__(self, config: Optional[ResilienceConfig] = None):
+    """Runs a callable with a timeout; the k-th retry waits base * 2^(k-1) seconds first."""
+
+    def __init__(self, config: ResilienceConfig | None = None) -> None:
         self.config = config or ResilienceConfig()
-    
+
     def execute(
         self,
-        func: Callable,
-        *args,
-        fallback_func: Optional[Callable] = None,
-        validation_func: Optional[Callable[[np.ndarray], bool]] = None,
-        **kwargs
-    ) -> Any:
-        """
-        Execute function with resilience logic.
-        
-        Args:
-            func: Primary optimization function
-            fallback_func: Function to call if primary fails/times out
-            validation_func: Function to validate result
-            
-        Returns:
-            Result from func or fallback_func
-        """
-        attempt = 0
-        last_error = None
-        
-        while attempt <= self.config.max_retries:
+        func: Callable[[], T],
+        fallback_func: Callable[[], T] | None = None,
+        validation_func: Callable[[T], bool] | None = None,
+    ) -> T:
+        """Return the first valid result of `func`, else `fallback_func()`, else re-raise."""
+        last_error: Exception | None = None
+        for attempt in range(self.config.max_retries + 1):
+            if attempt > 0:
+                backoff = self.config.base_backoff_seconds * (2 ** (attempt - 1))
+                logger.warning(
+                    "Retry %d/%d after %.1fs backoff", attempt, self.config.max_retries, backoff
+                )
+                time.sleep(backoff)
             try:
-                # Calculate backoff
-                if attempt > 0:
-                    backoff = self.config.base_backoff_seconds * (2 ** (attempt - 1))
-                    logger.warning(f"Retry {attempt}/{self.config.max_retries} after {backoff:.1f}s backoff")
-                    time.sleep(backoff)
-                
-                # Execute with timeout mechanism
-                result = self._run_with_timeout(func, *args, **kwargs)
-                
-                # Validate
-                if self.config.validate_solution and validation_func:
-                    if not validation_func(result):
-                        raise InvalidSolutionError("Solution failed validation")
-                
+                result = self._run_with_timeout(func)
+                if (
+                    self.config.validate_solution
+                    and validation_func is not None
+                    and not validation_func(result)
+                ):
+                    raise InvalidSolutionError("Solution failed validation")
                 return result
-                
+            # The optimizer is arbitrary user code: any failure should trigger a retry.
             except Exception as e:
                 last_error = e
-                logger.error(f"Attempt {attempt + 1} failed: {type(e).__name__}: {e}")
-                attempt += 1
-        
-        # All retries failed
-        logger.error(f"All retries failed. Last error: {last_error}")
-        
-        if fallback_func:
-            logger.info("Engaging fallback mechanism...")
-            try:
-                return fallback_func(*args, **kwargs)
-            except Exception as fe:
-                logger.error(f"Fallback failed: {fe}")
-                raise fe
-        
+                logger.error(
+                    "Attempt %d failed: %s: %s", attempt + 1, type(e).__name__, e, exc_info=True
+                )
+
+        logger.error("All retries failed. Last error: %s", last_error)
+        if fallback_func is not None:
+            logger.info("Using fallback")
+            return fallback_func()
+        assert last_error is not None
         raise last_error
-    
-    def _run_with_timeout(self, func: Callable, *args, **kwargs) -> Any:
-        """Run function in separate thread to enforce timeout."""
-        result_queue = queue.Queue()
-        
-        def wrapper():
+
+    def _run_with_timeout(self, func: Callable[[], T]) -> T:
+        """Run `func` in a daemon thread; on timeout the thread is abandoned, not killed."""
+        results: queue.Queue[T] = queue.Queue()
+        errors: queue.Queue[Exception] = queue.Queue()
+
+        def wrapper() -> None:
+            # Forward any failure to the calling thread, where it is re-raised.
             try:
-                out = func(*args, **kwargs)
-                result_queue.put(('success', out))
+                results.put(func())
             except Exception as e:
-                result_queue.put(('error', e))
-        
-        t = Thread(target=wrapper, daemon=True)
-        t.start()
-        
-        try:
-            status, value = result_queue.get(timeout=self.config.timeout_seconds)
-            if status == 'error':
-                raise value
-            return value
-        except queue.Empty:
-            # Thread is still running but we ignore it
-            raise OptimizerTimeoutError(f"Optimization timed out after {self.config.timeout_seconds}s")
+                errors.put(e)
 
-# =============================================================================
-# Validation Utils
-# =============================================================================
+        worker = Thread(target=wrapper, daemon=True)
+        worker.start()
+        worker.join(timeout=self.config.timeout_seconds)
+        if not errors.empty():
+            raise errors.get()
+        if results.empty():
+            raise OptimizerTimeoutError(
+                f"Optimization timed out after {self.config.timeout_seconds}s"
+            )
+        return results.get()
 
-def validate_schedule(schedule: np.ndarray, total_shares: int, verbose: bool = False) -> bool:
-    """Validate that schedule conforms to constraints."""
-    
-    # Check 1: Output is numpy array
+
+def validate_schedule(schedule: NDArray[np.float64], total_shares: int) -> bool:
+    """Non-negative numpy schedule summing to `total_shares` within max(1, 1%)."""
     if not isinstance(schedule, np.ndarray):
-        if verbose: print("Fail: Not a numpy array")
+        logger.debug("Invalid schedule: not a numpy array")
         return False
-        
-    # Check 2: No negative values
     if np.any(schedule < 0):
-        if verbose: print("Fail: Negative values")
+        logger.debug("Invalid schedule: negative quantities")
         return False
-        
-    # Check 3: Sum constraint (within 1% tolerance for floating point)
-    current_sum = np.sum(schedule)
-    tolerance = max(1, total_shares * 0.01)
-    if abs(current_sum - total_shares) > tolerance:
-        if verbose: print(f"Fail: Sum {current_sum} != {total_shares}")
+    current_sum = float(np.sum(schedule))
+    if abs(current_sum - total_shares) > max(1, total_shares * 0.01):
+        logger.debug("Invalid schedule: sum %s != %s", current_sum, total_shares)
         return False
-        
     return True

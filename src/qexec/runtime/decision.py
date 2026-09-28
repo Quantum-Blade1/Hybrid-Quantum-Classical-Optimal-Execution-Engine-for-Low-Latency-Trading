@@ -1,344 +1,225 @@
+"""Cost-benefit rule for invoking the (expensive) slow-path optimizer.
+
+invoke iff order_size >= min_order_size, the optimizer is available, the expected latency
+is within max_latency_ms, and E[improvement] / latency_cost > lambda_tradeoff.
 """
-Quantum Optimization Decision Layer
 
-Smart decision logic for when to invoke quantum/expensive optimization:
-
-Decision Rule:
-    invoke_quantum = (expected_improvement > lambda * latency_cost) 
-                     AND (order_size > min_threshold)
-                     AND (optimizer_available)
-
-Inputs:
-- Order size relative to market depth
-- Current volatility (std of recent returns)
-- Available optimization time
-- Historical improvement from optimization
-"""
+import logging
+from collections import deque
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
-from datetime import datetime
-from collections import deque
-import logging
 
 logger = logging.getLogger(__name__)
 
+# Prior used when there is no improvement history (an assumption, not a measurement).
+DEFAULT_IMPROVEMENT_PCT = 0.01
+_IMPACT_VOL_SCALE = 0.1
+_LATENCY_VOL_SCALE = 0.001
 
-# =============================================================================
-# Decision Configuration
-# =============================================================================
 
-@dataclass
+@dataclass(frozen=True)
 class DecisionConfig:
-    """
-    Configuration for optimization decision logic.
-    
-    Attributes:
-        lambda_tradeoff: Cost-benefit tradeoff parameter
-                        Higher = more conservative (require higher expected improvement)
-        min_order_size: Minimum order size to consider optimization
-        min_volatility: Minimum volatility to trigger optimization
-        max_latency_ms: Maximum acceptable optimization latency
-        improvement_history_size: How many historical improvements to track
-    """
+    """Thresholds and cost coefficients of the decision rule."""
+
     lambda_tradeoff: float = 1.0
     min_order_size: int = 1000
-    min_depth_ratio: float = 0.01  # Order must be at least 1% of depth
-    min_volatility: float = 0.001  # 0.1% min volatility
-    max_latency_ms: float = 1000.0  # 1 second max
+    max_latency_ms: float = 1000.0
     improvement_history_size: int = 20
-    
-    # Cost coefficients
-    latency_cost_per_ms: float = 0.001  # $ per ms of delay
-    volatility_impact_weight: float = 0.5  # How much vol affects expected improvement
+    latency_cost_per_ms: float = 0.001
+    volatility_impact_weight: float = 0.5
 
 
-# =============================================================================
-# Market State
-# =============================================================================
-
-@dataclass
+@dataclass(frozen=True)
 class MarketState:
-    """Current market conditions for decision making."""
+    """Market conditions the decision is conditioned on."""
+
     current_price: float
     bid_ask_spread: float
-    market_depth: int  # Total shares at best bid/ask
-    recent_volatility: float  # Std of recent returns
-    volume_rate: float  # Shares per minute
+    market_depth: int
+    recent_volatility: float
+    volume_rate: float
     timestamp: datetime = field(default_factory=datetime.now)
-    
+
     @property
     def spread_bps(self) -> float:
-        """Spread in basis points."""
-        return (self.bid_ask_spread / self.current_price) * 10000
-    
+        return (self.bid_ask_spread / self.current_price) * 10_000
+
     @classmethod
-    def from_market_data(cls, market_data: pd.DataFrame) -> 'MarketState':
-        """Create MarketState from market data DataFrame."""
+    def from_market_data(cls, market_data: pd.DataFrame) -> "MarketState":
+        """Latest bar's price, spread and volume; volatility is the std of simple returns
+        (0.01 for a single bar)."""
         latest = market_data.iloc[-1]
-        
-        # Calculate volatility from returns
         if len(market_data) > 1:
-            returns = market_data['price'].pct_change().dropna()
-            volatility = returns.std()
+            volatility = float(market_data["price"].pct_change().dropna().std())
         else:
             volatility = 0.01
-        
         return cls(
-            current_price=latest['price'],
-            bid_ask_spread=latest.get('spread', latest['price'] * 0.0005),
-            market_depth=int(latest.get('volume', 100000)),
+            current_price=float(latest["price"]),
+            bid_ask_spread=float(latest.get("spread", latest["price"] * 0.0005)),
+            market_depth=int(latest.get("volume", 100_000)),
             recent_volatility=volatility,
-            volume_rate=market_data['volume'].mean() if 'volume' in market_data.columns else 10000
+            volume_rate=float(market_data["volume"].mean())
+            if "volume" in market_data.columns
+            else 10_000.0,
         )
 
 
-# =============================================================================
-# Improvement Tracker
-# =============================================================================
-
 class ImprovementTracker:
-    """
-    Tracks historical improvement from optimization.
-    
-    Compares optimized vs baseline execution costs to estimate
-    expected improvement for future decisions.
-    """
-    
-    def __init__(self, max_history: int = 20):
+    """Similarity- and recency-weighted mean of past relative improvements."""
+
+    def __init__(self, max_history: int = 20) -> None:
         self.max_history = max_history
-        self._improvements: deque = deque(maxlen=max_history)
-        self._contexts: deque = deque(maxlen=max_history)  # (order_size, volatility)
-    
+        self._improvement_pcts: deque[float] = deque(maxlen=max_history)
+        self._contexts: deque[tuple[int, float]] = deque(maxlen=max_history)
+
+    def __len__(self) -> int:
+        return len(self._improvement_pcts)
+
     def record(
-        self, 
-        baseline_cost: float, 
-        optimized_cost: float,
-        order_size: int,
-        volatility: float
+        self, baseline_cost: float, optimized_cost: float, order_size: int, volatility: float
     ) -> None:
-        """Record an improvement observation."""
         improvement = baseline_cost - optimized_cost
-        improvement_pct = improvement / baseline_cost if baseline_cost > 0 else 0
-        
-        self._improvements.append({
-            'absolute': improvement,
-            'percentage': improvement_pct,
-            'timestamp': datetime.now()
-        })
+        improvement_pct = improvement / baseline_cost if baseline_cost > 0 else 0.0
+        self._improvement_pcts.append(improvement_pct)
         self._contexts.append((order_size, volatility))
-        
-        logger.debug(f"Recorded improvement: ${improvement:.2f} ({improvement_pct:.2%})")
-    
+        logger.debug("Recorded improvement: $%.2f (%.2f%%)", improvement, 100 * improvement_pct)
+
     def expected_improvement(
-        self, 
-        order_size: int, 
-        volatility: float,
-        base_cost_estimate: float
+        self, order_size: int, volatility: float, base_cost_estimate: float
     ) -> float:
-        """
-        Estimate expected improvement for given conditions.
-        
-        Uses weighted average of historical improvements,
-        weighted by similarity to current conditions.
-        """
-        if len(self._improvements) == 0:
-            # No history - use conservative estimate
-            return base_cost_estimate * 0.01  # Assume 1% improvement
-        
-        # Calculate similarity-weighted average
+        """base_cost x weighted mean improvement; weight = similarity(size, vol) x recency."""
+        if not self._improvement_pcts:
+            return base_cost_estimate * DEFAULT_IMPROVEMENT_PCT
+
         total_weight = 0.0
         weighted_improvement = 0.0
-        
-        for i, (hist_size, hist_vol) in enumerate(self._contexts):
-            # Similarity based on order size and volatility
+        n = len(self._contexts)
+        for i, ((hist_size, hist_vol), pct) in enumerate(
+            zip(self._contexts, self._improvement_pcts, strict=True)
+        ):
             size_ratio = min(order_size, hist_size) / max(order_size, hist_size)
             vol_ratio = min(volatility, hist_vol) / max(volatility, hist_vol + 1e-10)
             similarity = (size_ratio + vol_ratio) / 2
-            
-            # Time decay (recent observations more relevant)
-            recency = (i + 1) / len(self._contexts)
+            recency = (i + 1) / n
             weight = similarity * recency
-            
-            improvement_pct = self._improvements[i]['percentage']
-            weighted_improvement += weight * improvement_pct
+            weighted_improvement += weight * pct
             total_weight += weight
-        
-        avg_improvement_pct = weighted_improvement / total_weight if total_weight > 0 else 0.01
-        
-        return base_cost_estimate * avg_improvement_pct
-    
+
+        avg_pct = (
+            weighted_improvement / total_weight if total_weight > 0 else DEFAULT_IMPROVEMENT_PCT
+        )
+        return base_cost_estimate * avg_pct
+
     @property
     def mean_improvement_pct(self) -> float:
-        """Mean percentage improvement."""
-        if len(self._improvements) == 0:
-            return 0.01
-        return np.mean([imp['percentage'] for imp in self._improvements])
+        if not self._improvement_pcts:
+            return DEFAULT_IMPROVEMENT_PCT
+        return float(np.mean(self._improvement_pcts))
 
 
-# =============================================================================
-# Decision Engine
-# =============================================================================
-
-@dataclass
+@dataclass(frozen=True)
 class DecisionResult:
-    """Result of optimization decision."""
     invoke_optimization: bool
     reason: str
     expected_improvement: float
     latency_cost: float
-    confidence: float  # 0-1 confidence in decision
-    details: Dict = field(default_factory=dict)
+    confidence: float
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 class OptimizationDecisionEngine:
-    """
-    Smart decision engine for when to invoke optimization.
-    
-    Decision Rule:
-        invoke = (E[improvement] > λ * latency_cost) 
-                 AND (order_size > min_threshold)
-                 AND (optimizer_available)
-    """
-    
-    def __init__(self, config: Optional[DecisionConfig] = None):
+    """Applies the decision rule and learns expected improvement from recorded outcomes."""
+
+    def __init__(self, config: DecisionConfig | None = None) -> None:
         self.config = config or DecisionConfig()
         self.improvement_tracker = ImprovementTracker(
             max_history=self.config.improvement_history_size
         )
-        
-        # State
         self._optimizer_available = True
-        self._last_optimization_time: Optional[datetime] = None
-        
-        # Statistics
         self.decisions_made = 0
         self.optimizations_invoked = 0
-    
+
     def set_optimizer_available(self, available: bool) -> None:
-        """Update optimizer availability status."""
         self._optimizer_available = available
-    
+
+    @staticmethod
+    def _skip(reason: str) -> DecisionResult:
+        return DecisionResult(
+            invoke_optimization=False,
+            reason=reason,
+            expected_improvement=0,
+            latency_cost=0,
+            confidence=1.0,
+        )
+
     def decide(
-        self,
-        order_size: int,
-        market_state: MarketState,
-        optimization_latency_ms: float = 500.0
+        self, order_size: int, market_state: MarketState, optimization_latency_ms: float = 500.0
     ) -> DecisionResult:
-        """
-        Decide whether to invoke optimization.
-        
-        Args:
-            order_size: Size of order to execute
-            market_state: Current market conditions
-            optimization_latency_ms: Expected optimization time
-            
-        Returns:
-            DecisionResult with recommendation
+        """Hard thresholds first, then the cost-benefit ratio against `lambda_tradeoff`.
+
+        Base cost = N spread/2 + 0.1 N P sigma; E[improvement] = tracker estimate +
+        sigma w_vol base cost; latency cost = t c_ms + (t/1000) sigma P N 0.001.
         """
         self.decisions_made += 1
-        
-        # Check hard thresholds first
-        
-        # 1. Minimum order size
-        if order_size < self.config.min_order_size:
-            return DecisionResult(
-                invoke_optimization=False,
-                reason=f"Order size {order_size} below minimum {self.config.min_order_size}",
-                expected_improvement=0,
-                latency_cost=0,
-                confidence=1.0
-            )
-        
-        # 2. Optimizer availability
+        cfg = self.config
+        if order_size < cfg.min_order_size:
+            return self._skip(f"Order size {order_size} below minimum {cfg.min_order_size}")
         if not self._optimizer_available:
-            return DecisionResult(
-                invoke_optimization=False,
-                reason="Optimizer not available",
-                expected_improvement=0,
-                latency_cost=0,
-                confidence=1.0
+            return self._skip("Optimizer not available")
+        if optimization_latency_ms > cfg.max_latency_ms:
+            return self._skip(
+                f"Latency {optimization_latency_ms}ms exceeds max {cfg.max_latency_ms}ms"
             )
-        
-        # 3. Max latency constraint
-        if optimization_latency_ms > self.config.max_latency_ms:
-            return DecisionResult(
-                invoke_optimization=False,
-                reason=f"Latency {optimization_latency_ms}ms exceeds max {self.config.max_latency_ms}ms",
-                expected_improvement=0,
-                latency_cost=0,
-                confidence=1.0
-            )
-        
-        # Calculate expected improvement
-        # Base cost estimate: order_size * spread_cost + impact_cost
-        base_spread_cost = order_size * market_state.bid_ask_spread / 2
-        base_impact_cost = order_size * market_state.current_price * market_state.recent_volatility * 0.1
-        base_cost_estimate = base_spread_cost + base_impact_cost
-        
-        # Adjust expected improvement based on volatility
-        vol_adjusted_improvement = self.improvement_tracker.expected_improvement(
-            order_size=order_size,
-            volatility=market_state.recent_volatility,
-            base_cost_estimate=base_cost_estimate
+
+        sigma = market_state.recent_volatility
+        price = market_state.current_price
+        base_cost_estimate = (
+            order_size * market_state.bid_ask_spread / 2
+            + order_size * price * sigma * _IMPACT_VOL_SCALE
         )
-        
-        # Higher volatility = higher potential for improvement
-        vol_bonus = market_state.recent_volatility * self.config.volatility_impact_weight * base_cost_estimate
-        expected_improvement = vol_adjusted_improvement + vol_bonus
-        
-        # Calculate latency cost
-        # Cost of delay during volatile period
+        tracked = self.improvement_tracker.expected_improvement(
+            order_size=order_size, volatility=sigma, base_cost_estimate=base_cost_estimate
+        )
+        expected_improvement = tracked + sigma * cfg.volatility_impact_weight * base_cost_estimate
         latency_cost = (
-            optimization_latency_ms * self.config.latency_cost_per_ms +
-            optimization_latency_ms / 1000 * market_state.recent_volatility * market_state.current_price * order_size * 0.001
+            optimization_latency_ms * cfg.latency_cost_per_ms
+            + optimization_latency_ms / 1000 * sigma * price * order_size * _LATENCY_VOL_SCALE
         )
-        
-        # Apply decision rule
+
         cost_benefit_ratio = expected_improvement / (latency_cost + 1e-10)
-        invoke = cost_benefit_ratio > self.config.lambda_tradeoff
-        
-        # Confidence based on historical data
-        confidence = min(1.0, len(self.improvement_tracker._improvements) / 10)
-        
+        invoke = cost_benefit_ratio > cfg.lambda_tradeoff
         if invoke:
             self.optimizations_invoked += 1
-        
-        details = {
-            'order_size': order_size,
-            'volatility': market_state.recent_volatility,
-            'base_cost_estimate': base_cost_estimate,
-            'cost_benefit_ratio': cost_benefit_ratio,
-            'lambda': self.config.lambda_tradeoff,
-            'depth_ratio': order_size / market_state.market_depth
-        }
-        
-        reason = (
-            f"CBR={cost_benefit_ratio:.2f} {'>' if invoke else '<='} λ={self.config.lambda_tradeoff}"
-        )
-        
+
         return DecisionResult(
             invoke_optimization=invoke,
-            reason=reason,
+            reason=(
+                f"CBR={cost_benefit_ratio:.2f} {'>' if invoke else '<='} "
+                f"lambda={cfg.lambda_tradeoff}"
+            ),
             expected_improvement=expected_improvement,
             latency_cost=latency_cost,
-            confidence=confidence,
-            details=details
+            confidence=min(1.0, len(self.improvement_tracker) / 10),
+            details={
+                "order_size": order_size,
+                "volatility": sigma,
+                "base_cost_estimate": base_cost_estimate,
+                "cost_benefit_ratio": cost_benefit_ratio,
+                "lambda": cfg.lambda_tradeoff,
+                "depth_ratio": order_size / market_state.market_depth,
+            },
         )
-    
+
     def record_outcome(
-        self,
-        baseline_cost: float,
-        optimized_cost: float,
-        order_size: int,
-        volatility: float
+        self, baseline_cost: float, optimized_cost: float, order_size: int, volatility: float
     ) -> None:
-        """Record outcome for future learning."""
         self.improvement_tracker.record(
             baseline_cost=baseline_cost,
             optimized_cost=optimized_cost,
             order_size=order_size,
-            volatility=volatility
+            volatility=volatility,
         )

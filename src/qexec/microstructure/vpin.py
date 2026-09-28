@@ -1,34 +1,24 @@
-"""VPIN (volume-synchronized probability of informed trading)."""
+"""VPIN, volume-synchronised informed-trading probability (Easley, Lopez de Prado, O'Hara 2012)."""
 
 from collections import deque
 
+TOXICITY_THRESHOLD = 0.7
+_MIN_BUCKETS = 10
+
 
 class VPINEstimator:
-    """
-    Volume-Synchronized Probability of Informed Trading.
+    """Mean |buy - sell| / volume over the last `num_buckets` volume buckets.
 
-    VPIN (Easley, Lopez de Prado, O'Hara 2012) estimates the probability
-    that a trade is information-driven rather than noise. High VPIN signals
-    that the market is toxic for market makers and liquidity providers.
-
-    For HFT execution, high VPIN means:
-    - Wider effective spreads (adverse selection)
-    - Higher market impact (information leakage)
-    - The QUBO should shift to more passive, spread-crossing execution
-
-    The quantum optimizer uses VPIN to dynamically adjust:
-    - impact_coefficient in QUBOConfig
-    - Venue routing weights (avoid lit venues when toxic)
-    - Urgency parameter (slow down in toxic flow)
+    Trades are classified with the tick rule (up-tick buy, down-tick sell, unchanged
+    split evenly); the estimate is reported once 10 buckets are complete.
     """
 
-    def __init__(self, bucket_size: int = 1000, num_buckets: int = 50):
+    def __init__(self, bucket_size: int = 1000, num_buckets: int = 50) -> None:
         self._bucket_size = bucket_size
-        self._num_buckets = num_buckets
         self._current_bucket_volume = 0
         self._current_buy_volume = 0
-        self._buckets: deque = deque(maxlen=num_buckets)
-        self._vpin: float = 0.0
+        self._buckets: deque[tuple[int, int]] = deque(maxlen=num_buckets)
+        self._vpin = 0.0
 
     def update(self, price: float, volume: int, prev_price: float) -> float:
         if price > prev_price:
@@ -45,14 +35,13 @@ class VPINEstimator:
             sell_volume = self._current_bucket_volume - self._current_buy_volume
             imbalance = abs(self._current_buy_volume - sell_volume)
             self._buckets.append((imbalance, self._current_bucket_volume))
-
             self._current_bucket_volume = 0
             self._current_buy_volume = 0
 
-            if len(self._buckets) >= 10:
+            if len(self._buckets) >= _MIN_BUCKETS:
                 total_imbalance = sum(b[0] for b in self._buckets)
                 total_volume = sum(b[1] for b in self._buckets)
-                self._vpin = total_imbalance / total_volume if total_volume > 0 else 0
+                self._vpin = total_imbalance / total_volume if total_volume > 0 else 0.0
 
         return self._vpin
 
@@ -62,4 +51,4 @@ class VPINEstimator:
 
     @property
     def is_toxic(self) -> bool:
-        return self._vpin > 0.7
+        return self._vpin > TOXICITY_THRESHOLD
