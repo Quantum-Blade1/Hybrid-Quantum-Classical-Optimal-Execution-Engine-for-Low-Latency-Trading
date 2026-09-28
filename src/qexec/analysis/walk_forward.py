@@ -25,6 +25,10 @@ from qexec.market.simulator import MarketDataSimulator, MarketParams
 from qexec.execution.engine import ExecutionEngine
 from qexec.execution.strategies.vwap import VWAPStrategy
 from qexec.analysis.shortfall import ISAnalyzer
+from qexec.execution.strategies.fixed import FixedScheduleStrategy
+from qexec.optimization.qubo import ExecutionQUBO
+from qexec.optimization.schedule import optimize_schedule, slice_level_config
+from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
 
 @dataclass
 class WindowResult:
@@ -208,37 +212,23 @@ class WalkForwardAnalyzer:
             # --- Strategy C: Hybrid (QUBO-Optimized) ---
             # Run actual QUBO optimization via SA to generate schedule,
             # then execute it through the same engine.
-            from qexec.optimization.qubo import QUBOConfig, ExecutionQUBO
-            from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
-
             num_slices = min(20, len(day))
-            q_levels = [0, self.daily_shares // (num_slices * 2), self.daily_shares // num_slices]
-            q_levels = [q for q in q_levels if q >= 0]
-
-            qubo_config = QUBOConfig(
-                total_shares=self.daily_shares,
-                num_time_slices=num_slices,
-                num_venues=1,
-                quantity_levels=q_levels,
+            qubo_config = slice_level_config(
+                self.daily_shares,
+                num_slices,
                 volatility=max(0.001, train_vol / np.sqrt(252)),
-                equality_penalty=100.0,
-                impact_coefficient=0.1
+                impact_coefficient=0.1,
+            )
+            slice_qty, _ = optimize_schedule(
+                ExecutionQUBO(qubo_config), SimulatedAnnealingSolver(num_sweeps=300, seed=42)
             )
 
-            qubo = ExecutionQUBO(qubo_config)
-            Q = qubo.build_qubo_matrix()
-
-            sa_solver = SimulatedAnnealingSolver(num_sweeps=300, seed=42)
-            sa_result = sa_solver.solve(Q, verbose=False)
-
-            solution_df = qubo.interpret_solution(sa_result.solution)
+            # Each slice's quantity is placed at the slice's first minute.
             hybrid_schedule = np.zeros(len(day))
-            if len(solution_df) > 0:
-                minutes_per_slice = max(1, len(day) // num_slices)
-                for _, row in solution_df.iterrows():
-                    t = int(row["time_slice"])
-                    minute_idx = min(t * minutes_per_slice, len(day) - 1)
-                    hybrid_schedule[minute_idx] += row["quantity"]
+            minutes_per_slice = max(1, len(day) // num_slices)
+            for t, quantity in enumerate(slice_qty):
+                if quantity > 0:
+                    hybrid_schedule[min(t * minutes_per_slice, len(day) - 1)] += quantity
 
             # Normalize to match daily shares
             sched_sum = hybrid_schedule.sum()
@@ -247,23 +237,8 @@ class WalkForwardAnalyzer:
             else:
                 hybrid_schedule = np.full(len(day), self.daily_shares / len(day))
 
-            from qexec.execution.strategies.base import BaseStrategy, ExecutionSlice
-            class QUBOStrategy(BaseStrategy):
-                def __init__(self, schedule_array):
-                    super().__init__("HybridQUBO")
-                    self._schedule = schedule_array
-                def calculate_schedule(self, total_quantity, market_data):
-                    n = len(market_data)
-                    sched = self._schedule[:n].copy()
-                    sched_sum = sched.sum()
-                    if sched_sum > 0:
-                        sched = sched * (total_quantity / sched_sum)
-                    else:
-                        sched = np.full(n, total_quantity / n)
-                    return sched.astype(int)
-
             eng_h = ExecutionEngine()
-            strat_h = QUBOStrategy(hybrid_schedule)
+            strat_h = FixedScheduleStrategy(hybrid_schedule)
             report_h = eng_h.process_order(
                 self._create_order(), day, strat_h
             )

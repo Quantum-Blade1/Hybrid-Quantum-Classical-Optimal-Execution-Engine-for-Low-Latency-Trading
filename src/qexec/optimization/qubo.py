@@ -433,6 +433,15 @@ class ExecutionQUBO:
     # Solution Interpretation
     # =========================================================================
     
+    def slice_quantities(self, x: np.ndarray) -> np.ndarray:
+        """Total quantity selected in each time slice (summed over venues and levels)."""
+        cfg = self.config
+        quantities = np.zeros(cfg.num_time_slices)
+        for i in np.flatnonzero(np.asarray(x) > 0.5):
+            t, _, k = cfg.decode_index(int(i))
+            quantities[t] += cfg.quantity_levels[k]
+        return quantities
+
     def interpret_solution(self, x: np.ndarray) -> pd.DataFrame:
         """
         Convert binary solution vector to execution schedule.

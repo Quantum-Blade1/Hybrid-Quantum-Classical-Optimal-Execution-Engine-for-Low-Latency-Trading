@@ -335,6 +335,15 @@ class HFTExecutionQUBO:
                         excess = q_i + q_j - M
                         self._constraint_matrix[i, j] += P * excess
 
+    def slice_quantities(self, x: np.ndarray) -> np.ndarray:
+        """Total quantity selected in each tick slice (summed over venues and levels)."""
+        cfg = self.config
+        quantities = np.zeros(cfg.num_tick_slices)
+        for i in np.flatnonzero(np.asarray(x) > 0.5):
+            t, _, k = cfg.decode_index(int(i))
+            quantities[t] += cfg.quantity_levels[k]
+        return quantities
+
     def interpret_solution(self, x: np.ndarray) -> dict:
         cfg = self.config
         schedule = []

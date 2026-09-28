@@ -21,6 +21,7 @@ from typing import Optional, Dict, List, Tuple
 from time import time
 
 from qexec.optimization.qubo import QUBOConfig, ExecutionQUBO
+from qexec.optimization.schedule import optimize_schedule, spread_over_minutes
 from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
 from qexec.optimization.solvers.result import QUBOResult
 from qexec.execution.engine import ExecutionEngine, ParentOrder, OrderSide, ExecutionReport
@@ -126,11 +127,8 @@ class QUBOStrategy(BaseStrategy):
             max_shares_per_slice=total_shares // 3
         )
         
-        # Build QUBO
+        # Build and solve the QUBO with simulated annealing
         self.qubo = ExecutionQUBO(config)
-        Q = self.qubo.build_qubo_matrix()
-        
-        # Solve with simulated annealing
         solver = SimulatedAnnealingSolver(
             num_sweeps=self.sa_sweeps,
             initial_temp=10.0,
@@ -138,34 +136,11 @@ class QUBOStrategy(BaseStrategy):
             cooling_rate=0.95,
             seed=self.seed
         )
-        
-        self.qubo_result = solver.solve(Q)
+        slice_qty, self.qubo_result = optimize_schedule(self.qubo, solver)
         self.optimization_time = time() - start_time
         
-        # Convert QUBO solution to schedule
-        solution_df = self.qubo.interpret_solution(self.qubo_result.solution)
-        
         # Map QUBO time slices to market data minutes
-        schedule = np.zeros(num_minutes)
-        minutes_per_slice = num_minutes // self.num_time_slices
-        
-        for _, row in solution_df.iterrows():
-            t = row["time_slice"]
-            q = row["quantity"]
-            
-            # Distribute quantity across minutes in this slice
-            start_min = t * minutes_per_slice
-            end_min = min((t + 1) * minutes_per_slice, num_minutes)
-            
-            if end_min > start_min:
-                shares_per_min = q // (end_min - start_min)
-                remainder = q % (end_min - start_min)
-                
-                for m in range(start_min, end_min):
-                    schedule[m] = shares_per_min
-                schedule[start_min] += remainder  # Add remainder to first minute
-        
-        return schedule
+        return spread_over_minutes(slice_qty, num_minutes)
     
     def get_execution_summary(self) -> pd.DataFrame:
         """Get summary of execution slices."""

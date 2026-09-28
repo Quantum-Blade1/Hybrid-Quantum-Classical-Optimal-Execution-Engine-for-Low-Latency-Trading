@@ -15,12 +15,8 @@ from dataclasses import dataclass
 from time import time
 import logging
 
-from qexec.market.simulator import MarketDataSimulator
-# hybrid_demo is at root, assuming running from root
-import sys
-import os
-sys.path.append(os.getcwd())
-from hybrid_demo import run_hybrid_execution, run_vwap_execution, ExecutionResult
+from qexec.analysis.runners import run_hybrid_execution, run_vwap_execution
+from qexec.market.simulator import MarketDataSimulator, MarketParams
 
 @dataclass
 class StressResult:
@@ -46,8 +42,6 @@ class StressGenerator:
         drop_pct: float = 0.50
     ) -> pd.DataFrame:
         """Simulate flash crash."""
-        from qexec.market.simulator import MarketParams
-        
         sim = MarketDataSimulator(params=MarketParams(initial_price=100.0))
         data = sim.generate(num_minutes=num_minutes)
         data['volatility'] = 0.0002 # Initialize base volatility
@@ -135,9 +129,8 @@ class StressRunner:
         print(f"\nRunning Scenario: {name}")
         results = []
         
-        # 1. Classical (VWAP) - reusing hybrid_demo logic but forcing SA/VWAP
+        # 1. Classical (VWAP) - VWAP baseline
         try:
-            # We use hybrid_demo.run_vwap_execution as baseline
             
             start = time()
             res = run_vwap_execution(data, total_shares=50000)
@@ -236,7 +229,3 @@ class StressRunner:
             print(crashes)
         else:
             print("\nAll systems operational. No crashes detected.")
-
-if __name__ == "__main__":
-    runner = StressRunner()
-    runner.run_suite()

@@ -11,7 +11,9 @@ import matplotlib.pyplot as plt
 from typing import List, Dict
 
 from qexec.execution.strategies.almgren_chriss import AlmgrenChrissSolver, ACConfig
-from qexec.runtime.controller import HybridController
+from qexec.optimization.qubo import ExecutionQUBO
+from qexec.optimization.schedule import optimize_schedule, slice_level_config
+from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
 from qexec.market.simulator import MarketDataSimulator
 
 def run_comparison(
@@ -41,19 +43,9 @@ def run_comparison(
     # NOTE: The current demo QUBO is mostly impact-minimizing (Risk Neutral-ish).
     # To make it fair, we'll run it as is and see how it compares to AC-RiskNeutral.
     
-    controller = HybridController(
-        optimizer_type='sa',
-        optimizer_interval=10.0, # Run once effectively
-        engine_tick_interval=0.01 
-    )
-    
-    # Force single optimization with specific parameters if possible, 
-    # but controller runs loop. We'll just execute and capture the result.
-    
-    # Actually, let's use the optimizer directly to get the schedule
-    # to avoid the noise of the execution engine for the trajectory plot.
-    params = controller.optimizer._optimize_sa(total_shares, n_steps)
-    hybrid_schedule = params
+    # Same QUBO and SA settings as the runtime's slow-path optimizer (AsyncOptimizer).
+    qubo = ExecutionQUBO(slice_level_config(total_shares, n_steps))
+    hybrid_schedule, _ = optimize_schedule(qubo, SimulatedAnnealingSolver(num_sweeps=200))
     
     # 3. Calculate metrics
     # Deviation from AC optimal

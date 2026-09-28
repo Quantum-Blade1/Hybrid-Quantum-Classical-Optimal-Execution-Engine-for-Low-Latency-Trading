@@ -18,6 +18,9 @@ from time import time
 from abc import ABC, abstractmethod
 import logging
 
+from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
+from qexec.optimization.solvers.exact import BruteForceSolver as ExactSolver
+
 logger = logging.getLogger(__name__)
 
 
@@ -73,7 +76,7 @@ class Solver(ABC):
 # =============================================================================
 
 class BruteForceSolver(Solver):
-    """Brute force enumeration (optimal but exponential)."""
+    """Brute force enumeration (optimal but exponential); wraps qexec's exact solver."""
     
     @property
     def name(self) -> str:
@@ -84,18 +87,8 @@ class BruteForceSolver(Solver):
         return "classical"
     
     def solve(self, Q: np.ndarray, **kwargs) -> Tuple[np.ndarray, float]:
-        n = Q.shape[0]
-        best_x = None
-        best_e = float('inf')
-        
-        for i in range(2**n):
-            x = np.array([(i >> j) & 1 for j in range(n)])
-            e = x @ Q @ x
-            if e < best_e:
-                best_e = e
-                best_x = x
-        
-        return best_x, best_e
+        result = ExactSolver().solve(Q)
+        return result.solution, result.energy
 
 
 class SABenchmarkSolver(Solver):
@@ -114,8 +107,6 @@ class SABenchmarkSolver(Solver):
         return "classical"
     
     def solve(self, Q: np.ndarray, **kwargs) -> Tuple[np.ndarray, float]:
-        from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
-        
         solver = SimulatedAnnealingSolver(num_sweeps=self.num_sweeps, seed=self.seed)
         result = solver.solve(Q, verbose=False)
         return result.solution, result.energy

@@ -1,27 +1,19 @@
 """
-IBM Quantum Hardware Benchmarking Module
+Hardware benchmark: simulated annealing vs QAOA (ideal Aer, noisy Aer and,
+with credentials, IBM Quantum hardware) on the toy execution QUBO.
 
-Runs execution QUBO optimization on real IBM quantum processors via
-qiskit-ibm-runtime, then compares against:
-  1. Noiseless Aer simulator (ideal QAOA)
-  2. Noisy Aer simulator (calibrated noise model)
-  3. Classical simulated annealing
-
-This produces the hardware benchmark data and figures needed for
-a Springer journal paper. No prior quantum finance paper provides
-real-hardware execution results at this level of detail.
+All solvers see the same toy_execution_qubo(n) instance. Hardware jobs go
+through qexec.hardware.ibm, which appends every job's ID and raw counts to
+a JSONL file (--counts-log) as soon as the job returns.
 
 Usage:
-    # With IBM Quantum token:
-    results = run_hardware_benchmark(token="YOUR_IBM_TOKEN")
-
-    # Without token (simulator-only mode for development):
-    results = run_hardware_benchmark(token=None)
-
-    # Generate all figures:
-    generate_hardware_figures(results, output_dir="paper/figures/")
+    python experiments/hardware_benchmark.py --simulator-only --output-dir /tmp/hw_figs
+    IBM_QUANTUM_TOKEN=... python experiments/hardware_benchmark.py
+    IBM_CLOUD_API_KEY=... IBM_CLOUD_CRN=... python experiments/hardware_benchmark.py
 """
 
+import argparse
+import os
 import numpy as np
 import time
 import logging
@@ -29,23 +21,13 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 from collections import Counter
 
+from qexec.hardware.ibm import backend_properties, connect_service, run_qaoa_on_hardware
+from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
+from qexec.optimization.solvers.qaoa import aer_sampler, run_qaoa
+
 logger = logging.getLogger(__name__)
 
-
-def _extract_counts(pub_result):
-    """Extract measurement counts from a SamplerV2 PubResult, handling different DataBin attribute names."""
-    data = pub_result.data
-    for attr in ('meas', 'c', 'cr'):
-        if hasattr(data, attr):
-            return getattr(data, attr).get_counts()
-    for attr in dir(data):
-        if not attr.startswith('_'):
-            obj = getattr(data, attr)
-            if hasattr(obj, 'get_counts'):
-                return obj.get_counts()
-    raise AttributeError(
-        f"No measurement data found in DataBin. Attributes: {[a for a in dir(data) if not a.startswith('_')]}"
-    )
+DEFAULT_COUNTS_LOG = "results/hw_jobs.jsonl"
 
 
 @dataclass
@@ -114,14 +96,8 @@ class HardwareBenchmarkResult:
         return table
 
 
-def build_execution_qubo(n_qubits: int, seed: int = 42) -> Tuple[np.ndarray, float]:
-    """
-    Build a small execution-style QUBO for hardware benchmarking.
-
-    Creates a QUBO that encodes an optimal execution problem with
-    n_qubits binary decision variables. Returns the QUBO matrix and
-    the exact optimal energy (found by brute force for small n).
-    """
+def toy_execution_qubo(n_qubits: int, seed: int = 42) -> Tuple[np.ndarray, float]:
+    """Toy QUBO used for the ibm_fez runs in results/bench_hw_*.json (not the six-term HFT QUBO); returns (Q, brute-force optimum)."""
     rng = np.random.default_rng(seed)
     Q = np.zeros((n_qubits, n_qubits))
 
@@ -164,19 +140,19 @@ def build_execution_qubo(n_qubits: int, seed: int = 42) -> Tuple[np.ndarray, flo
     return Q, optimal_energy
 
 
+def _approximation_ratio(energy: float, optimal_energy: float) -> float:
+    ratio = optimal_energy / energy if abs(energy) > 1e-10 else 1.0
+    return min(ratio, 1.0)
+
+
 def solve_with_sa(Q: np.ndarray, optimal_energy: float,
                   num_sweeps: int = 1000, seed: int = 42) -> SingleRunResult:
     """Solve QUBO with simulated annealing."""
-    from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
-
     n = Q.shape[0]
     start = time.time()
     solver = SimulatedAnnealingSolver(num_sweeps=num_sweeps, seed=seed)
     result = solver.solve(Q, verbose=False)
     elapsed = time.time() - start
-
-    ratio = optimal_energy / result.energy if abs(result.energy) > 1e-10 else 1.0
-    ratio = min(ratio, 1.0)
 
     return SingleRunResult(
         solver="SA",
@@ -184,10 +160,31 @@ def solve_with_sa(Q: np.ndarray, optimal_energy: float,
         qaoa_depth=0,
         energy=result.energy,
         optimal_energy=optimal_energy,
-        approximation_ratio=ratio,
+        approximation_ratio=_approximation_ratio(result.energy, optimal_energy),
         solve_time_s=elapsed,
         success_probability=1.0 if abs(result.energy - optimal_energy) < 1e-6 else 0.0,
     )
+
+
+def noisy_aer_backend(noise_level: float = 0.02):
+    """Aer backend with depolarizing gate noise and asymmetric readout error."""
+    from qiskit_aer import AerSimulator
+    from qiskit_aer.noise import NoiseModel, depolarizing_error, ReadoutError
+
+    noise_model = NoiseModel()
+    error_1q = depolarizing_error(noise_level, 1)
+    error_2q = depolarizing_error(noise_level * 5, 2)
+    noise_model.add_all_qubit_quantum_error(error_1q, ['rx', 'rz', 'h'])
+    noise_model.add_all_qubit_quantum_error(error_2q, ['rzz', 'cx'])
+
+    p_0_given_1 = noise_level
+    p_1_given_0 = noise_level * 0.8
+    readout_err = ReadoutError(
+        [[1 - p_1_given_0, p_1_given_0],
+         [p_0_given_1, 1 - p_0_given_1]]
+    )
+    noise_model.add_all_qubit_readout_error(readout_err)
+    return AerSimulator(noise_model=noise_model)
 
 
 def solve_with_qaoa_simulator(
@@ -202,98 +199,26 @@ def solve_with_qaoa_simulator(
 ) -> SingleRunResult:
     """Solve QUBO with QAOA on Aer simulator (ideal or noisy)."""
     from qiskit_aer import AerSimulator
-    from qiskit_aer.noise import NoiseModel, depolarizing_error, ReadoutError
-    from qiskit import transpile
-    from scipy.optimize import minimize
-
-    from qexec.optimization.ising import qubo_to_ising, build_qaoa_circuit_from_ising
 
     n = Q.shape[0]
-    rng = np.random.default_rng(seed)
     start = time.time()
-
-    ising = qubo_to_ising(Q)
-
-    backend = AerSimulator()
-    if noisy:
-        noise_model = NoiseModel()
-        error_1q = depolarizing_error(noise_level, 1)
-        error_2q = depolarizing_error(noise_level * 5, 2)
-        noise_model.add_all_qubit_quantum_error(error_1q, ['rx', 'rz', 'h'])
-        noise_model.add_all_qubit_quantum_error(error_2q, ['rzz', 'cx'])
-
-        p_0_given_1 = noise_level
-        p_1_given_0 = noise_level * 0.8
-        readout_err = ReadoutError(
-            [[1 - p_1_given_0, p_1_given_0],
-             [p_0_given_1, 1 - p_0_given_1]]
-        )
-        noise_model.add_all_qubit_readout_error(readout_err)
-        backend = AerSimulator(noise_model=noise_model)
-
-    history = []
-
-    def cost_fn(params):
-        gammas = params[:p]
-        betas = params[p:]
-        qc = build_qaoa_circuit_from_ising(ising, gammas, betas, p)
-        compiled = transpile(qc, backend)
-        result = backend.run(compiled, shots=shots).result()
-        counts = result.get_counts()
-
-        exp_energy = 0.0
-        for bitstring, count in counts.items():
-            binary = np.array([int(b) for b in bitstring[::-1]])
-            if len(binary) == n:
-                exp_energy += float(binary @ Q @ binary) * count / shots
-        history.append(exp_energy)
-        return exp_energy
-
-    x0 = np.concatenate([
-        rng.uniform(0, 2 * np.pi, p),
-        rng.uniform(0, np.pi, p)
-    ])
-
-    opt_result = minimize(cost_fn, x0, method='COBYLA',
-                          options={'maxiter': maxiter})
-
-    gammas = opt_result.x[:p]
-    betas = opt_result.x[p:]
-    qc = build_qaoa_circuit_from_ising(ising, gammas, betas, p)
-    compiled = transpile(qc, backend)
-    final = backend.run(compiled, shots=shots * 5).result()
-    counts = final.get_counts()
-
-    best_energy = float('inf')
-    best_bs = None
-    for bitstring, count in counts.items():
-        binary = np.array([int(b) for b in bitstring[::-1]])
-        if len(binary) == n:
-            e = float(binary @ Q @ binary)
-            if e < best_energy:
-                best_energy = e
-                best_bs = bitstring
-
-    total_shots = sum(counts.values())
-    success_count = counts.get(best_bs, 0) if best_bs else 0
-    success_prob = success_count / total_shots
-
+    backend = noisy_aer_backend(noise_level) if noisy else AerSimulator()
+    result = run_qaoa(
+        Q, p=p, sample=aer_sampler(backend), shots=shots, maxiter=maxiter,
+        final_shots=shots * 5, rng=np.random.default_rng(seed),
+    )
     elapsed = time.time() - start
-    ratio = optimal_energy / best_energy if abs(best_energy) > 1e-10 else 1.0
-    ratio = min(ratio, 1.0)
-
-    solver_name = "QAOA_Noisy" if noisy else "QAOA_Ideal"
 
     return SingleRunResult(
-        solver=solver_name,
+        solver="QAOA_Noisy" if noisy else "QAOA_Ideal",
         num_qubits=n,
         qaoa_depth=p,
-        energy=best_energy,
+        energy=result.energy,
         optimal_energy=optimal_energy,
-        approximation_ratio=ratio,
+        approximation_ratio=_approximation_ratio(result.energy, optimal_energy),
         solve_time_s=elapsed,
-        success_probability=success_prob,
-        counts=dict(Counter(counts).most_common(20)),
+        success_probability=result.success_probability,
+        counts=dict(Counter(result.counts).most_common(20)),
     )
 
 
@@ -308,121 +233,42 @@ def solve_with_ibm_hardware(
     seed: int = 42,
     instance: str = None,
     channel: str = None,
+    counts_log: str = DEFAULT_COUNTS_LOG,
+    run_id: int = 0,
 ) -> Tuple[SingleRunResult, Dict]:
     """
     Solve QUBO with QAOA on real IBM quantum hardware.
 
-    Supports both IBM Quantum Platform (channel="ibm_quantum") and
-    IBM Cloud Quantum (channel="ibm_cloud" with instance CRN).
-
-    Args:
-        token: IBM API key/token
-        backend_name: Backend processor name
-        instance: IBM Cloud CRN (required for ibm_cloud channel)
-        channel: "ibm_quantum" or "ibm_cloud" (auto-detected from instance)
+    Every SamplerV2 job's ID and raw counts are appended to ``counts_log``
+    as soon as the job returns.
     """
-    from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2
-    from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
-    from qiskit import QuantumCircuit
-    from scipy.optimize import minimize
-
-    from qexec.optimization.ising import qubo_to_ising, build_qaoa_circuit_from_ising
-
     n = Q.shape[0]
-    rng = np.random.default_rng(seed)
     start = time.time()
 
-    if channel is None:
-        channel = "ibm_cloud" if instance else "ibm_quantum"
-
-    service_kwargs = {"channel": channel, "token": token}
-    if instance:
-        service_kwargs["instance"] = instance
-
-    service = QiskitRuntimeService(**service_kwargs)
+    service = connect_service(token=token, channel=channel, instance=instance)
     backend = service.backend(backend_name)
+    props = backend_properties(backend)
 
-    backend_props = {
-        "name": backend.name,
-        "num_qubits": backend.num_qubits,
-        "version": str(getattr(backend, 'version', 'unknown')),
-    }
-
-    ising = qubo_to_ising(Q)
-
-    pm = generate_preset_pass_manager(optimization_level=3, backend=backend)
-
-    def cost_fn(params):
-        gammas = params[:p]
-        betas = params[p:]
-        qc = build_qaoa_circuit_from_ising(ising, gammas, betas, p)
-        isa_circuit = pm.run(qc)
-
-        sampler = SamplerV2(mode=backend)
-        job = sampler.run([isa_circuit], shots=shots)
-        result = job.result()
-        pub_result = result[0]
-
-        counts = _extract_counts(pub_result)
-
-        exp_energy = 0.0
-        total = sum(counts.values())
-        for bitstring, count in counts.items():
-            binary = np.array([int(b) for b in bitstring[::-1]])
-            if len(binary) >= n:
-                binary = binary[:n]
-            exp_energy += float(binary @ Q @ binary) * count / total
-        return exp_energy
-
-    x0 = np.concatenate([
-        rng.uniform(0, 2 * np.pi, p),
-        rng.uniform(0, np.pi, p)
-    ])
-
-    opt_result = minimize(cost_fn, x0, method='COBYLA',
-                          options={'maxiter': maxiter})
-
-    gammas = opt_result.x[:p]
-    betas = opt_result.x[p:]
-    qc = build_qaoa_circuit_from_ising(ising, gammas, betas, p)
-    isa_circuit = pm.run(qc)
-
-    sampler = SamplerV2(mode=backend)
-    job = sampler.run([isa_circuit], shots=shots * 5)
-    result = job.result()
-    pub_result = result[0]
-    counts = _extract_counts(pub_result)
-
-    best_energy = float('inf')
-    best_bs = None
-    for bitstring, count in counts.items():
-        binary = np.array([int(b) for b in bitstring[::-1]])
-        if len(binary) >= n:
-            binary = binary[:n]
-        e = float(binary @ Q @ binary)
-        if e < best_energy:
-            best_energy = e
-            best_bs = bitstring
-
-    total_shots = sum(counts.values())
-    success_count = counts.get(best_bs, 0) if best_bs else 0
-    success_prob = success_count / total_shots
-
+    result, job_ids = run_qaoa_on_hardware(
+        Q, backend, p=p, shots=shots, maxiter=maxiter, seed=seed,
+        log_path=counts_log,
+        metadata={"experiment": "hardware_benchmark", "run_id": run_id,
+                  "seed": seed, "optimal_energy": optimal_energy},
+    )
     elapsed = time.time() - start
-    ratio = optimal_energy / best_energy if abs(best_energy) > 1e-10 else 1.0
-    ratio = min(ratio, 1.0)
+    props["job_ids"] = job_ids
 
     return SingleRunResult(
         solver="QAOA_Hardware",
         num_qubits=n,
         qaoa_depth=p,
-        energy=best_energy,
+        energy=result.energy,
         optimal_energy=optimal_energy,
-        approximation_ratio=ratio,
+        approximation_ratio=_approximation_ratio(result.energy, optimal_energy),
         solve_time_s=elapsed,
-        success_probability=success_prob,
-        counts=dict(Counter(counts).most_common(20)),
-    ), backend_props
+        success_probability=result.success_probability,
+        counts=dict(Counter(result.counts).most_common(20)),
+    ), props
 
 
 def run_hardware_benchmark(
@@ -430,6 +276,7 @@ def run_hardware_benchmark(
     config: Optional[HardwareBenchmarkConfig] = None,
     instance: Optional[str] = None,
     channel: Optional[str] = None,
+    counts_log: str = DEFAULT_COUNTS_LOG,
 ) -> HardwareBenchmarkResult:
     """
     Run the full IBM hardware benchmark suite.
@@ -442,6 +289,7 @@ def run_hardware_benchmark(
         config: Benchmark configuration
         instance: IBM Cloud CRN for ibm_cloud channel
         channel: "ibm_quantum" or "ibm_cloud" (auto-detected from instance)
+        counts_log: JSONL file receiving job IDs and raw counts of every hardware job
     """
     if config is None:
         config = HardwareBenchmarkConfig()
@@ -469,7 +317,7 @@ def run_hardware_benchmark(
         print(f" Problem size: {n_qubits} qubits")
         print(f"{'─' * 60}")
 
-        Q, opt_energy = build_execution_qubo(n_qubits, seed=config.seed)
+        Q, opt_energy = toy_execution_qubo(n_qubits, seed=config.seed)
         print(f" Optimal energy: {opt_energy:.4f}")
 
         for run_id in range(config.num_runs_per_config):
@@ -503,7 +351,8 @@ def run_hardware_benchmark(
                             maxiter=min(config.optimizer_maxiter, 30),
                             token=token, backend_name=config.backend_name,
                             seed=run_seed, instance=instance,
-                            channel=channel,
+                            channel=channel, counts_log=counts_log,
+                            run_id=run_id,
                         )
                         hw.run_id = run_id
                         result.runs.append(hw)
@@ -826,6 +675,7 @@ def run_quick_benchmark(
     token: Optional[str] = None,
     instance: Optional[str] = None,
     channel: Optional[str] = None,
+    counts_log: str = DEFAULT_COUNTS_LOG,
 ) -> HardwareBenchmarkResult:
     """Quick benchmark for testing (smaller parameters)."""
     config = HardwareBenchmarkConfig(
@@ -838,16 +688,28 @@ def run_quick_benchmark(
     )
     result = run_hardware_benchmark(
         token=token, config=config,
-        instance=instance, channel=channel,
+        instance=instance, channel=channel, counts_log=counts_log,
     )
     generate_hardware_figures(result, output_dir=output_dir)
     return result
 
 
-if __name__ == "__main__":
-    import os
-    ibm_token = os.environ.get("IBM_QUANTUM_TOKEN") or os.environ.get("IBM_CLOUD_API_KEY")
-    ibm_instance = os.environ.get("IBM_CLOUD_CRN")
-    result = run_quick_benchmark(
-        token=ibm_token, instance=ibm_instance,
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("--simulator-only", action="store_true",
+                        help="skip IBM hardware even if credentials are set")
+    parser.add_argument("--output-dir", default="paper/figures")
+    parser.add_argument("--counts-log", default=DEFAULT_COUNTS_LOG)
+    args = parser.parse_args()
+
+    token = None
+    if not args.simulator_only:
+        token = os.environ.get("IBM_QUANTUM_TOKEN") or os.environ.get("IBM_CLOUD_API_KEY")
+    run_quick_benchmark(
+        output_dir=args.output_dir, token=token,
+        instance=os.environ.get("IBM_CLOUD_CRN"), counts_log=args.counts_log,
     )
+
+
+if __name__ == "__main__":
+    main()

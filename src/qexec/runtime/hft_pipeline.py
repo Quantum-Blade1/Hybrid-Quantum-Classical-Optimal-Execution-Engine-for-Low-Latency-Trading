@@ -54,6 +54,8 @@ import logging
 from qexec.microstructure.analyzer import MicrostructureAnalyzer, MicrostructureState
 from qexec.microstructure.regime import AdaptiveRiskManager, RegimeState
 from qexec.optimization.hft_qubo import HFTQUBOConfig, HFTExecutionQUBO
+from qexec.optimization.schedule import optimize_schedule
+from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
 from qexec.runtime.latency import LatencyMonitor, LatencySpan, get_latency_monitor
 from qexec.runtime.policy import PolicyQueue, ExecutionPolicy
 
@@ -270,8 +272,6 @@ class HFTQuantumPipeline:
             self._optimizer_thread.join(timeout=5.0)
 
     def _optimizer_loop(self) -> None:
-        from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
-
         solver = SimulatedAnnealingSolver(
             num_sweeps=self.config.solver_sweeps,
             seed=self.config.seed
@@ -299,14 +299,7 @@ class HFTQuantumPipeline:
                         Q = qubo.build_qubo_matrix()
 
                     with LatencySpan("slow_path_solve", self.latency):
-                        result = solver.solve(Q, verbose=False)
-
-                solution = qubo.interpret_solution(result.solution)
-                schedule = np.zeros(config_snapshot.num_tick_slices)
-                for entry in solution["schedule"]:
-                    t = entry["tick"]
-                    if t < len(schedule):
-                        schedule[t] += entry["quantity"]
+                        schedule, result = optimize_schedule(qubo, solver, Q)
 
                 sched_sum = schedule.sum()
                 if sched_sum > 0:

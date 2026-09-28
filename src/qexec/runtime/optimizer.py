@@ -12,6 +12,9 @@ from time import time
 from threading import Thread, Lock, Event
 import logging
 
+from qexec.optimization.qubo import ExecutionQUBO
+from qexec.optimization.schedule import optimize_schedule, slice_level_config
+from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
 from qexec.runtime.policy import ExecutionPolicy, PolicyQueue
 
 logger = logging.getLogger(__name__)
@@ -168,30 +171,7 @@ class AsyncOptimizer:
     
     def _optimize_sa(self, order_size: int, num_slices: int) -> np.ndarray:
         """Optimize using simulated annealing on QUBO."""
-        from qexec.optimization.qubo import QUBOConfig, ExecutionQUBO
-        from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
-        
-        # Build QUBO (simplified for speed)
-        config = QUBOConfig(
-            total_shares=order_size,
-            num_time_slices=num_slices,
-            num_venues=1,
-            quantity_levels=[0, order_size // (num_slices * 2), order_size // num_slices],
-            equality_penalty=100.0
-        )
-        
-        qubo = ExecutionQUBO(config)
-        Q = qubo.build_qubo_matrix()
-        
+        qubo = ExecutionQUBO(slice_level_config(order_size, num_slices))
         solver = SimulatedAnnealingSolver(num_sweeps=200, seed=self.seed)
-        result = solver.solve(Q, verbose=False)
-        
-        # Convert solution to schedule
-        solution_df = qubo.interpret_solution(result.solution)
-        schedule = np.zeros(num_slices)
-        for _, row in solution_df.iterrows():
-            t = int(row["time_slice"])
-            if t < num_slices:
-                schedule[t] += row["quantity"]
-        
+        schedule, _ = optimize_schedule(qubo, solver)
         return schedule
