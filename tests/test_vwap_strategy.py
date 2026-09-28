@@ -9,13 +9,11 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 
-import sys
-sys.path.insert(0, str(__file__).replace("\\tests\\test_vwap_strategy.py", ""))
 
-from src.vwap_strategy import VWAPStrategy
-from src.base_strategy import ExecutionMetrics
-from src.market_data import MarketDataSimulator
-from src.order_book import OrderBook
+from qexec.execution.strategies.vwap import VWAPStrategy
+from qexec.execution.strategies.base import ExecutionMetrics
+from qexec.market.simulator import MarketDataSimulator
+from qexec.market.order_book import OrderBook
 
 
 def create_mock_market_data(volume_profile: np.ndarray) -> pd.DataFrame:

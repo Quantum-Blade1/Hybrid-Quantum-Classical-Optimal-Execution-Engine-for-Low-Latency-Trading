@@ -9,10 +9,8 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-import sys
-sys.path.insert(0, str(__file__).replace("\\tests\\test_market_data.py", ""))
 
-from src.market_data import (
+from qexec.market.simulator import (
     MarketDataSimulator,
     IntraDayPriceGenerator,
     VolumeProfileGenerator,

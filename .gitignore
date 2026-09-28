@@ -53,6 +53,6 @@ paper/*.toc
 data/
 
 # Figures written to the working directory by ad-hoc script runs.
-# Curated images live in assets/ and figures/ and are tracked.
+# Curated images live in assets/ and paper/figures/ and are tracked.
 /*.png
 /*.pdf

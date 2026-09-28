@@ -9,10 +9,8 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-import sys
-sys.path.insert(0, str(__file__).replace("\\tests\\test_execution_engine.py", ""))
 
-from src.execution_engine import (
+from qexec.execution.engine import (
     ExecutionEngine,
     ParentOrder,
     ChildOrder,
@@ -21,9 +19,9 @@ from src.execution_engine import (
     ExecutionState,
     ExecutionReport
 )
-from src.vwap_strategy import VWAPStrategy
-from src.twap_strategy import TWAPStrategy
-from src.market_data import MarketDataSimulator
+from qexec.execution.strategies.vwap import VWAPStrategy
+from qexec.execution.strategies.twap import TWAPStrategy
+from qexec.market.simulator import MarketDataSimulator
 
 
 class TestParentOrder:

@@ -9,23 +9,19 @@ Demonstrates the complete workflow:
 5. Compare against VWAP and TWAP
 """
 
-import sys
 from datetime import datetime
 
-import os
-# Add src to path for imports
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.market_data import MarketDataSimulator, MarketParams
-from src.execution_engine import ParentOrder, OrderSide
-from src.qubo_integration import (
+from qexec.market.simulator import MarketDataSimulator, MarketParams
+from qexec.execution.engine import ParentOrder, OrderSide
+from qexec.execution.strategies.qubo import (
     run_integrated_comparison,
     plot_strategy_comparison
 )
-from src.execution_engine import ExecutionEngine
-from src.vwap_strategy import VWAPStrategy
-from src.twap_strategy import TWAPStrategy
-from src.qubo_integration import QUBOStrategy
+from qexec.execution.engine import ExecutionEngine
+from qexec.execution.strategies.vwap import VWAPStrategy
+from qexec.execution.strategies.twap import TWAPStrategy
+from qexec.execution.strategies.qubo import QUBOStrategy
 
 
 def print_header(text: str):

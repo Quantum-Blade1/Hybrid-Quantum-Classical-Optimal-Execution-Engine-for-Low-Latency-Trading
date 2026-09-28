@@ -8,19 +8,15 @@ This demo demonstrates the Phase 1 classical baseline:
 4. Optionally visualizes execution quality
 """
 
-import sys
 from datetime import datetime
 
 import numpy as np
 import pandas as pd
 
-import os
-# Add src to path for imports
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.market_data import MarketDataSimulator, MarketParams, calculate_vwap
-from src.order_book import OrderBook
-from src.vwap_strategy import VWAPStrategy
+from qexec.market.simulator import MarketDataSimulator, MarketParams, calculate_vwap
+from qexec.market.order_book import OrderBook
+from qexec.execution.strategies.vwap import VWAPStrategy
 
 
 def print_header(text: str, width: int = 60):

@@ -9,16 +9,14 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-import sys
-sys.path.insert(0, str(__file__).replace("\\tests\\test_qubo_integration.py", ""))
 
-from src.qubo_integration import (
+from qexec.execution.strategies.qubo import (
     QUBOStrategy,
     StrategyComparison,
     run_integrated_comparison
 )
-from src.execution_engine import ParentOrder, OrderSide, ExecutionEngine
-from src.market_data import MarketDataSimulator
+from qexec.execution.engine import ParentOrder, OrderSide, ExecutionEngine
+from qexec.market.simulator import MarketDataSimulator
 
 
 class TestQUBOStrategy:

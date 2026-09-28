@@ -6,7 +6,7 @@ Test Failure Modes for Optimizer Resilience
 import time
 import unittest
 import numpy as np
-from src.optimizer_resilience import (
+from qexec.runtime.resilience import (
     OptimizerResilience, ResilienceConfig, 
     OptimizerTimeoutError, InvalidSolutionError,
     validate_schedule

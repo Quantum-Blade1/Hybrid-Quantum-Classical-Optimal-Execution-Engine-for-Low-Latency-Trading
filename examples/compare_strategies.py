@@ -5,18 +5,14 @@ Compares VWAP and TWAP execution strategies on the same market data,
 showing differences in execution schedule, performance, and costs.
 """
 
-import sys
 from datetime import datetime
 
 import numpy as np
 
-import os
-# Add src to path for imports
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.market_data import MarketDataSimulator, MarketParams
-from src.vwap_strategy import VWAPStrategy
-from src.twap_strategy import TWAPStrategy, compare_strategies
+from qexec.market.simulator import MarketDataSimulator, MarketParams
+from qexec.execution.strategies.vwap import VWAPStrategy
+from qexec.execution.strategies.twap import TWAPStrategy, compare_strategies
 
 
 def print_header(text: str, width: int = 70):

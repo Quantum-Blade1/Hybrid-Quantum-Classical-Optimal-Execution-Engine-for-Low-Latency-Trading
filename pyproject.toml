@@ -39,13 +39,12 @@ dev = ["pytest>=7.0.0", "ruff>=0.6", "mypy>=1.10", "pandas-stubs"]
 [project.urls]
 Repository = "https://github.com/Quantum-Blade1/Hybrid-Quantum-Classical-Optimal-Execution-Engine-for-Low-Latency-Trading"
 
-# The importable package is introduced in a later restructuring step; until then
-# this project installs its dependencies only and code is run from the repo root.
-[tool.setuptools]
-packages = []
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 addopts = "-q"
 
 [tool.ruff]

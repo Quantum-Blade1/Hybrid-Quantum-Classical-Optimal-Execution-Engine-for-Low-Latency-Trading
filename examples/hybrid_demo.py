@@ -20,18 +20,14 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.WARNING)
 
-import sys
-import os
-# Add project root to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Local imports
-from src.market_data import MarketDataSimulator, MarketParams
-from src.execution_engine import ExecutionEngine, ParentOrder, OrderSide
-from src.vwap_strategy import VWAPStrategy
-from src.qubo_execution import QUBOConfig, ExecutionQUBO
-from src.qubo_solvers import SimulatedAnnealingSolver
-from src.decision_layer import (
+from qexec.market.simulator import MarketDataSimulator, MarketParams
+from qexec.execution.engine import ExecutionEngine, ParentOrder, OrderSide
+from qexec.execution.strategies.vwap import VWAPStrategy
+from qexec.optimization.qubo import QUBOConfig, ExecutionQUBO
+from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
+from qexec.runtime.decision import (
     OptimizationDecisionEngine, 
     DecisionConfig, 
     MarketState,

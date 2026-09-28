@@ -9,13 +9,11 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-import sys
-sys.path.insert(0, str(__file__).replace("\\tests\\test_twap_strategy.py", ""))
 
-from src.twap_strategy import TWAPStrategy, compare_strategies
-from src.vwap_strategy import VWAPStrategy
-from src.base_strategy import ExecutionMetrics
-from src.market_data import MarketDataSimulator
+from qexec.execution.strategies.twap import TWAPStrategy, compare_strategies
+from qexec.execution.strategies.vwap import VWAPStrategy
+from qexec.execution.strategies.base import ExecutionMetrics
+from qexec.market.simulator import MarketDataSimulator
 
 
 class TestTWAPSchedule:

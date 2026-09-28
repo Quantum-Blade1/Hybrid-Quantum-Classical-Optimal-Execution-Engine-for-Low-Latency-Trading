@@ -5,20 +5,14 @@ Demonstrates brute-force and simulated annealing solvers
 on the execution QUBO with N=8 time slices.
 """
 
-import sys
 import numpy as np
 
-import os
-# Add src to path for imports
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.qubo_execution import QUBOConfig, ExecutionQUBO
-from src.qubo_solvers import (
-    BruteForceSolver,
-    SimulatedAnnealingSolver,
-    GreedySolver,
-    compare_solvers
-)
+from qexec.optimization.qubo import QUBOConfig, ExecutionQUBO
+from qexec.optimization.solvers.exact import BruteForceSolver
+from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
+from qexec.optimization.solvers.greedy import GreedySolver
+from qexec.optimization.solvers.compare import compare_solvers
 
 
 def print_header(text: str):

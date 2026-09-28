@@ -8,10 +8,8 @@ import pytest
 import numpy as np
 import pandas as pd
 
-import sys
-sys.path.insert(0, str(__file__).replace("\\tests\\test_qubo_execution.py", ""))
 
-from src.qubo_execution import (
+from qexec.optimization.qubo import (
     QUBOConfig,
     ExecutionQUBO,
     create_random_binary_solution,

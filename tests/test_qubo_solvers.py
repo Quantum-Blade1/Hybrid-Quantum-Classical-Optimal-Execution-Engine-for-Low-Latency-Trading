@@ -7,16 +7,12 @@ Verifies brute-force and simulated annealing solvers.
 import pytest
 import numpy as np
 
-import sys
-sys.path.insert(0, str(__file__).replace("\\tests\\test_qubo_solvers.py", ""))
 
-from src.qubo_solvers import (
-    QUBOResult,
-    BruteForceSolver,
-    SimulatedAnnealingSolver,
-    GreedySolver,
-    compare_solvers
-)
+from qexec.optimization.solvers.result import QUBOResult
+from qexec.optimization.solvers.exact import BruteForceSolver
+from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
+from qexec.optimization.solvers.greedy import GreedySolver
+from qexec.optimization.solvers.compare import compare_solvers
 
 
 def create_simple_qubo(n: int = 5) -> np.ndarray:
@@ -198,7 +194,7 @@ class TestWithExecutionQUBO:
     
     def test_solve_execution_qubo(self):
         """Test solving an execution QUBO with N=8 slices."""
-        from src.qubo_execution import QUBOConfig, ExecutionQUBO
+        from qexec.optimization.qubo import QUBOConfig, ExecutionQUBO
         
         config = QUBOConfig(
             total_shares=1000,

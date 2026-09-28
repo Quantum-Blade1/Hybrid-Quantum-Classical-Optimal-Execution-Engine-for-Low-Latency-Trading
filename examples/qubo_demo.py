@@ -5,14 +5,10 @@ Demonstrates the QUBO formulation for optimal execution and
 shows how to interpret solutions.
 """
 
-import sys
 import numpy as np
 
-import os
-# Add src to path for imports
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.qubo_execution import (
+from qexec.optimization.qubo import (
     QUBOConfig,
     ExecutionQUBO,
     create_random_binary_solution,

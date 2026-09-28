@@ -4,17 +4,13 @@ Execution Engine Demo
 Demonstrates the modular execution engine with comprehensive reporting.
 """
 
-import sys
 from datetime import datetime
 
-import os
-# Add src to path for imports
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.market_data import MarketDataSimulator, MarketParams
-from src.execution_engine import ExecutionEngine, ParentOrder, OrderSide
-from src.vwap_strategy import VWAPStrategy
-from src.twap_strategy import TWAPStrategy
+from qexec.market.simulator import MarketDataSimulator, MarketParams
+from qexec.execution.engine import ExecutionEngine, ParentOrder, OrderSide
+from qexec.execution.strategies.vwap import VWAPStrategy
+from qexec.execution.strategies.twap import TWAPStrategy
 
 
 def print_header(text: str, width: int = 70):
