@@ -155,7 +155,7 @@ def plot_comparison(
     
     # Plot 1: Energy distribution
     ax1 = axes[0]
-    ax1.boxplot([comparison.qaoa_energies, comparison.sa_energies], labels=['QAOA', 'SA'])
+    ax1.boxplot([comparison.qaoa_energies, comparison.sa_energies], tick_labels=['QAOA', 'SA'])
     ax1.set_ylabel('Energy')
     ax1.set_title('Energy Distribution')
     ax1.grid(True, alpha=0.3)

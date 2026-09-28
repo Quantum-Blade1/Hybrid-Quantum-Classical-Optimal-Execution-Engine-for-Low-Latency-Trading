@@ -82,7 +82,7 @@ class StressGenerator:
         data['spread'] = 0.02 # Base spread
         
         data.loc[start:end, 'spread'] = 0.20 # 10x
-        data.loc[start:end, 'volume'] = data.loc[start:end, 'volume'] * 0.1 # Volume dries up
+        data.loc[start:end, 'volume'] = (data.loc[start:end, 'volume'] * 0.1).astype(int)  # Volume dries up
         
         data['is_stress'] = False
         data.loc[start:end, 'is_stress'] = True

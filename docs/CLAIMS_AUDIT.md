@@ -5,6 +5,24 @@ Baseline: tag `pre-refactor`. This ledger covers `src/`, `examples/`, `README.md
 
 "Fabricated" here means a number shown as a result that comes from a hand-typed literal, a random draw, or a hardcoded multiplier instead of from running the project's code.
 
+> **Paths updated in Phase 3.** The entries below keep the file names that were current when the audit was written. The code now lives in the `qexec` package:
+> `src/ibm_hardware_benchmark.py` → `experiments/hardware_benchmark.py` (`build_execution_qubo` → `toy_execution_qubo`, unchanged; IBM service/sampler code → `src/qexec/hardware/ibm.py`) ·
+> `src/generate_journal_figures.py` → `experiments/journal_figures.py` ·
+> `src/benchmark.py` → `experiments/solver_benchmark.py` ·
+> `src/is_comparison.py`, `src/load_test.py` → `experiments/` ·
+> `src/qaoa_solver.py` → `src/qexec/optimization/solvers/qaoa.py` (compare/plot part → `experiments/qaoa_vs_sa.py`) ·
+> `src/hybrid_async.py` → `src/qexec/runtime/{policy,optimizer,engine,controller}.py` ·
+> `src/hft_microstructure.py` → `src/qexec/microstructure/{kyle,vpin,adverse_selection,queue,analyzer}.py` ·
+> `src/adaptive_risk.py` → `src/qexec/microstructure/regime.py` ·
+> `src/hft_qubo.py`, `src/qubo_execution.py`, `src/qubo_to_ising.py` → `src/qexec/optimization/{hft_qubo,qubo,ising}.py` ·
+> `src/qubo_solvers.py` → `src/qexec/optimization/solvers/{exact,annealing,greedy,compare,result}.py` ·
+> `src/decision_layer.py`, `src/latency_monitor.py`, `src/hft_pipeline.py` → `src/qexec/runtime/{decision,latency,hft_pipeline}.py` ·
+> `src/error_mitigation.py` → `src/qexec/hardware/mitigation.py` ·
+> `src/walk_forward.py`, `src/implementation_shortfall.py`, `src/stress_test.py` → `src/qexec/analysis/{walk_forward,shortfall,stress}.py` ·
+> `src/dashboard.py` → `apps/dashboard.py` ·
+> `figures/*.pdf` → `paper/figures/`, `figures/*.json` → `results/` (byte-identical).
+> The `run_*_demo` functions cited in F5, F7, F8 and R2 were deleted. `src/generate_academic_plots.py` (R17, R18) was deleted. F4 is resolved: the runners `stress_test.py` needed now live in `src/qexec/analysis/runners.py`, and `experiments/stress_test.py` runs the suite. F6 now refers to `qexec.analysis.runners`.
+
 ---
 
 ## 1. Removed

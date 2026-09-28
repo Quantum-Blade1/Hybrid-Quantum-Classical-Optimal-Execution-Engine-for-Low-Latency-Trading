@@ -12,7 +12,7 @@ A research-grade hybrid architecture for optimal trade execution, combining low-
 *   **Hybrid Architecture**: Decoupled "Fast Path" (Execution Engine, <10ms delay) and "Slow Path" (Quantum/Classical Optimizer, 1-5s update).
 *   **Asynchronous Optimization**: Trading never blocks; execution policy is updated in real-time via a thread-safe queue.
 *   **Quantum Solvers**: Supports Simulated Annealing (SA) and QAOA (via Qiskit).
-*   **Real Data Ready**: Includes `DataLoader` for NSE/Binance/NYSE tick data ingestion and backtesting.
+*   **Real Data Ready**: Includes `qexec.market.loader.DataLoader` for NSE/Binance/NYSE tick data ingestion and backtesting.
 *   **Real-Time Dashboard**: Streamlit interface for live monitoring, strategy comparison, and quantum visualization.
 *   **Robustness**: Built-in resilience against solver timeouts and crashes with exponential backoff and classical fallback.
 *   **Advanced Analytics**: Implementation Shortfall decomposition (Delay, Impact, Timing Risk).
@@ -40,28 +40,39 @@ pip install -e ".[app]"          # Streamlit dashboard (streamlit, plotly)
 pip install -e ".[hardware]"     # IBM Quantum hardware runs (qiskit-ibm-runtime)
 ```
 
-Dependencies are declared in `pyproject.toml`. Run the scripts below from the repository root.
+Dependencies are declared in `pyproject.toml`. The library is the `qexec` package under `src/`; experiment and example scripts import it, so install it first and run the scripts from the repository root (figure and result paths are relative to it).
 
 ##  Quick Start
 
 ### 1. Interactive Dashboard (Recommended)
 Launch the real-time control center:
 ```bash
-streamlit run src/dashboard.py
+streamlit run apps/dashboard.py
 ```
 *Features: Live P&L, Execution Trajectory, Quantum Heatmap, TWAP Benchmark.*
 
-### 2. Headless Demo
-Run a standard execution simulation:
+### 2. Examples
+Short scripts showing the library API:
 ```bash
-python examples/hybrid_demo.py
+python examples/vwap_twap_execution.py   # classical baselines through the ExecutionEngine
+python examples/qubo_solvers.py          # build the execution QUBO; exact vs SA vs greedy
+python examples/qubo_vs_baselines.py     # QUBO-optimised schedule vs VWAP/TWAP
+python examples/hybrid_runtime.py        # fast/slow-path runtime and the HFT pipeline
 ```
 
-### 3. Walk-Forward Analysis
-Run the rolling window backtest:
+### 3. Experiments
+Each script in `experiments/` regenerates one set of results:
 ```bash
-python -m src.walk_forward
+python experiments/solver_benchmark.py    # BF / SA / QAOA-simulator comparison on random QUBOs
+python experiments/qaoa_vs_sa.py          # QAOA vs simulated annealing on a 12-variable execution QUBO
+python experiments/ac_comparison.py       # SA-QUBO schedule vs Almgren-Chriss trajectory
+python experiments/is_comparison.py       # implementation-shortfall decomposition, VWAP vs TWAP
+python experiments/stress_test.py         # stress scenarios, VWAP vs hybrid
+python experiments/load_test.py           # throughput of concurrent HybridController orders
+python experiments/journal_figures.py     # paper figures -> paper/figures/
+python experiments/hardware_benchmark.py  # SA + QAOA (ideal/noisy Aer; IBM hardware if credentials are set)
 ```
+The walk-forward backtest (`qexec.analysis.walk_forward`) is run by `journal_figures.py` (fig21). `hardware_benchmark.py --simulator-only` skips IBM hardware; with credentials (`IBM_QUANTUM_TOKEN`, or `IBM_CLOUD_API_KEY` + `IBM_CLOUD_CRN`) every hardware job's ID and raw counts are appended to `results/hw_jobs.jsonl` as soon as it returns.
 
 ##  System Architecture
 
@@ -83,21 +94,22 @@ The system operates on two timescales:
 
 ```
 Hybrid-Quantum-Classical-Optimal-Execution-Engine-for-Low-Latency-Trading/
-├── src/               # Core Source Code
-│   ├── hybrid_async.py
-│   ├── qubo_execution.py
-│   └── ...
-├── examples/          # Demo Scripts
-│   ├── hybrid_demo.py
-│   ├── solver_demo.py
-│   └── ...
-├── docs/              # Documentation
-│   ├── MATHEMATICAL_MODEL.md
-│   └── CLAIMS_AUDIT.md
-├── assets/            # README images
-├── figures/           # Paper figures and benchmark JSON
-├── paper/             # Manuscript source (main.tex)
-├── tests/             # Unit Tests
+├── src/qexec/             # Library (import-only; no scripts)
+│   ├── market/            # simulator, order_book, loader
+│   ├── execution/         # engine + strategies/ (base, twap, vwap, almgren_chriss, qubo)
+│   ├── optimization/      # qubo, hft_qubo, ising, schedule, solvers/ (exact, annealing, greedy, qaoa)
+│   ├── microstructure/    # kyle, vpin, adverse_selection, queue, analyzer, regime
+│   ├── runtime/           # policy, optimizer, engine, controller, hft_pipeline, decision, resilience, latency
+│   ├── hardware/          # ibm (IBM Quantum runtime access), mitigation
+│   └── analysis/          # shortfall, walk_forward, stress, runners
+├── experiments/           # Runnable scripts that produce results and figures
+├── examples/              # Short scripts demonstrating the library
+├── apps/dashboard.py      # Streamlit dashboard
+├── results/               # Benchmark data (JSON), incl. IBM hardware runs
+├── paper/                 # Manuscript (main.tex) and figures/
+├── docs/                  # MATHEMATICAL_MODEL.md, CLAIMS_AUDIT.md
+├── assets/                # README images
+├── tests/                 # Unit tests
 └── pyproject.toml     # Project metadata and dependencies
 ```
 
