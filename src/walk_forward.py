@@ -309,9 +309,3 @@ class WalkForwardAnalyzer:
         plt.grid(True, alpha=0.3)
         plt.savefig('walk_forward_results.png')
         print("Saved plot: walk_forward_results.png")
-
-if __name__ == "__main__":
-    # Test Run
-    analyzer = WalkForwardAnalyzer(total_days=10, train_days=5, test_days=1)
-    results = analyzer.run()
-    analyzer.plot_results(results)

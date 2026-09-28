@@ -95,9 +95,3 @@ class DataLoader:
         
         df.to_csv(filepath, index=False)
         print(f"Generated sample data at {filepath}")
-
-if __name__ == "__main__":
-    # Test generation
-    DataLoader.create_dummy_nse_data()
-    data = DataLoader.load_csv("data/sample_nse_ticks.csv", "NIFTY")
-    print(f"Loaded {len(data.data)} ticks for {data.symbol}")

@@ -289,33 +289,3 @@ class LatencySpan:
             self._component, self._start_ns, self._metadata
         )
         return False
-
-
-def run_latency_demo():
-    """Demonstrate latency monitoring on the hybrid architecture."""
-    monitor = LatencyMonitor()
-
-    print("\n" + "=" * 70)
-    print(" HFT Latency Monitor Demo")
-    print("=" * 70)
-
-    for i in range(200):
-        with LatencySpan("fast_path", monitor):
-            time.sleep(np.random.exponential(0.0001))
-
-        if i % 10 == 0:
-            with LatencySpan("slow_path_optimize", monitor):
-                time.sleep(np.random.exponential(0.05))
-
-            staleness = np.random.exponential(50)
-            monitor.record_staleness(staleness, i // 10)
-
-        with LatencySpan("tick_to_decision", monitor):
-            time.sleep(np.random.exponential(0.00005))
-
-    monitor.print_report()
-    return monitor
-
-
-if __name__ == "__main__":
-    run_latency_demo()

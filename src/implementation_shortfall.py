@@ -150,6 +150,3 @@ def plot_is_breakdown(strategies: Dict[str, ISC_Components], filename: str = "is
     plt.tight_layout()
     plt.savefig(filename)
     print(f"Saved plot: {filename}")
-
-if __name__ == "__main__":
-    pass
