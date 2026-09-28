@@ -1,137 +1,86 @@
-"""
-Almgren-Chriss Optimal Execution Model
+"""Almgren-Chriss optimal liquidation trajectory with linear temporary and permanent impact."""
 
-Implements the classic optimal execution framework (Almgren & Chriss, 2000).
-Provides closed-form solution for optimal trading trajectory minimizing
-Expected Cost + Lambda * Variance.
-
-Model parameters:
-- sigma: Daily volatility
-- eta: Temporary impact coefficient
-- rho: Permanent impact coefficient
-- lambda: Risk aversion
-"""
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Tuple
-from dataclasses import dataclass
 
-@dataclass
+# Below this value of kappa*T the sinh trajectory is numerically linear (risk-neutral limit).
+_LINEAR_LIMIT = 1e-4
+_ETA_EPS = 1e-9
+_KAPPA_ZERO_ETA = 100.0
+
+
+@dataclass(frozen=True)
 class ACConfig:
+    """Model inputs; `sigma` is daily volatility of returns, time is measured in days."""
+
     total_shares: int
-    n_days: float = 1.0  # Fraction of day usually
+    n_days: float = 1.0
     n_steps: int = 10
-    sigma: float = 0.02  # Daily volatility
+    sigma: float = 0.02
     price: float = 100.0
-    daily_volume: int = 5_000_000
-    
-    # Impact coefficients (estimated)
-    # Temporary impact: Cost ~ eta * v
-    eta: float = 0.05 / 10000  # $0.05 per 10k shares rate
-    
-    # Permanent impact: Cost ~ rho * X
-    rho: float = 0.01 / 10000 
-    
-    # Risk aversion
+    eta: float = 0.05 / 10_000
+    rho: float = 0.01 / 10_000
     risk_aversion: float = 1e-6
 
+
 class AlmgrenChrissSolver:
-    """Calculates optimal execution trajectory using Almgren-Chriss model."""
-    
-    def __init__(self, config: ACConfig):
+    """Almgren & Chriss (2000): mean-variance optimal liquidation of X shares over T."""
+
+    def __init__(self, config: ACConfig) -> None:
         self.config = config
-    
+
+    @property
+    def _tau(self) -> float:
+        return self.config.n_days / self.config.n_steps
+
+    @property
+    def _price_variance(self) -> float:
+        """Daily variance of the price in $^2."""
+        return (self.config.sigma * self.config.price) ** 2
+
+    def kappa(self) -> float:
+        """Urgency kappa = sqrt(lambda sigma^2 / eta) (continuous-time limit)."""
+        if abs(self.config.eta) < _ETA_EPS:
+            return _KAPPA_ZERO_ETA
+        return float(np.sqrt(self.config.risk_aversion * self._price_variance / self.config.eta))
+
     def compute_trajectory(self) -> pd.DataFrame:
-        """
-        Compute optimal trading schedule.
-        
-        Returns:
-            DataFrame with [time, shares_held, shares_to_trade]
+        """Holdings x(t) = X sinh(kappa(T-t)) / sinh(kappa T), Almgren & Chriss (2000), eq. 18.
+
+        One row per trading interval with holdings at its start and end and the shares traded.
         """
         X = self.config.total_shares
         T = self.config.n_days
         N = self.config.n_steps
-        tau = T / N
-        
-        # Almgren-Chriss parameters
-        # sigma^2 is daily variance of price change (absolute)
-        # We need variance per time step? 
-        # AC formula uses sigma = volatility of the asset per unit time
-        
-        # Kappa calculation:
-        # kappa = sqrt(lambda * sigma^2 / eta)
-        # Assuming linear temporary impact
-        
-        sig2 = (self.config.sigma * self.config.price) ** 2  # Variance in $^2
-        lam = self.config.risk_aversion
-        eta = self.config.eta
-        
-        # Avoid divide by zero
-        if abs(eta) < 1e-9:
-            kappa = 100.0 # Fast execution
-        else:
-            kappa = np.sqrt(lam * sig2 / eta)
-            
-        # Time steps
+        kappa = self.kappa()
         t = np.linspace(0, T, N + 1)
-        
-        # Calculate optimal shares holding x(t)
-        # x(t) = X * sinh(kappa(T-t)) / sinh(kappa*T)
-        
-        # Handle small kappa (risk neutral -> TWAP)
-        if kappa * T < 1e-4:
-            # Limit is linear (TWAP)
-            x_t = X * (1 - t/T)
+
+        if kappa * T < _LINEAR_LIMIT:
+            x_t = X * (1 - t / T)
         else:
             x_t = X * np.sinh(kappa * (T - t)) / np.sinh(kappa * T)
-            
-        # Shares to trade in each interval (n_j)
-        # n_j = x_{j-1} - x_j
-        shares_to_trade = -np.diff(x_t)
-        
-        # Last element of diff is last step
-        
-        schedule = pd.DataFrame({
-            'step': range(N),
-            'time': t[1:], # End of interval
-            'shares_held_start': x_t[:-1],
-            'shares_held_end': x_t[1:],
-            'shares_to_trade': shares_to_trade
-        })
-        
-        return schedule
-    
+
+        return pd.DataFrame(
+            {
+                "step": range(N),
+                "time": t[1:],
+                "shares_held_start": x_t[:-1],
+                "shares_held_end": x_t[1:],
+                "shares_to_trade": -np.diff(x_t),
+            }
+        )
+
     def calculate_expected_cost(self, trajectory: pd.DataFrame) -> float:
-        """Calculate theoretical expected cost E[C]."""
-        # E[C] = Permanent + Temporary
-        # Perm = 0.5 * gamma * X^2 (gamma = permanent impact)
-        # Temp = sum(eta * n_j^2 / tau)
-        
+        """E[C] = gamma X^2 / 2 + (eta / tau) sum n_k^2 (fixed cost epsilon omitted)."""
         X = self.config.total_shares
-        rho = self.config.rho
-        eta = self.config.eta
-        tau = self.config.n_days / self.config.n_steps
-        
-        perm_cost = 0.5 * rho * (X ** 2)
-        
-        n = trajectory['shares_to_trade'].values
-        temp_cost = np.sum(eta * (n ** 2) / tau)
-        
-        return perm_cost + temp_cost
-        
+        n = trajectory["shares_to_trade"].to_numpy()
+        permanent = 0.5 * self.config.rho * X**2
+        temporary = float(np.sum(self.config.eta * n**2 / self._tau))
+        return permanent + temporary
+
     def calculate_variance(self, trajectory: pd.DataFrame) -> float:
-        """Calculate variance of cost V[C]."""
-        # V[C] = sigma^2 * sum(x_j^2 * tau)
-        
-        sig2 = (self.config.sigma * self.config.price) ** 2
-        tau = self.config.n_days / self.config.n_steps
-        
-        # x_j is shares held (using approximation as sum of integrals or discrete sum)
-        # AC formula: sum_{j=1}^N (tau * sig2 * x_{j-1}^2) 
-        # (Actually depends on exact implementation, simple Riemann sum here)
-        
-        x = trajectory['shares_held_start'].values
-        variance = sig2 * np.sum((x ** 2) * tau)
-        
-        return variance
+        """V[C] = sigma^2 tau sum_{k=1}^{N} x_k^2, with x_k the holdings after interval k."""
+        x = trajectory["shares_held_end"].to_numpy()
+        return float(self._price_variance * np.sum(x**2) * self._tau)
