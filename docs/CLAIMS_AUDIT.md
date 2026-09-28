@@ -57,7 +57,7 @@ These items are not fabricated results, but they matter for whether the results 
 | F9 | `src/walk_forward.py` | `MarketDataSimulator` is unseeded, so results change on every run. The default in `fig21` is 8 days / 3 train / 1 test, which gives **5 windows**. |
 | F10 | `figures/bench_hw_*.json` | Eight records (n=4: 3, n=6: 1, n=8: 1, n=10: 3). All have `counts: {}` and `success_probability: 0.0`, yet energy equals the optimum. Under the code, finding the optimal bitstring means `success_probability ≥ 1/shots`, so these records cannot be raw output of `solve_with_ibm_hardware`. They have no job IDs, shots, transpiled depth or timestamps. The same 8 records are also merged into `figures/bench_n*.json`, which hold 68 records = 60 simulator + 8 hardware. Left untouched until the raw counts are recovered. |
 | F11 | `fig_hw_*.pdf` provenance | `generate_hardware_figures` takes an in-memory `HardwareBenchmarkResult`. No code in the repo reads `bench_*.json` back, so the script that produced the committed `fig_hw_*` PDFs from the JSON is not in the repo. |
-| F12 | `results_paper.md`, `EXTREME_CAPABILITIES.md` (linked from the README) | Contain unsupported numbers: "~15–20% IS reduction", "12 bps", "8% timing-variance reduction", "95% capital preservation", "18 bps alpha", "25% impact reduction", "100% uptime". No code produces them. Rewrite or remove them in the docs phase. |
+| F12 | `results_paper.md`, `EXTREME_CAPABILITIES.md` (linked from the README) | Contain unsupported numbers: "~15–20% IS reduction", "12 bps", "8% timing-variance reduction", "95% capital preservation", "18 bps alpha", "25% impact reduction", "100% uptime". No code produces them. **Resolved in Phase 2: both files deleted.** |
 
 ---
 

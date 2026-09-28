@@ -1,15 +1,58 @@
+# Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.egg-info/
-dist/
-build/
-.eggs/
 *.egg
-.env
-.venv
-env/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
 venv/
-*.png
-*.jpg
+env/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ipynb_checkpoints/
+
+# Secrets and local configuration
+.env
+.env.*
+*.pem
+qiskit-ibm.json
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Paper build artifacts (only paper/main.tex is tracked)
+paper/*.pdf
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.bbl
+paper/*.blg
+paper/*.synctex.gz
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.toc
+
+# Raw / large market data
 data/
+
+# Figures written to the working directory by ad-hoc script runs.
+# Curated images live in assets/ and figures/ and are tracked.
+/*.png
+/*.pdf

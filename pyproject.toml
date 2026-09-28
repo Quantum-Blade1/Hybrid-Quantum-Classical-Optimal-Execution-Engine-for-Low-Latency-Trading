@@ -1,0 +1,77 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qexec"
+version = "0.1.0"
+description = "Hybrid quantum-classical optimal trade execution: QUBO/QAOA and simulated annealing scheduling with an asynchronous fast/slow execution runtime."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Krish Kumar Sharma", email = "krishkumarsharma72@gmail.com" }]
+keywords = ["optimal execution", "QUBO", "QAOA", "simulated annealing", "Almgren-Chriss", "quantum computing"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = [
+    "numpy>=1.21.0",
+    "pandas>=1.3.0",
+    "scipy>=1.10.0",
+    "matplotlib>=3.4.0",
+    "qiskit>=0.44.0",
+    "qiskit-aer>=0.12.2",
+    "psutil>=5.9",
+]
+
+[project.optional-dependencies]
+hardware = ["qiskit-ibm-runtime>=0.21"]
+app = ["streamlit>=1.20.0", "plotly>=5.13.0"]
+dev = ["pytest>=7.0.0", "ruff>=0.6", "mypy>=1.10", "pandas-stubs"]
+
+[project.urls]
+Repository = "https://github.com/Quantum-Blade1/Hybrid-Quantum-Classical-Optimal-Execution-Engine-for-Low-Latency-Trading"
+
+# The importable package is introduced in a later restructuring step; until then
+# this project installs its dependencies only and code is run from the repo root.
+[tool.setuptools]
+packages = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["paper"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "N", "PL"]
+ignore = [
+    "PLR0913",  # too many arguments: model constructors take many physical parameters
+    "PLR2004",  # magic value comparison: numeric thresholds are common in model code
+    "N803",     # argument name should be lowercase: math notation (Q, T, N)
+    "N806",     # variable in function should be lowercase: math notation
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR0915", "PLC0415"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = false
+warn_unused_ignores = true
+warn_redundant_casts = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "qexec.*"
+disallow_untyped_defs = true

@@ -3,12 +3,6 @@
 ![Status](https://img.shields.io/badge/Status-Project%20Complete-success)
 ![Quantum](https://img.shields.io/badge/Quantum-Ready-blueviolet)
 
-> ** [READ THIS FIRST: 10 Extreme Performance Use Cases](EXTREME_CAPABILITIES.md)**  
-> *Discover how this system outperforms traditional algorithms in Flash Crashes, HFT Evasion, and Massive Block Trades.*
-
-> ** [Creator's Insights & Deep-Dive FAQ](docs/)**
-> *Read the Founder's candid thoughts on the architecture and the Top 30 technical questions (with proofs).*
-
 A research-grade hybrid architecture for optimal trade execution, combining low-latency classical execution with quantum-inspired optimization (QUBO/QAOA) to minimize implementation shortfall.
 
 ![Architecture](assets/figure1_architecture.png)
@@ -26,7 +20,7 @@ A research-grade hybrid architecture for optimal trade execution, combining low-
 ##  System Requirements
 
 *   **OS**: Windows 10/11, Linux (Ubuntu 20.04+), or macOS (M1/Intel).
-*   **Python**: Version 3.9 or higher (3.10+ recommended).
+*   **Python**: Version 3.10 or higher.
 *   **RAM**: Minimum 8GB (16GB recommended for heavy simulations).
 *   **CPU**: Multi-core processor (Hybrid engine is multi-threaded).
 *   **Optional**:
@@ -37,12 +31,16 @@ A research-grade hybrid architecture for optimal trade execution, combining low-
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/quantum-trading-engine.git
-cd quantum-trading-engine
+git clone https://github.com/Quantum-Blade1/Hybrid-Quantum-Classical-Optimal-Execution-Engine-for-Low-Latency-Trading.git
+cd Hybrid-Quantum-Classical-Optimal-Execution-Engine-for-Low-Latency-Trading
 
-# Install dependencies (requires Python 3.9+)
-pip install -r requirements.txt
+# Install dependencies (requires Python 3.10+)
+pip install -e ".[dev]"          # core + test/lint tools
+pip install -e ".[app]"          # Streamlit dashboard (streamlit, plotly)
+pip install -e ".[hardware]"     # IBM Quantum hardware runs (qiskit-ibm-runtime)
 ```
+
+Dependencies are declared in `pyproject.toml`. Run the scripts below from the repository root.
 
 ##  Quick Start
 
@@ -79,12 +77,12 @@ The system operates on two timescales:
 | **Timing Risk** | Low | Low | **Low** |
 | **Robustness** | Low | High | **High** |
 
-*See `results_paper.md` for detailed research findings.*
+*Qualitative comparison only. See `docs/CLAIMS_AUDIT.md` for the status of every quantitative claim.*
 
 ##  Project Structure
 
 ```
-c:\Engine\
+Hybrid-Quantum-Classical-Optimal-Execution-Engine-for-Low-Latency-Trading/
 ├── src/               # Core Source Code
 │   ├── hybrid_async.py
 │   ├── qubo_execution.py
@@ -93,14 +91,15 @@ c:\Engine\
 │   ├── hybrid_demo.py
 │   ├── solver_demo.py
 │   └── ...
-├── docs/              # Documentation & Founder's Notes
-│   ├── CREATOR_THOUGHTS.md
-│   └── MATHEMATICAL_MODEL.md
-├── assets/            # Images & Figures
+├── docs/              # Documentation
+│   ├── MATHEMATICAL_MODEL.md
+│   └── CLAIMS_AUDIT.md
+├── assets/            # README images
+├── figures/           # Paper figures and benchmark JSON
+├── paper/             # Manuscript source (main.tex)
 ├── tests/             # Unit Tests
-├── results_paper.md   # Research Summary
-└── requirements.txt
+└── pyproject.toml     # Project metadata and dependencies
 ```
 
 ##  License
-Research Use Only.
+Apache License 2.0. See `LICENSE`.
