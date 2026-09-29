@@ -130,7 +130,7 @@ def _bucketed(
         "median": series.median(),
         "rms": series.apply(lambda s: float(np.sqrt(np.nanmean(np.square(s))))),
     }[how]
-    return agg.reindex(range(n)).to_numpy(dtype=np.float64)
+    return np.asarray(agg.reindex(range(n)).to_numpy(), dtype=np.float64)
 
 
 def intraday_profile(bars: pd.DataFrame, bucket_minutes: int = 15) -> IntradayProfile:
