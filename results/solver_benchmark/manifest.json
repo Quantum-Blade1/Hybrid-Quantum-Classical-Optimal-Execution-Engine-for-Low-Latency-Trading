@@ -21,6 +21,18 @@
       15,
       18
     ],
+    "slice_sizes": [
+      4,
+      6,
+      8,
+      9,
+      10,
+      12,
+      15,
+      16,
+      18,
+      20
+    ],
     "random_sizes": [
       4,
       6,
@@ -32,7 +44,8 @@
       18,
       20
     ],
-    "sa_sweeps": 500,
+    "sa_sweeps": 1000,
+    "sa_restarts": 16,
     "convergence_sweeps": [
       100,
       300,
@@ -57,8 +70,8 @@
     9
   ],
   "git": {
-    "commit": "28df913273d525e8c79489a069b40473b748ee55",
-    "dirty": false
+    "commit": "ea315c2d277f3a09d182f3d2e53bfaa1fabcb620",
+    "dirty": true
   },
   "environment": {
     "python": "3.12.14",
@@ -79,14 +92,13 @@
     "memory_gb": 16.0,
     "cpu_model": "Apple M5"
   },
-  "started_utc": "2026-09-29T02:20:02+00:00",
-  "wall_time_s": 29.731,
+  "started_utc": "2026-09-29T18:08:23+00:00",
+  "wall_time_s": 89.656,
   "files": {
-    "runs.csv": "e6d76cad673135c7e5a0be287e18a9234b5d5842a9a2fea7da44fec4627898f0",
-    "summary.csv": "83f4aed873b9310f8f0b7bd96054b83604e6e3d0e6b79edf7891be60a9f76d07",
-    "sa_convergence_history.csv": "ea14279982b0e391145158f42a8f994030a1c0f4dfd47764dc34889626a22b09",
-    "sa_convergence_final.csv": "fc3175fdb007e5107f64703e63f04f3c1a7e637253938f4cad9ca62f9c3ecb83"
+    "runs.csv": "bb37b45b9dcfcf388abeb7753aee2c0898912061a20c660a4c515a47e1129730",
+    "summary.csv": "a10d1066ed1d4906ac00d3dd16a881493eff1e98a8ff87cb4fc8f91c268ba26e",
+    "sa_convergence_history.csv": "35831cf6d3037eacb1041e60e9cb4dfa66ea5c51316c8444179a9f709d4c9cfd",
+    "sa_convergence_final.csv": "4e6ef2117c57d284de407d77ccc99b438128d895144eefdda8f2ad17e478b897"
   },
-  "quick": false,
-  "sa_effective_max_sweeps": 135
+  "quick": false
 }

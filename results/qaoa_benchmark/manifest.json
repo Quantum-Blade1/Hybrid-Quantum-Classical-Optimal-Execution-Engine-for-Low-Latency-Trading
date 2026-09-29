@@ -17,6 +17,14 @@
       10,
       12
     ],
+    "slice_sizes": [
+      4,
+      6,
+      8,
+      9,
+      10,
+      12
+    ],
     "fig07": true,
     "depths": [
       1,
@@ -29,6 +37,7 @@
     "final_shots": 5000,
     "maxiter": 50,
     "sa_sweeps": 1000,
+    "sa_restarts": 16,
     "count_table_n": 4,
     "seed": 0,
     "num_seeds": 5
@@ -41,8 +50,8 @@
     4
   ],
   "git": {
-    "commit": "28df913273d525e8c79489a069b40473b748ee55",
-    "dirty": false
+    "commit": "ea315c2d277f3a09d182f3d2e53bfaa1fabcb620",
+    "dirty": true
   },
   "environment": {
     "python": "3.12.14",
@@ -63,12 +72,12 @@
     "memory_gb": 16.0,
     "cpu_model": "Apple M5"
   },
-  "started_utc": "2026-09-29T02:23:46+00:00",
-  "wall_time_s": 615.248,
+  "started_utc": "2026-09-29T18:09:53+00:00",
+  "wall_time_s": 1242.32,
   "files": {
-    "runs.csv": "697a8f930caa01ef04e93acc09a40eedb846ccdf5d69e4933a57c008b37b7688",
+    "runs.csv": "754a00dd38e341594d5d8900c575ffb12a28bd1680cd16b6aec2050ee9369e87",
     "top_counts.csv": "12ce750e952985392f9dcf36aaa3fe042d5cae21c67d43a6fe477999b829a5b0",
-    "summary.csv": "4a5f6788ca2d08d7b3f289424a0cfc8ff7b3b3d40e97b257810ad96f1e813f33"
+    "summary.csv": "2c29a8818fa5f7264de4982f2fb96344f3471c01e83222eaaee9d5b9bcbcfcaf"
   },
   "quick": false
 }

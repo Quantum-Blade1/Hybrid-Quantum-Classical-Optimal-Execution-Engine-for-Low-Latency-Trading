@@ -266,3 +266,22 @@ Status key: **supported** (a committed result backs the claim as stated) · **pa
 
 ### Flagged items resolved in Phase 6
 F2 (saturating best-of-shots): probability on the optimal set, <H> ratio and a same-budget uniform baseline are now reported. F6 (unfair comparison): one engine, one book, no fills without volume, opportunity cost for unfilled shares. F9: walk-forward seeded and repeated over 30 seeds. F11: every figure is drawn from `results/` by a registered function. T5 (underfill after a policy switch): the fast path re-plans the remaining shares. `run_integrated_comparison` ranks by shortfall including opportunity cost. F5 (assumed improvement prior) remains and is documented; F10 remains until IBM raw counts are recovered.
+
+## 7. Phase 7 status (real data, fixed SA, binary encoding)
+
+Phase 7 added a pre-registered real-data evaluation (`docs/PROTOCOL.md`; Binance BTCUSDT and LINKUSDT, 16 development + 12 held-out days, run once), an exact binary QUBO encoding of an explicit cost model, a fixed SA, and an analysis pipeline for recovered IBM raw counts. Numbers are in `docs/RESULTS.md`, section 0. Only rows whose evidence changed are listed; all other rows keep their section 6 status.
+
+| # | Claim (short) | Phase 7 evidence | Status |
+|---|---|---|---|
+| P1, P2, P7, P8 | Hardware validation / IBM results | `results/ibm_fez_recovered.jsonl` has not been recovered; `experiments/hardware_analysis.py` is ready and tested only on a synthetic fixture. No hardware claim is made | still unsupported |
+| P4 | 68 configurations, all 1.000 | Fixed SA reaches the exact optimum in every seed up to n = 16 (50-80% at n = 18-20); QAOA's best sample still misses it more often than same-budget uniform sampling (ideal QAOA 87-95%, uniform 100% on the toy and binary-encoded families) | contradicted |
+| P6 | Config (10k shots, maxiter 40, SA 1000 sweeps / 0.995 / T0 = max Qii) | SA now runs exactly 1,000 sweeps (geometric, `neal`-style temperature bounds, 16 restarts); cooling rate, T0, shots and maxiter still differ from the text | contradicted |
+| P11 | 15-40% IS reduction | Held-out real data: QUBO/Hybrid vs TWAP, VWAP, AC, 12 pre-registered comparisons, all Holm p = 1.00, mean differences -0.27 to +0.22 bps; robust to 0.5x/2x impact | contradicted |
+| P13 | Impact -25%, net -20% | Real data: spread + impact 0.16 bps (BTC) and 0.60 bps (LINK) for every schedule; no schedule changes it by more than ~0.1 bps | contradicted |
+| P32 | Weights calibrated on historical data | The Phase 7 cost model (spread, volume, volatility profiles, Kyle-style impact) is calibrated on real development days; the paper's HFT-QUBO weights are still hardcoded | rewording |
+| P35 | fig06 all ratio 1.0 | SA now at ratio 1.0 for n <= 16 on every family; greedy is not, and SA is not at n = 18-20 | contradicted |
+| P36, P37 | SA >1000x faster, both optimal; COBYLA reliably identifies the optimum | fig07 instance: SA optimal in 5/5 seeds in 0.21 s vs ideal QAOA 1.7-3.6 s (13x, not >1000x). On the binary-encoded execution QUBO QAOA's P_opt advantage over same-budget uniform sampling is +0.007 [0.000, 0.016], p = 0.28, and its best sample is optimal in 87% of runs vs 100% for uniform | contradicted |
+| P43 | All benchmark data available | Real-data summaries, the tuning and both evaluations are committed with manifests (commit hash, clean tree); raw Binance files are public and checksum-verified; hardware raw counts still missing | partly supported |
+| P44 | Calibrated synthetic data | The synthetic simulator is still uncalibrated; the real-data evaluation does not use it | rewording |
+
+**Totals (44), unchanged from Phase 6:** supported **1** (P34) · partly supported **2** (P15, P43) · contradicted **16** (P4-P6, P9-P14, P25-P27, P29, P35-P37) · still unsupported **13** (P1, P2, P7, P8, P17-P22, P24, P28, P39) · rewording **12** (P3, P16, P23, P30-P33, P38, P40-P42, P44). The evidence for P4, P6, P11, P13, P35-P37 is stronger (real held-out data, fixed SA) but points the same way. The IBM rows (P1, P2, P7, P8) can only change once raw counts are recovered.
