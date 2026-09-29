@@ -1,22 +1,4 @@
-"""Tuning of the QUBO and hybrid hyperparameters on the development days only
-(docs/PROTOCOL.md §5). No held-out day is read.
-
-Stage 1 (model only, no execution): for each candidate QUBO setting (slices, bits, units,
-SA sweeps/restarts) and every development cell (symbol x start hour x size x horizon, at
-lambda = 0 and impact x1), solve the binary QUBO with SA and record its cost-model
-objective against the discretized AC optimum and the exact integer optimum (DP), plus SA
-time. Rule, fixed before looking at the numbers: among settings whose SA solution equals
-the DP optimum (within 1e-6 bps) in at least 95% of cells and whose median SA time is at
-most 1 s, choose the smallest mean objective gap to AC; ties go to fewer variables.
-
-Stage 2 (development-day execution): with the chosen QUBO setting, the hybrid's number of
-re-planning checkpoints in {1, 3, 6} and ratio clip in {(0.5, 2), (0.8, 1.25)} are chosen
-by the lowest mean realized shortfall over all development orders (both symbols, primary
-variant). The chosen values are frozen into `experiments/real_data.py` (FROZEN_*).
-
-Usage:
-    python -m experiments.real_data_tune [--quick] [--results-dir results]
-"""
+"""Tune the QUBO and hybrid hyperparameters on development days only (PROTOCOL.md §5)."""
 
 from __future__ import annotations
 

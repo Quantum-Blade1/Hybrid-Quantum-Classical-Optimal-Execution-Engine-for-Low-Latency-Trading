@@ -1,11 +1,3 @@
-"""IBM ibm_fez figures (results/hardware/), at IEEE column width and legible in grayscale.
-
-Every number comes from the tables written by `experiments.hardware_analysis`: per final
-job (`final_tests.csv`), per n (`summary.csv`, which carries the Aer p=1 references) and
-per job (`jobs.csv`, for the COBYLA trajectories). Hardware runs are drawn individually,
-never pooled; simulator references show the mean and the range over seeds.
-"""
-
 from typing import Any
 
 import numpy as np
@@ -101,8 +93,7 @@ def fig_hw_ibm_success_prob(res: Results) -> Figure:
 
 
 def fig_hw_ibm_approx_ratio(res: Results) -> Figure:
-    """Mean-energy approximation ratio of each final job (shot bootstrap 95% CI) with the
-    exact uniform value per n and the Aer p=1 references."""
+    """Mean-energy ratio of each final job (bootstrap 95% CI) vs uniform and the Aer references."""
     tests = res.table("hardware", "final_tests")
     summary = res.table("hardware", "summary").sort_values("n").reset_index(drop=True)
     sizes = [int(n) for n in summary["n"]]
@@ -134,8 +125,7 @@ def fig_hw_ibm_approx_ratio(res: Results) -> Figure:
 
 
 def fig_hw_ibm_trajectory(res: Results) -> Figure:
-    """Mean-energy ratio of every COBYLA-loop job by position in its run, per n; the final
-    job of each run is the filled marker at the end. Incomplete runs are drawn in gray."""
+    """Mean-energy ratio of every COBYLA-loop job by position in its run, per n."""
     jobs = res.table("hardware", "jobs")
     sizes = sorted(int(n) for n in jobs["n"].unique())
     fig, axes = _figure(COLUMN_IN, 2.2, 1, len(sizes), sharey=False, squeeze=False)

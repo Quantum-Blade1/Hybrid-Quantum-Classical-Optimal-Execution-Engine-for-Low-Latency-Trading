@@ -34,7 +34,6 @@ jobs:
         run: python -m pytest -m slow
 
   reproduce-quick:
-    # Every experiment at tiny sizes, then every figure from those results; no IBM access.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

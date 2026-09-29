@@ -1,16 +1,4 @@
-"""TWAP, VWAP, SA-QUBO and Hybrid under four synthetic stress scenarios, over seeds
-(paper fig23).
-
-Scenarios (qexec.analysis.stress): flash crash (50% linear drop over 5 minutes, then a
-slow recovery), liquidity crisis (spread 10x, volume -90% for 20 minutes), volatility
-spike (N(0, $5) price jumps for 30 minutes) and market outage (10 minutes with zero
-volume). They differ from the scenarios described in the paper (claims audit P14).
-Nothing fills in a zero-volume bar; shares carry forward; unfilled shares count as
-opportunity cost.
-
-Usage:
-    python -m experiments.stress_test [--quick] [--results-dir results] [--seed 0]
-"""
+"""TWAP, VWAP, SA-QUBO and Hybrid under four synthetic stress scenarios (paper fig23)."""
 
 from dataclasses import dataclass
 

@@ -1,12 +1,8 @@
-"""Constants of the pre-registered Phase 7 protocol (docs/PROTOCOL.md).
-
-Changing any value here is a protocol deviation and must be recorded in docs/PROTOCOL.md.
-"""
-
 from pathlib import Path
 
 import pandas as pd
 
+# Pre-registered (docs/PROTOCOL.md): changing any value here is a recorded protocol deviation.
 SYMBOLS = ("BTCUSDT", "LINKUSDT")
 DEV_START, DEV_END = "2026-07-22", "2026-08-06"
 TEST_START, TEST_END = "2026-08-07", "2026-08-18"

@@ -1,14 +1,4 @@
-"""Download the protocol's Binance aggTrades days, verify SHA-256, and build 1-minute bars.
-
-Idempotent: a zip already on disk whose SHA-256 matches its published `.CHECKSUM` is not
-downloaded again, and bars are rebuilt only when missing. No API keys; public files only.
-Raw zips go to data/binance/aggTrades/<SYMBOL>/, bars to data/binance/bars/<SYMBOL>/
-(both git-ignored).
-
-Usage:
-    python -m experiments.fetch_binance [--symbols BTCUSDT ...] [--days 2026-07-22 ...]
-                                        [--no-bars]
-"""
+"""Download the protocol's Binance aggTrades days, verify SHA-256, and build 1-minute bars."""
 
 from __future__ import annotations
 

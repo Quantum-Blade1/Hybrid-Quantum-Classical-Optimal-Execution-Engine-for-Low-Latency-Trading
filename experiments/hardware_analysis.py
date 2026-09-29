@@ -1,34 +1,4 @@
-"""Analysis of recovered IBM ibm_fez raw counts for the toy execution QUBO (PROTOCOL.md §9).
-
-Input: `results/ibm_fez_recovered.jsonl`, one JSON object per job (job_id, status,
-created, num_bits, shots, counts in Qiskit little-endian bit order, or error), written by
-the user's recovery script. Duplicate job records are collapsed (latest status wins).
-Energies are recomputed from the counts with `toy_execution_qubo(n)`; nothing reported by
-the original run is trusted. Final-sampling and COBYLA-loop jobs are told apart by their
-shot counts, and loop jobs are assigned to runs by creation time per n
-(`qexec.hardware.jobs`).
-
-Outputs (results/hardware/):
-  jobs.csv                 every analysed job, with run and position in the run
-  excluded.csv             jobs not analysed, with the reason
-  final_tests.csv          per final job: Wilson 95% CI of P(optimum), one-sided exact
-                           binomial tests against the uniform mass on the optimum (the
-                           pre-specified 'greater', and 'less' for description), and a
-                           shot-level bootstrap 95% CI of (mean-energy ratio - uniform)
-  runs.csv                 per run: loop jobs, first/best/last loop ratio, final ratio,
-                           span of job creation times (not QPU time)
-  summary.csv              per n: per-run mean and range (runs are not pooled), number of
-                           runs significant, a sign count across runs, and the ideal and
-                           noisy Aer p=1 references (mean and range over seeds)
-  simulator_reference.csv  toy-family Aer QAOA metrics per (n, solver, p)
-  manifest.json            provenance, and the analysed / excluded / incomplete-run job IDs
-
-Without the input file the experiment is skipped (no hardware claim is made). `--quick`
-runs on `tests/fixtures/ibm_jobs_sample.jsonl`, a SYNTHETIC fixture (not hardware data).
-
-Usage:
-    python -m experiments.hardware_analysis [--quick] [--results-dir results]
-"""
+"""Analysis of recovered IBM ibm_fez raw counts for the toy execution QUBO (PROTOCOL.md §9)."""
 
 from __future__ import annotations
 
@@ -78,8 +48,7 @@ def missing_jobs(config: Config) -> str | None:
 
 
 def simulator_reference(path: Path) -> pd.DataFrame:
-    """Toy-family Aer QAOA metrics per (n, solver, p): mean over seeds (`sim_<metric>`),
-    and min / max over seeds for the success probability and mean-energy ratio."""
+    """Toy-family Aer QAOA metrics per (n, solver, p): seed mean, min and max."""
     if not path.exists():
         return pd.DataFrame()
     runs = pd.read_csv(path)
@@ -99,8 +68,7 @@ def simulator_reference(path: Path) -> pd.DataFrame:
 def final_tests(
     jobs: pd.DataFrame, counts: dict[str, dict[str, int]], config: Config
 ) -> pd.DataFrame:
-    """Per final job of a complete run: Wilson CI and binomial test of P(optimum) against
-    the uniform mass on the optimum; bootstrap CI of the mean-energy ratio advantage."""
+    """Per final job of a complete run: Wilson CI and binomial test of P(optimum) vs uniform."""
     rows = []
     final = jobs[(jobs["role"] == "final") & jobs["run_complete"]]
     for _, job in final.iterrows():
@@ -152,8 +120,7 @@ def final_tests(
 
 
 def run_table(jobs: pd.DataFrame) -> pd.DataFrame:
-    """Per run: loop jobs and their mean-energy ratios, the final job, and the span of job
-    creation times (queueing + execution + classical overhead; not QPU time)."""
+    """Per run: loop-job ratios, the final job, and the job creation-time span (not QPU time)."""
     rows = []
     for (n, run), group in jobs.groupby(["n", "run"]):
         g = group.sort_values("iteration")
@@ -194,8 +161,7 @@ def run_table(jobs: pd.DataFrame) -> pd.DataFrame:
 
 
 def summarise(tests: pd.DataFrame, runs: pd.DataFrame, reference: pd.DataFrame) -> pd.DataFrame:
-    """Per n: mean and range over complete runs (not pooled), counts of significant runs, a
-    sign count across runs, and the Aer p=1 references."""
+    """Per n: mean and range over complete runs (not pooled), significance and sign counts."""
     if tests.empty:
         return pd.DataFrame()
     rows = []
@@ -241,8 +207,7 @@ def summarise(tests: pd.DataFrame, runs: pd.DataFrame, reference: pd.DataFrame) 
     summary = pd.DataFrame(rows)
     if not reference.empty:
         for solver in SIM_SOLVERS:
-            # Depth 1 is the only depth common to every size of the Aer benchmark, and the
-            # configured depth of the hardware runs.
+            # Depth 1 is the only depth common to every Aer benchmark size and to the hardware runs.
             ref = reference[(reference["solver"] == solver) & (reference["p"] == 1)]
             prefix = f"{solver.lower()}_p1_"
             ref = ref.drop(columns=["solver", "p"]).rename(

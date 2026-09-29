@@ -1,10 +1,3 @@
-"""Phase 7 figures: real-data execution (results/real_data_dev, results/real_data_test).
-The IBM hardware figures are in `figures.hardware`.
-
-These inputs can be legitimately absent (no downloaded data);
-their registry entries are `optional` and are skipped, not failed, when absent.
-"""
-
 import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure

@@ -1,5 +1,3 @@
-"""QUBO formulation figures (fig03, fig04, fig18, fig27, fig28) from results/formulation/."""
-
 import numpy as np
 from matplotlib.figure import Figure
 

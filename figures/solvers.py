@@ -1,11 +1,3 @@
-"""Solver figures: classical (fig05, fig06, fig09) from results/solver_benchmark/, and QAOA
-(fig07, fig08, fig_hw_*) from results/qaoa_benchmark/ and results/qaoa_landscape/.
-
-The fig_hw_* file names are kept for the paper, but these figures contain simulator runs
-only: the committed IBM records (results/bench_hw_*.json) are unverifiable (claims audit
-F10) and are not plotted.
-"""
-
 import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure

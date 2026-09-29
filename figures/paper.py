@@ -1,11 +1,3 @@
-"""Figures of the IEEE TQE manuscript (paper/ieee/main.tex), sized for IEEE columns.
-
-Single-column figures are 3.5 in wide and double-column figures 7.16 in wide, drawn at
-their final size with 7-8 pt text, so nothing is scaled down in the PDF. Series are told
-apart by marker, line style and gray level as well as colour, so every figure reads in
-grayscale. Like the other figure modules, these read numbers only from `results/`.
-"""
-
 from typing import Any
 
 import matplotlib.pyplot as plt
@@ -72,11 +64,6 @@ def _figure(width: float, height: float, *args: Any, **kwargs: Any) -> tuple[Fig
 
 def _panel_label(ax: Any, text: str) -> None:
     ax.text(-0.02, 1.02, text, transform=ax.transAxes, ha="right", va="bottom", fontsize=8)
-
-
-# --------------------------------------------------------------------------------------
-# Architecture (illustrative)
-# --------------------------------------------------------------------------------------
 
 
 def _box(ax: Any, xy: tuple[float, float], w: float, h: float, *, text: str, fill: str) -> None:
@@ -163,10 +150,6 @@ def fig_paper_architecture(_: Results) -> Figure:
     fig.tight_layout(pad=0.1)
     return fig
 
-
-# --------------------------------------------------------------------------------------
-# Real data (held-out test days)
-# --------------------------------------------------------------------------------------
 
 _PRIMARY_ORDER = [
     ("QUBO", "TWAP"),
@@ -318,11 +301,6 @@ def fig_paper_signal_vs_noise(res: Results) -> Figure:
     return fig
 
 
-# --------------------------------------------------------------------------------------
-# Synthetic strategy experiments
-# --------------------------------------------------------------------------------------
-
-
 def fig_paper_synthetic(res: Results) -> Figure:
     """Paired shortfall difference vs TWAP for SA-QUBO and Hybrid, every synthetic setting."""
     rows: list[tuple[str, str, pd.Series]] = []
@@ -374,11 +352,6 @@ def fig_paper_synthetic(res: Results) -> Figure:
     ax.grid(axis="y", visible=False)
     fig.tight_layout(pad=0.2)
     return fig
-
-
-# --------------------------------------------------------------------------------------
-# Solvers and QAOA
-# --------------------------------------------------------------------------------------
 
 
 def fig_paper_solver_success(res: Results) -> Figure:
@@ -475,11 +448,6 @@ def fig_paper_qaoa(res: Results) -> Figure:
     axes[2].legend(fontsize=6, loc="lower left")
     fig.tight_layout(pad=0.2, w_pad=1.0)
     return fig
-
-
-# --------------------------------------------------------------------------------------
-# Latency
-# --------------------------------------------------------------------------------------
 
 
 def fig_paper_latency(res: Results) -> Figure:

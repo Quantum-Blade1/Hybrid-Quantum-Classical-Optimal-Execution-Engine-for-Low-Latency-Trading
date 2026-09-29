@@ -1,12 +1,3 @@
-"""QUBO instance families shared by the solver and QAOA benchmarks.
-
-toy        `toy_execution_qubo(n)`: the problem of the IBM hardware runs (claims audit F3)
-execution  `ExecutionQUBO(slice_level_config(100 T, T))`: T slices x levels {0, 50, 100}
-random     symmetric Gaussian Q, (A + A^T)/2 with A_ij ~ N(0, 1); one instance per seed
-slice      Phase 7 exact binary encoding (`SliceProgram`) of the real-data cost model on a
-           synthetic 30-minute window: T slices x B bits, n = T B (`SLICE_SHAPES`)
-"""
-
 import numpy as np
 from numpy.typing import NDArray
 
@@ -35,10 +26,7 @@ _SLICE_MINUTES = 30
 
 
 def slice_program(n: int) -> SliceProgram:
-    """Synthetic 30-minute window: U-shaped volume, spread rising at the edges, 4 bps/min
-    volatility, impact 1.5 bps per unit participation (the order of the dev-day BTCUSDT
-    fit), an order of 10% of window volume, and lambda set so that lambda Var = E for
-    TWAP (the protocol's secondary risk-aversion rule)."""
+    """Synthetic 30-minute window near the dev-day BTCUSDT fit, with lambda Var = E for TWAP."""
     if n not in SLICE_SHAPES:
         raise ValueError(f"slice family sizes are {sorted(SLICE_SHAPES)}")
     slices, bits = SLICE_SHAPES[n]
@@ -65,8 +53,7 @@ def execution_qubo(n: int) -> ExecutionQUBO:
 
 
 def fig07_qubo() -> ExecutionQUBO:
-    """The 12-variable instance of the old qaoa_vs_sa script: 400 shares, 4 slices x
-    levels {0, 100, 200}, equality penalty 100, capacity penalty 50."""
+    """The 12-variable fig07 instance: 400 shares, 4 slices x levels {0, 100, 200}."""
     return ExecutionQUBO(
         QUBOConfig(
             total_shares=400,

@@ -1,20 +1,4 @@
-"""Source-level checks of paper/ieee/main.tex that do not need a TeX installation.
-
-* every \\begin{env} has a matching \\end{env}, properly nested;
-* every \\includegraphics file exists in paper/figures/ and has a registered producer
-  (and is not one of the figures removed as fabricated);
-* every result macro used (a control word starting with an upper-case letter) is defined
-  in numbers.tex or in main.tex, except a small list of LaTeX/IEEEtran commands;
-* every \\ref / \\cite target is defined, and no hand-typed result from the retracted
-  draft (listed in RETRACTED) reappears;
-* every TODO is an author TODO, written ``TODO(author): ...`` in a LaTeX comment. These
-  mark facts only the authors can supply (degrees, funding, reference details); they are
-  allowed and listed, not errors (``make paper-todos`` prints them).
-
-Usage:
-    python -m experiments.check_paper [--tex paper/ieee/main.tex] [--todos]
-Exits non-zero and lists the problems if any check fails.
-"""
+"""Source-level checks of paper/ieee/main.tex that do not need a TeX installation."""
 
 from __future__ import annotations
 
@@ -53,7 +37,6 @@ BUILTIN = {
     "Theta",
     "Upsilon",
     "Xi",
-    # algpseudocode
     "State",
     "Statex",
     "If",

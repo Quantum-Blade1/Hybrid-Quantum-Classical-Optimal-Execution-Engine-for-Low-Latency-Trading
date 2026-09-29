@@ -1,14 +1,4 @@
-"""Run every experiment that feeds the paper (IBM hardware *runs* excluded).
-
-Experiments whose inputs are absent (real data before `make data`, recovered IBM counts)
-are skipped with a message and leave existing results untouched.
-
-Usage:
-    python -m experiments.run_all [--quick] [--results-dir DIR] [--only NAME ...]
-
-Full runs write to results/; --quick uses tiny sizes and writes to build/quick/results/
-unless --results-dir is given. Exits non-zero if any experiment fails.
-"""
+"""Run every experiment that feeds the paper (IBM hardware *runs* excluded)."""
 
 import argparse
 import importlib
@@ -45,7 +35,6 @@ EXPERIMENTS = (
     "real_data_test",
     "hardware",
 )
-# Experiment (results directory) name -> module, where they differ.
 MODULES = {"hardware": "hardware_analysis"}
 
 

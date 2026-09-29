@@ -1,18 +1,4 @@
-"""QAOA (ideal and noisy Aer) vs simulated annealing vs uniform random sampling, over sizes,
-depths and seeds (paper fig07, fig_hw_*, tables tab:sim_results / tab:config).
-
-This is the simulator part of the hardware benchmark. Families (experiments.problems):
-toy (the IBM-hardware problem), random Gaussian QUBOs, the 12-variable execution QUBO
-of fig07, and the Phase 7 exact binary encoding of the execution cost model ("slice").
-For each QAOA run we record the best-of-shots energy (which saturates when the shot
-budget is comparable to 2^n, claims audit F2), the probability mass on the optimal set,
-the <H>-based approximation ratio, and a uniform-random baseline given the same total
-shot budget (optimisation shots + final shots). Noisy runs use qexec.hardware.noise
-(not calibrated to a device).
-
-Usage:
-    python -m experiments.qaoa_benchmark [--quick] [--results-dir results] [--seed 0]
-"""
+"""QAOA (ideal and noisy Aer) vs simulated annealing vs same-budget uniform sampling."""
 
 import time
 from collections import Counter

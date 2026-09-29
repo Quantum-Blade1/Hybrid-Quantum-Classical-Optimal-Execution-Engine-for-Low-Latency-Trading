@@ -1,12 +1,3 @@
-"""Shared command line, seeding and summary helpers for the experiment scripts.
-
-Every experiment module defines a frozen `Config` dataclass, a `FULL` and a `QUICK`
-instance, and `run(config, rec)` that computes results and writes them through the
-`ExperimentRecorder` `rec`. `main()` built by `experiment_main` gives each script:
-
-    python -m experiments.<name> [--quick] [--results-dir results] [--seed N]
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -49,7 +40,6 @@ class Experiment:
         if self.precheck is not None:
             reason = self.precheck(config)
             if reason:
-                # Leave any existing results untouched.
                 raise SkipExperiment(f"{self.name}: skipped ({reason})")
         start = time.perf_counter()
         with ExperimentRecorder(
@@ -75,7 +65,6 @@ class Experiment:
 
 
 def seed_range(config: Any) -> list[int]:
-    """Seeds base, base+1, ... for configs with `seed` and `num_seeds`."""
     return list(range(config.seed, config.seed + config.num_seeds))
 
 
@@ -109,10 +98,7 @@ def paired_vs_baselines(
     baselines: Sequence[str],
     group_cols: Sequence[str] = (),
 ) -> pd.DataFrame:
-    """Paired differences (strategy - baseline) of `value_col`, matched on `unit_col`.
-
-    For costs, a negative mean difference means the strategy is cheaper than the baseline.
-    """
+    """Paired differences (strategy - baseline) of `value_col`, matched on `unit_col`."""
     rows = []
     groups = df.groupby(list(group_cols), sort=False) if group_cols else [((), df)]
     for key, group in groups:

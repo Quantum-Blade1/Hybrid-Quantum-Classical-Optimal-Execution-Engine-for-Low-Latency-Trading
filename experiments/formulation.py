@@ -1,16 +1,4 @@
-"""QUBO formulation checks and sensitivities (paper fig03, fig04, fig18, fig27, fig28).
-
-    cost_breakdown   six-term HFT QUBO cost of SA solutions, over seeds (fig03, audit P25)
-    ising_check      max |x^T Q x - H_Ising(z)| over random x, absolute and relative (fig04)
-    sensitivity      SA energy vs an impact-weight multiplier and vs VPIN (fig18); the
-                     x-axis multiplies `impact_weight` by 0.25 lambda: it is not the
-                     timing-risk aversion (audit P40)
-    venue_routing    SA venue split of the HFT QUBO with constant VPIN 0.4 (fig27, P39)
-    circuit_scaling  logical and transpiled QAOA depth and gate counts (fig28)
-
-Usage:
-    python -m experiments.formulation [--quick] [--results-dir results] [--seed 0]
-"""
+"""QUBO formulation checks and sensitivities (paper fig03, fig04, fig18, fig27, fig28)."""
 
 from dataclasses import dataclass
 

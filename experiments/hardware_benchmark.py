@@ -1,16 +1,4 @@
-"""QAOA on IBM Quantum hardware for the toy execution QUBO (needs credentials; not part of
-`run_all`). The simulator part of the benchmark is `experiments.qaoa_benchmark`.
-
-Every job's ID, stage, angles and raw counts are appended to `--counts-log` as soon as the
-job returns (qexec.hardware.ibm), and each completed run is written to
-results/hardware_benchmark/ with the same metrics and random baseline as qaoa_benchmark.
-The committed results/bench_hw_*.json predate this script and are unverifiable (claims
-audit F10); they are not read by any figure.
-
-Usage:
-    IBM_QUANTUM_TOKEN=... python -m experiments.hardware_benchmark
-    IBM_CLOUD_API_KEY=... IBM_CLOUD_CRN=... python -m experiments.hardware_benchmark
-"""
+"""QAOA on IBM Quantum hardware for the toy execution QUBO (needs credentials; not in run_all)."""
 
 import argparse
 import logging

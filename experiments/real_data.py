@@ -1,20 +1,3 @@
-"""Phase 7 real-data evaluation (docs/PROTOCOL.md): TWAP, VWAP, discretized Almgren-Chriss,
-the binary-encoded QUBO (SA) and the adaptive hybrid on Binance 1-minute bars.
-
-Everything is calibrated on the development days; `real_data_dev` evaluates on the same
-days (in-sample, for development) and `real_data_test` on the held-out test days (run once
-per the protocol; re-running the frozen code reproduces it exactly: nothing is random
-except SA, which is seeded per order). Orders execute through `ExecutionEngine` with the
-`ImpactFillModel` (participation cap, carry-forward, opportunity cost at the last bar).
-
-Without the downloaded data (`make data`), full runs stop with a message. `--quick` runs
-on small synthetic bars generated here (clearly not market data) for CI.
-
-Usage:
-    python -m experiments.real_data_dev [--quick] [--results-dir results]
-    python -m experiments.real_data_test [--quick] [--results-dir results]
-"""
-
 from __future__ import annotations
 
 import os
@@ -60,8 +43,7 @@ ALPHA = 0.05
 EQUIVALENCE_BPS = 0.5
 
 
-# Frozen from results/real_data_tune (development days only; selection rules in
-# experiments/real_data_tune.py). Changing them after the test run is a protocol deviation.
+# Tuned on dev days only (PROTOCOL.md §5); changing them after the test run is a deviation.
 FROZEN_QUBO = QUBOSettings(num_slices=4, bits=3, units=16, sweeps=1000, restarts=16)
 FROZEN_CHECKPOINTS = 1
 FROZEN_CLIP = (0.5, 2.0)
@@ -69,8 +51,7 @@ FROZEN_CLIP = (0.5, 2.0)
 
 @dataclass(frozen=True)
 class Variant:
-    """Risk aversion rule ('zero' or 'rule': lambda Var = E for TWAP), the evaluator's
-    impact multiple and the optimisers' impact multiple."""
+    """Risk-aversion rule ('zero' or 'rule': lambda Var = E for TWAP) and impact multiples."""
 
     name: str
     risk: str = "zero"
@@ -122,9 +103,6 @@ QUICK_BASE = {
     "synthetic": True,
     "workers": 1,
 }
-
-
-# -- data ---------------------------------------------------------------------------------
 
 
 def synthetic_bars(symbol: str, days: Iterable[str], seed: int) -> pd.DataFrame:
@@ -188,9 +166,6 @@ def evaluation_frame(bars: pd.DataFrame, cal: Calibration) -> pd.DataFrame:
             "spread": 2 * h * price / 1e4,
         }
     )
-
-
-# -- orders -------------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -406,12 +381,8 @@ def run_symbol_variant(config: Config, symbol: str, variant: Variant) -> dict[st
     return {"orders": rows, "gaps": gaps, "calibration": [calib]}
 
 
-# -- statistics -----------------------------------------------------------------------------
-
-
 def window_differences(orders: pd.DataFrame, strategy: str, baseline: str) -> pd.DataFrame:
-    """Per window (symbol, day, start hour): mean over cells of shortfall(strategy) -
-    shortfall(baseline)."""
+    """Per window (symbol, day, start hour): mean over cells of the shortfall difference."""
     keys = ["symbol", "variant", "day", "start_hour", "size_pct", "horizon"]
     wide = orders.pivot_table(index=keys, columns="strategy", values="shortfall_bps")
     diff = (wide[strategy] - wide[baseline]).rename("diff").reset_index()
@@ -465,7 +436,7 @@ def comparison_family(
     df["p_holm"] = np.nan
     for _, idx in df.groupby("variant").groups.items():
         df.loc[idx, "p_holm"] = holm_adjust(df.loc[idx, "wilcoxon_p"].to_numpy())
-    # Section 8: the sensitivity family (every impact-multiple variant) Holm-corrected jointly.
+    # Protocol section 8: all impact-multiple variants are Holm-corrected as one family.
     sens = df["variant"].str.startswith(("eval_", "both_"))
     df["p_holm_sensitivity_family"] = np.nan
     if sens.any():

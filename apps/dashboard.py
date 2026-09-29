@@ -1,10 +1,4 @@
-"""Streamlit monitor for a live HybridController run against a random-walk price feed.
-
-The price feed is a Gaussian random walk for display only; fills are marked at the
-feed price of their tick (the runtime has no fill model).
-
-    streamlit run apps/dashboard.py
-"""
+"""Streamlit monitor for a live HybridController run: `streamlit run apps/dashboard.py`."""
 
 import time
 from dataclasses import dataclass

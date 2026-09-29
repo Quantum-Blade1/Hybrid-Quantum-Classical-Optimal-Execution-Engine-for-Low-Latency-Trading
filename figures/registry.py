@@ -1,13 +1,3 @@
-"""Figure registry: every PDF in paper/figures/ -> plot function -> results inputs -> experiment.
-
-`kind` is "empirical" (numbers read from results/) or "illustrative" (a diagram computed
-directly from qexec that makes no empirical claim). `optional` figures read inputs that can
-legitimately be absent (real data before `make data`, recovered IBM counts); they are
-skipped with a message instead of failing when an input is missing. `REMOVED` lists
-figures the paper still references that were deleted because they plotted fabricated
-numbers (docs/CLAIMS_AUDIT.md, section 1); they have no producer and must not be recreated.
-"""
-
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -265,7 +255,6 @@ FIGURES: tuple[FigureSpec, ...] = (
     ),
 )
 
-# Figures drawn for paper/ieee/main.tex at IEEE column width, grayscale-safe.
 PAPER_FIGURES: tuple[FigureSpec, ...] = (
     _spec(
         "fig_paper_architecture.pdf",
@@ -312,8 +301,7 @@ PAPER_FIGURES: tuple[FigureSpec, ...] = (
 )
 FIGURES = FIGURES + PAPER_FIGURES
 
-# Referenced by the archived paper/springer_qip_old/main.tex, deleted in Phase 1 as
-# fabricated; no producer by design.
+# Referenced by the archived Springer draft, deleted as fabricated; no producer by design.
 REMOVED = {
     "fig13_adverse_selection_venue.pdf": "R8: hand-typed venue scores",
     "fig14_order_flow_imbalance.pdf": "R9: random walk; OFI not implemented",

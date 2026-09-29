@@ -1,13 +1,4 @@
-"""
-Execution QUBO: build it, solve it three ways, read the schedule back.
-
-An order of 800 shares over 4 time slices with quantity levels
-{0, 100, 200, 300} gives a 16-variable QUBO, small enough for exhaustive
-search, so the simulated-annealing and greedy energies can be compared
-with the exact optimum.
-
-    python examples/qubo_solvers.py
-"""
+"""Execution QUBO: build it, solve it three ways, read the schedule back."""
 
 from qexec.optimization.qubo import ExecutionQUBO, QUBOConfig
 from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver

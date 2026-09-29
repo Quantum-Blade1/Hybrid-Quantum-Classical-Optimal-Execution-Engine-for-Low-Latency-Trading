@@ -1,16 +1,4 @@
-"""Classical QUBO solvers (exact enumeration, simulated annealing, greedy descent) on the
-toy, execution (Phase 6 level encoding), slice (Phase 7 exact binary encoding) and random
-families up to 20 variables, over seeds (paper fig05, fig06, fig09).
-
-Quality uses exact bounds from enumeration: approximation ratio (E_max - E)/(E_max -
-E_min), relative optimality gap and the rate of reaching the optimum. SA runs exactly
-`sa_sweeps` sweeps on a geometric schedule with automatic temperatures and `sa_restarts`
-replicas ("SA"); "SA_1" is the same schedule with a single replica. (Phase 6's schedule
-stopped after 135 sweeps whatever `num_sweeps` said.)
-
-Usage:
-    python -m experiments.solver_benchmark [--quick] [--results-dir results] [--seed 0]
-"""
+"""Exact, SA and greedy QUBO solvers over families, sizes and seeds (paper fig05, fig06, fig09)."""
 
 from dataclasses import dataclass
 
@@ -86,9 +74,7 @@ def run(config: Config, rec: ExperimentRecorder) -> None:
             for seed in seed_range(config):
                 Q = instance(family, n, seed)
                 bounds = energy_bounds(Q)
-                # toy/execution/slice instances do not depend on the seed: time the exact solver
-                # once per size above 16 variables (it takes seconds and always returns
-                # the same answer).
+                # Non-random instances ignore the seed: above n = 16, solve exactly only once.
                 if family == "random" or seed == config.seed or n <= 16:
                     exact = BruteForceSolver().solve(Q)
                     rows.append(_row(family, n, seed, "BruteForce", result=exact, bounds=bounds))
@@ -126,7 +112,6 @@ def run(config: Config, rec: ExperimentRecorder) -> None:
         ),
     )
 
-    # SA convergence (single replica) on the 12-variable execution QUBO (fig05).
     Q = instance("execution", config.convergence_size, config.seed)
     bounds = energy_bounds(Q)
     history_rows, final_rows = [], []

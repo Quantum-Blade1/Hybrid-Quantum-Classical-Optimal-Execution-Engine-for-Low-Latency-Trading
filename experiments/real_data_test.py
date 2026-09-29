@@ -1,10 +1,4 @@
-"""Real-data evaluation on held-out test days, run once per docs/PROTOCOL.md.
-
-See experiments/real_data.py.
-
-Usage:
-    python -m experiments.real_data_test [--quick] [--results-dir results]
-"""
+"""Held-out real-data evaluation; run once, per docs/PROTOCOL.md."""
 
 from experiments.real_data import TEST as EXPERIMENT
 

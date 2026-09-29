@@ -1,12 +1,4 @@
-"""Volatility-regime detection and adaptive risk aversion on the microstructure ticks, over
-seeds (paper fig15, fig16, fig17).
-
-Stores the first seed's per-tick series (fast/slow EWMA volatility, ratio, regime, lambda)
-and, over all seeds, the regime distribution and the lambda range (claims audit P26, P27).
-
-Usage:
-    python -m experiments.regime [--quick] [--results-dir results] [--seed 0]
-"""
+"""Volatility-regime detection and adaptive risk aversion over seeds (paper fig15-fig17)."""
 
 from dataclasses import dataclass, replace
 

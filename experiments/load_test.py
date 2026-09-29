@@ -1,12 +1,4 @@
-"""Concurrent HybridController orders on a thread pool: wall time, per-order duration, fill
-rate and memory.
-
-Order sizes and slice counts are drawn from a seeded generator. Timings depend on the
-machine and Python's GIL; they measure this implementation, not a production system.
-
-Usage:
-    python -m experiments.load_test [--quick] [--results-dir results] [--seed 0]
-"""
+"""Concurrent HybridController orders on a thread pool: wall time, duration, fill rate, memory."""
 
 import logging
 import os

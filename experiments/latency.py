@@ -1,22 +1,4 @@
-"""Measured fast-path and slow-path latency of the Python runtime (paper fig24).
-
-    runtime   `HybridController` orders (AsyncExecutionEngine + AsyncOptimizer): each tick's
-              work (policy poll, re-plan, execute; not the sleep between ticks) is
-              `fast_path`; each SA solve is `slow_path_optimize`; publication-to-application
-              delay is `policy_propagation`; how late each tick starts versus its 5 ms
-              schedule is `tick_lateness` (the pure-Python SA thread holds the GIL, so the
-              tick thread wakes late even though its own work takes microseconds)
-    pipeline  `HFTQuantumPipeline` ticks (microstructure + regime estimator updates, QUBO
-              config update, policy application) are `fast_path`; the SA solve of the
-              HFT QUBO is `slow_path_optimize`
-
-Latencies are CPython thread timings (time.monotonic_ns) on the machine recorded in the
-manifest, with the GIL shared by the fast and slow paths. They are not kernel-bypass
-numbers and must not be reported as such (claims audit P15, P16).
-
-Usage:
-    python -m experiments.latency [--quick] [--results-dir results] [--seed 0]
-"""
+"""Measured fast-path and slow-path latency of the Python runtime (paper fig24)."""
 
 import logging
 from dataclasses import dataclass

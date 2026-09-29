@@ -1,18 +1,4 @@
-"""Write every number quoted in paper/ieee/main.tex as a LaTeX macro, from results/ only.
-
-The manuscript never types a result by hand: it uses the macros in
-`paper/ieee/numbers.tex` (e.g. `\\BtcQuboTwapMean`). This script reads the committed
-tables under `results/`, derives the few statistics the paper needs that no table stores
-(paired QAOA-vs-uniform comparisons, recomputed with the same seeded bootstrap and
-Wilcoxon test as the experiments), and writes the macro file deterministically.
-
-Usage:
-    python -m experiments.paper_numbers [--results-dir results] [--output paper/ieee/numbers.tex]
-                                        [--check]
-
-`--check` regenerates the file in memory and exits non-zero if it differs from the
-committed one (`make check-paper`).
-"""
+"""Write every number quoted in paper/ieee/main.tex as a LaTeX macro, from results/ only."""
 
 from __future__ import annotations
 
@@ -105,10 +91,6 @@ class Tables:
         return (self.root / experiment / name).exists()
 
 
-# --------------------------------------------------------------------------------------
-# Real data
-# --------------------------------------------------------------------------------------
-
 PRIMARY_ORDER = [
     ("QUBO", "TWAP"),
     ("QUBO", "VWAP"),
@@ -192,7 +174,6 @@ def real_data(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of
         rows.append("\\midrule")
     m["PrimaryTableRows"] = "\n".join(rows[:-1])
 
-    # Sensitivity to the impact coefficient (section 8 of the protocol).
     sens = comp[comp["variant"].str.startswith(("eval_", "both_"))]
     m["SensMinMean"] = fmt(sens["mean_diff_bps"].min(), sign=True)
     m["SensMaxMean"] = fmt(sens["mean_diff_bps"].max(), sign=True)
@@ -276,7 +257,6 @@ def real_data(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of
     m["RobustnessSpread"] = fmt(spread.max(), 3)
     m["RobustnessSeeds"] = str(seeded["strategy"].nunique())
 
-    # Development days (tuning and in-sample evaluation).
     cand = t.csv("real_data_tune", "qubo_candidates")
     sel = cand[cand["selected"]].iloc[0]
     m["TuneNumCandidates"] = str(len(cand))
@@ -308,11 +288,6 @@ def real_data(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of
     m["DevMinHolm"] = fmt_p(dev["p_holm"].min())
     m["DevMinMean"] = fmt(dev["mean_diff_bps"].min(), sign=True)
     m["DevMaxMean"] = fmt(dev["mean_diff_bps"].max(), sign=True)
-
-
-# --------------------------------------------------------------------------------------
-# Synthetic strategy experiments
-# --------------------------------------------------------------------------------------
 
 
 def _paired_row(df: pd.DataFrame, **where: Any) -> pd.Series:
@@ -364,10 +339,6 @@ def synthetic(t: Tables, m: Macros) -> None:
     put("SynWfHybridTwap", _paired_row(wf, strategy="Hybrid", baseline="TWAP"))
 
 
-# --------------------------------------------------------------------------------------
-# Solvers, QAOA and formulation checks
-# --------------------------------------------------------------------------------------
-
 QAOA_FAMILIES = {"toy": "Toy", "random": "Random", "slice": "Slice", "fig07": "Instance"}
 QAOA_SOLVERS = {"QAOA_Ideal": "Ideal", "QAOA_Noisy": "Noisy"}
 
@@ -378,7 +349,6 @@ def solvers(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of n
     for family, name in (("slice", "Slice"), ("toy", "Toy")):
         sa = opt[(opt["family"] == family) & (opt["solver"] == "SA")].set_index("n")["mean"]
         full = sa[sa >= 1.0 - 1e-12]
-        # Largest n up to which SA is optimal in every seed at every size.
         n_all = max((n for n in sa.index if (sa.loc[:n] >= 1.0 - 1e-12).all()), default=0)
         m[f"Sa{name}AllOptimalUpTo"] = str(int(n_all))
         m[f"Sa{name}NumSizesAllOptimal"] = str(len(full))
@@ -412,7 +382,6 @@ def solvers(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of n
     m["QaoaShotBudgetMin"] = fmt_int(q["total_shots"].min())
     m["QaoaShotBudgetMax"] = fmt_int(q["total_shots"].max())
     m["QaoaMaxN"] = str(int(q["n"].max()))
-    # Chance that uniform sampling with the smallest budget misses a unique optimum at max n.
     n_max = int(q["n"].max())
     miss = (1.0 - 2.0**-n_max) ** float(q["total_shots"].min())
     m["UniformMissProbMaxN"] = _sci(miss)
@@ -453,7 +422,6 @@ def solvers(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of n
     m["QaoaEnergyMin"] = fmt(min(energy), 3, sign=True)
     m["QaoaEnergyMax"] = fmt(max(energy), 3, sign=True)
 
-    # Per-size success probability on the binary execution encoding (ideal, all depths).
     ideal = q[(q["family"] == "slice") & (q["solver"] == "QAOA_Ideal")]
     by_n = ideal.groupby("n")[["success_probability", "random_success_probability"]].mean()
     for n in by_n.index:
@@ -470,7 +438,6 @@ def solvers(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of n
         toy[(toy["n"] == best[0]) & (toy["p"] == best[1])]["random_success_probability"].mean(), 4
     )
 
-    # Noisy / ideal ratio of mean P_opt per (family, n, p).
     ratios = []
     for family in ("toy", "random", "slice"):
         f = q[q["family"] == family]
@@ -480,7 +447,6 @@ def solvers(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of n
     m["NoiseRatioMin"] = fmt(min(ratios))
     m["NoiseRatioMax"] = fmt(max(ratios), 1)
 
-    # The fig07 execution instance: SA vs ideal QAOA wall time.
     f7 = runs[runs["family"] == "fig07"]
     sa7 = f7[f7["solver"] == "SA"]
     q7 = f7[f7["solver"] == "QAOA_Ideal"]
@@ -500,11 +466,6 @@ def solvers(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of n
 def _sci(x: float) -> str:
     mantissa, exponent = f"{x:.1e}".split("e")
     return f"${mantissa}\\times 10^{{{int(exponent)}}}$"
-
-
-# --------------------------------------------------------------------------------------
-# Latency and load
-# --------------------------------------------------------------------------------------
 
 
 def latency(t: Tables, m: Macros) -> None:
@@ -559,11 +520,6 @@ def latency(t: Tables, m: Macros) -> None:
     m["LoadWallTime"] = fmt(load["wall_time_s"], 1)
     m["LoadFilled"] = str(load["orders_fully_filled"])
     m["LoadOverheadMedian"] = fmt(load["overhead_vs_tick_schedule_s"]["50%"])
-
-
-# --------------------------------------------------------------------------------------
-# Hardware (only once raw counts are recovered)
-# --------------------------------------------------------------------------------------
 
 
 def hardware(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of numbers
@@ -672,9 +628,6 @@ def spell_small(k: int) -> str:
     """Integers 0-10 as words for running text."""
     words = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
     return words[k] if 0 <= k < len(words) else str(k)
-
-
-# --------------------------------------------------------------------------------------
 
 
 def build(results_dir: Path) -> str:

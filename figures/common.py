@@ -1,9 +1,3 @@
-"""Plot style and read-only access to experiment results for the figure scripts.
-
-Figure modules (except `diagrams`) read numbers only through `Results`; they never import
-qexec solvers, simulators or models.
-"""
-
 import json
 from dataclasses import dataclass
 from pathlib import Path

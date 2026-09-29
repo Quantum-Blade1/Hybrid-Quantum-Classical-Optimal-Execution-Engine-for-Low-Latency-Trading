@@ -1,13 +1,4 @@
-"""Build every registered figure from results/ into paper/figures/.
-
-Usage:
-    python -m figures.make_figures [--results-dir results] [--output-dir paper/figures]
-                                   [--only fig06 fig21] [--check]
-
-`--check` only verifies the registry against the output directory: every PDF there must
-have a producer. Exits non-zero if a figure fails, an input is missing, or an unregistered
-PDF is found.
-"""
+"""Build every registered figure from results/ into paper/figures/."""
 
 import argparse
 import sys

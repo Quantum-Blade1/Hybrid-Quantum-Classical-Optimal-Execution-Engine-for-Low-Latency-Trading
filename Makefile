@@ -1,5 +1,4 @@
-# One-command reproduction. Full runs write results/ and paper/figures/ (committed);
-# quick runs use tiny sizes and write build/quick/ (ignored), for CI and smoke tests.
+# Full runs write results/ and paper/figures/ (committed); quick runs write build/quick/ (ignored).
 PYTHON ?= python
 export PYTHONPATH := src:.
 
@@ -8,8 +7,7 @@ export PYTHONPATH := src:.
 
 all: data experiments figures paper-numbers
 
-# Public Binance aggTrades for docs/PROTOCOL.md (~255 MB, checksum-verified, git-ignored).
-# Experiments that need them skip with a message when they are absent.
+# Public Binance aggTrades (~255 MB, git-ignored); experiments that need them skip without them.
 data:
 	$(PYTHON) -m experiments.fetch_binance
 
@@ -36,20 +34,16 @@ lint:
 test:
 	$(PYTHON) -m pytest && $(PYTHON) -m pytest -m slow
 
-# Every number in paper/ieee/main.tex is a macro in paper/ieee/numbers.tex, written from results/.
 paper-numbers:
 	$(PYTHON) -m experiments.paper_numbers
 
-# Fails if numbers.tex is stale or the manuscript references a missing figure/macro.
 check-paper:
 	$(PYTHON) -m experiments.paper_numbers --check
 	$(PYTHON) -m experiments.check_paper
 
-# Lists the TODO(author) notes in the manuscript: facts only the authors can supply.
 paper-todos:
 	$(PYTHON) -m experiments.check_paper --todos
 
-# Builds paper/ieee/main.pdf with latexmk if installed, else tectonic.
 paper: check-paper
 	cd paper/ieee && if command -v latexmk >/dev/null 2>&1; then \
 		latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex; \

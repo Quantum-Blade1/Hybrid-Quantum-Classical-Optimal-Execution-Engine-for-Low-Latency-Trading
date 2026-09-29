@@ -1,9 +1,4 @@
-"""Exact p=1 QAOA energy landscape <H>(gamma, beta) of a 4-variable execution QUBO (paper
-fig08), from the statevector (no shot noise).
-
-Usage:
-    python -m experiments.qaoa_landscape [--quick] [--results-dir results]
-"""
+"""Exact p=1 QAOA energy landscape <H>(gamma, beta) of a 4-variable execution QUBO."""
 
 from dataclasses import dataclass
 

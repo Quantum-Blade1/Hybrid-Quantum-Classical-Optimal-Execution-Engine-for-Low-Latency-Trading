@@ -1,7 +1,3 @@
-"""Execution figures (fig19-fig24) from results/{ac_frontier,walk_forward,is_comparison,
-stress_test,latency}/. Costs are implementation shortfall in bps of arrival notional,
-including the opportunity cost of unfilled shares; error bars are 95% bootstrap CIs."""
-
 import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure

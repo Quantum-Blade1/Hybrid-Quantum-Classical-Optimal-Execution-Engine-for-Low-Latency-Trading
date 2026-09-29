@@ -1,13 +1,4 @@
-"""Implementation-shortfall decomposition of TWAP, VWAP, SA-QUBO and Hybrid on one simulated
-hour, repeated over seeds (paper fig22).
-
-Every strategy runs through the same engine and faces the same books (docs/
-MATHEMATICAL_MODEL.md, "Evaluation Model"). Shortfall is in bps of arrival notional and
-includes the opportunity cost of unfilled shares.
-
-Usage:
-    python -m experiments.is_comparison [--quick] [--results-dir results] [--seed 0]
-"""
+"""Implementation-shortfall decomposition of TWAP, VWAP, SA-QUBO and Hybrid (paper fig22)."""
 
 from dataclasses import dataclass
 from datetime import datetime

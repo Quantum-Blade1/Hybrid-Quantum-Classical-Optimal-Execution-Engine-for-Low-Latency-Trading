@@ -1,12 +1,4 @@
-"""
-QUBO-optimised schedule vs VWAP and TWAP on the same simulated hour.
-
-run_integrated_comparison executes the order three times through the
-ExecutionEngine: once with VWAP, once with TWAP and once with QUBOStrategy
-(ExecutionQUBO solved by simulated annealing).
-
-    python examples/qubo_vs_baselines.py
-"""
+"""QUBO-optimised schedule vs VWAP and TWAP on the same simulated hour."""
 
 from datetime import datetime
 

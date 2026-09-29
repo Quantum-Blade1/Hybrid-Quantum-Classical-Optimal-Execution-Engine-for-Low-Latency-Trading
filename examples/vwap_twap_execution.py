@@ -1,12 +1,4 @@
-"""
-Classical baseline: execute a 10,000-share buy order with VWAP and TWAP.
-
-Generates one simulated trading day, runs both strategies through the
-ExecutionEngine (order book + impact model) and prints the execution
-reports side by side.
-
-    python examples/vwap_twap_execution.py
-"""
+"""Classical baseline: execute a 10,000-share buy order with VWAP and TWAP."""
 
 from datetime import datetime
 

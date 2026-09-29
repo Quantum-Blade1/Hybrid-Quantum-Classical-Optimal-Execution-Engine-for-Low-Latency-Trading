@@ -1,17 +1,4 @@
-"""Almgren-Chriss efficient frontier and schedule shapes vs the SA-QUBO schedule (paper
-fig19, fig20).
-
-    frontier    E[C] and V[C] of the AC trajectory over 20 risk aversions (10k shares)
-    schedules   TWAP, VWAP on the simulator's expected volume curve, AC (lambda = 1e-4),
-                and the SA-QUBO schedule both as solved (`qubo_raw`, may not sum to the
-                order) and repaired to the order (`qubo_repaired`); 10k shares, 15 slices
-    ac_vs_qubo  RMSE between the runtime's SA-QUBO schedule and AC at lambda = 1e-9 and
-                1e-4 (50k shares, 20 steps), over seeds. The execution QUBO has no
-                risk-aversion term, so it can only be compared with near risk-neutral AC.
-
-Usage:
-    python -m experiments.ac_frontier [--quick] [--results-dir results] [--seed 0]
-"""
+"""Almgren-Chriss efficient frontier and schedule shapes vs the SA-QUBO schedule (fig19, fig20)."""
 
 from dataclasses import dataclass
 

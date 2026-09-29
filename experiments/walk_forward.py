@@ -1,13 +1,4 @@
-"""Seeded walk-forward backtest: TWAP, static VWAP, adaptive VWAP and SA-QUBO ("Hybrid")
-over rolling windows, repeated over seeds (paper fig21).
-
-Each seed simulates `total_days` chained days; each window trains on `train_days` and
-tests on the next day (qexec.analysis.walk_forward). The unit of the paired statistics
-is the per-seed mean over windows (windows of one seed share a price history).
-
-Usage:
-    python -m experiments.walk_forward [--quick] [--results-dir results] [--seed 0]
-"""
+"""Seeded walk-forward backtest of TWAP, VWAP, adaptive VWAP and SA-QUBO (paper fig21)."""
 
 from dataclasses import dataclass
 

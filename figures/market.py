@@ -1,6 +1,3 @@
-"""Microstructure and regime figures (fig10-12, fig15-17) from results/microstructure/ and
-results/regime/."""
-
 import matplotlib.patches as mpatches
 from matplotlib.figure import Figure
 

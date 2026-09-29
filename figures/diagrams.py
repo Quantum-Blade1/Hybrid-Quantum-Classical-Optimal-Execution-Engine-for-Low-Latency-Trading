@@ -1,9 +1,3 @@
-"""Illustrative figures: they depict structure and make no empirical claim.
-
-These are the only figure functions allowed to compute from qexec directly (fig02 builds
-a QUBO matrix to show its sparsity pattern; no solver or simulator is run).
-"""
-
 import numpy as np
 from matplotlib.figure import Figure
 from matplotlib.patches import FancyBboxPatch

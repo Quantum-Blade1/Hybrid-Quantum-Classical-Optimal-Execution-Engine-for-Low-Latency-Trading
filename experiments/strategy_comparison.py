@@ -1,12 +1,4 @@
-"""TWAP, VWAP, SA-QUBO and Hybrid on a simulated full day at three order sizes (0.1%, 1%
-and 5% of daily volume), repeated over seeds.
-
-Same engine, same books and the same shortfall definition (incl. opportunity cost) as
-`is_comparison`; this experiment varies the order size, so the impact term matters.
-
-Usage:
-    python -m experiments.strategy_comparison [--quick] [--results-dir results] [--seed 0]
-"""
+"""TWAP, VWAP, SA-QUBO and Hybrid on a simulated day at three order sizes, over seeds."""
 
 from dataclasses import dataclass
 from datetime import datetime

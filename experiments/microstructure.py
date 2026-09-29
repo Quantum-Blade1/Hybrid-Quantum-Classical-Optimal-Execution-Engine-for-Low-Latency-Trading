@@ -1,13 +1,4 @@
-"""Kyle's lambda, VPIN, adverse selection and spread on synthetic ticks with a
-high-volatility block (ticks 200-399), over seeds (paper fig10, fig11, fig12).
-
-The synthetic trade side is sign(return), so lambda's rise in the stress block is partly
-built into the data (claims audit P29). The series of the first seed is stored for the
-figures; the ratios are summarised over all seeds.
-
-Usage:
-    python -m experiments.microstructure [--quick] [--results-dir results] [--seed 0]
-"""
+"""Kyle's lambda, VPIN, adverse selection and spread on synthetic stressed ticks (fig10-fig12)."""
 
 from dataclasses import dataclass
 

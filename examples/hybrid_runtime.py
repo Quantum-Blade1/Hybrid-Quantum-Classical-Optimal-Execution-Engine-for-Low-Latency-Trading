@@ -1,16 +1,4 @@
-"""
-Latency-decoupled runtime: the fast path never waits for the optimizer.
-
-1. HybridController: a 1,000-share order in 20 ticks of 100 ms while the
-   SA-QUBO optimizer republishes a policy every 500 ms in the background.
-2. HFTQuantumPipeline: synthetic ticks with a volatility regime change;
-   microstructure and regime estimates re-parameterise the HFT QUBO that
-   the slow path keeps re-solving.
-
-Timings depend on the machine and are for illustration only.
-
-    python examples/hybrid_runtime.py
-"""
+"""Latency-decoupled runtime: the fast path never waits for the optimizer."""
 
 import logging
 
