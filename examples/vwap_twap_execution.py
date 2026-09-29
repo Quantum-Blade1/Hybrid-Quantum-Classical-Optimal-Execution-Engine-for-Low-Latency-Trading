@@ -53,7 +53,10 @@ def main() -> None:
     print(f"BUY {ORDER_SIZE:,} AAPL over {MINUTES} simulated minutes\n")
     print(f"{'Metric':<28}" + "".join(f"{name:>14}" for name in reports))
     for label, attr, fmt in rows:
-        print(f"{label:<28}" + "".join(f"{fmt.format(getattr(r, attr)):>14}" for r in reports.values()))
+        print(
+            f"{label:<28}"
+            + "".join(f"{fmt.format(getattr(r, attr)):>14}" for r in reports.values())
+        )
 
 
 if __name__ == "__main__":

@@ -36,10 +36,9 @@ def main() -> None:
         qubo_time_slices=10,
         qubo_sa_sweeps=500,
         seed=SEED,
-        verbose=True,
     )
-    print()
     print(comparison.to_dataframe().to_string(index=False))
+    print(f"\nLowest total cost: {comparison.best_strategy}")
 
 
 if __name__ == "__main__":

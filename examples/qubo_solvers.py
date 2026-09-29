@@ -10,9 +10,9 @@ with the exact optimum.
 """
 
 from qexec.optimization.qubo import ExecutionQUBO, QUBOConfig
-from qexec.optimization.solvers.compare import compare_solvers
-from qexec.optimization.solvers.exact import BruteForceSolver
 from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
+from qexec.optimization.solvers.compare import compare_solvers, format_comparison
+from qexec.optimization.solvers.exact import BruteForceSolver
 from qexec.optimization.solvers.greedy import GreedySolver
 
 SEED = 42
@@ -28,8 +28,10 @@ def main() -> None:
     )
     qubo = ExecutionQUBO(config)
     Q = qubo.build_qubo_matrix()
-    print(f"QUBO: {Q.shape[0]} binary variables "
-          f"({config.num_time_slices} slices x {config.num_quantity_levels} levels)")
+    print(
+        f"QUBO: {Q.shape[0]} binary variables "
+        f"({config.num_time_slices} slices x {config.num_quantity_levels} levels)"
+    )
 
     results = compare_solvers(
         Q,
@@ -38,8 +40,8 @@ def main() -> None:
             SimulatedAnnealingSolver(num_sweeps=1000, seed=SEED),
             GreedySolver(seed=SEED),
         ],
-        verbose=True,
     )
+    print(format_comparison(results))
 
     best = min(results, key=lambda r: r.energy)
     print(f"\nSchedule from {best.solver_name} (energy {best.energy:.4f}):")
