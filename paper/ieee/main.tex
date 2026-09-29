@@ -25,15 +25,18 @@
 
 \begin{document}
 
-\title{Quantum Optimization for Optimal Trade Execution:\\ A Reproducible Hybrid Architecture
+\title{Quantum Optimization for Optimal Trade Execution: A Reproducible Hybrid Architecture
 and a Pre-Registered Benchmark on Real Market Data}
 
-\author{Krish~Kumar~Sharma,
-        S.~Rajarajeswari,
-        and~Shilpa~Chaudhari%
-\thanks{The authors are with the Department of Computer Science and Engineering, M.~S.~Ramaiah
-Institute of Technology (affiliated to VTU), Bengaluru, India. Corresponding author:
-K.~K.~Sharma (e-mail: krishkumarsharma72@gmail.com).}}
+\author{Krish~Kumar~Sharma,% add IEEE membership grade if applicable
+        S.~Rajarajeswari,% add IEEE membership grade if applicable
+        and~Shilpa~Chaudhari% add IEEE membership grade if applicable
+\thanks{Krish Kumar Sharma (e-mail: krishkumarsharma72@gmail.com), S.~Rajarajeswari
+(e-mail: raji@msrit.edu), and Shilpa Chaudhari (e-mail: shilpasc29@msrit.edu) are with the
+Department of Computer Science and Engineering, M S Ramaiah Institute of Technology
+(affiliated to Visvesvaraya Technological University), Bengaluru 560054, India.}%
+\thanks{Corresponding author: Krish Kumar Sharma (e-mail: krishkumarsharma72@gmail.com).}%
+\thanks{This work received no external funding.}}% TODO(author): confirm funding
 
 \markboth{IEEE Transactions on Quantum Engineering}%
 {Sharma \MakeLowercase{\textit{et al.}}: Quantum Optimization for Optimal Trade Execution}
@@ -41,35 +44,35 @@ K.~K.~Sharma (e-mail: krishkumarsharma72@gmail.com).}}
 \maketitle
 
 \begin{abstract}
-Quantum optimization is often proposed for optimal trade execution but rarely tested against
-strong classical baselines on held-out market data. We present a
-reproducible hybrid quantum--classical execution system and an evaluation designed to be
-able to fail. The system decouples a fast execution loop, which never waits for the
-optimizer, from a slow path that solves a quadratic unconstrained binary optimization (QUBO)
-problem and publishes schedules through a single latest-value slot. We give an exact binary
-QUBO encoding of a discretized execution problem that shares one cost model with the
-evaluator and with discretized Almgren--Chriss (AC), and a penalty rule under which the QUBO
-minimizers are exactly the integer-program minimizers. In a pre-registered evaluation on
-\NumTestDays{} held-out days of Binance BTCUSDT and LINKUSDT data, run once from a frozen
-commit, none of the \NumPrimaryComparisons{} primary comparisons of the QUBO and adaptive
-hybrid schedules against TWAP, VWAP and AC is significant after Holm correction (mean paired
-differences \PrimaryMinMean{} to \PrimaryMaxMean{}~bps). The reason is structural: spread
-plus impact costs \BtcSpreadImpact{} and \LinkSpreadImpact{}~bps, while per-order shortfall
-has a standard deviation of \BtcStdMin{}--\LinkStdMax{}~bps. A corrected simulated annealer
-finds the exact optimum in every seed up to $n=\SaSliceAllOptimalUpTo$ variables. On simulators, QAOA puts slightly more probability on the optimum than same-budget uniform sampling on two
-benchmark families but not on the binary execution encoding, and best-of-shots metrics are
-uninformative at these sizes. On IBM hardware (\texttt{ibm\_fez}), $p=1$ QAOA at $n=4$ and
-$n=10$ (three runs each, recomputed from the raw counts of every job) gives a
-better-than-uniform mean energy in every run, but its probability of sampling the optimum is
-significantly above uniform in only \HwRunsSuccessSig{} of \HwNumFinalJobs{} runs, and a
-classical annealer solves these instances exactly. We report measured latencies, state conditions under which
-quantum optimization might help as hypotheses, and release all code, data manifests and
-results.
+Quantum optimization is often proposed for optimal trade execution but is rarely tested
+against strong classical baselines on held-out market data. We present a reproducible hybrid
+quantum--classical execution system and an evaluation designed so that it could fail. The
+system separates a fast execution loop, which never waits for the optimizer, from a slow path
+that solves a quadratic unconstrained binary optimization problem and publishes schedules
+through a single latest-value slot. We give an exact binary encoding of a discretized
+execution problem that shares one cost model with the evaluator and with a discretized
+Almgren--Chriss schedule, and a penalty rule under which its minimizers are exactly those of
+the integer program. In a pre-registered evaluation on \NumTestDays{} held-out days of
+Binance bitcoin and Chainlink spot data, run once from a frozen commit, none of the
+\NumPrimaryComparisons{} primary comparisons against time-weighted, volume-weighted, and
+Almgren--Chriss schedules is significant after Holm correction (mean paired differences
+\PrimaryMinMean{} to \PrimaryMaxMean{} basis points). The reason is structural: spread plus
+impact costs \BtcSpreadImpact{} and \LinkSpreadImpact{} basis points, whereas the per-order
+standard deviation of shortfall is \BtcStdMin{} to \LinkStdMax{} basis points. A corrected
+simulated annealer finds the exact optimum in every seed up to \SaSliceAllOptimalUpTo{}
+variables. In simulation, the quantum approximate optimization algorithm places slightly
+more probability on the optimum than same-budget uniform sampling on two benchmark families,
+but not on the execution encoding. On an IBM quantum processor at \HwMinN{} and \HwMaxN{}
+variables, it reaches a better-than-uniform mean energy in all \HwNumFinalJobs{} runs, but
+its probability of sampling the optimum is significantly above uniform in only
+\HwRunsSuccessSig{}, and a classical annealer solves these instances exactly. All code, data
+manifests, and results are released.
 \end{abstract}
 
 \begin{IEEEkeywords}
-Optimal execution, QUBO, QAOA, simulated annealing, Almgren--Chriss, implementation
-shortfall, reproducibility, pre-registration, negative results.
+Implementation shortfall, optimal execution, pre-registration, quadratic unconstrained binary
+optimization, quantum approximate optimization algorithm, reproducibility, simulated
+annealing.
 \end{IEEEkeywords}
 
 % ======================================================================================
@@ -79,93 +82,92 @@ shortfall, reproducibility, pre-registration, negative results.
 \IEEEPARstart{A}{n} institutional order is too large to trade at once: executing it
 immediately moves the price against the trader, while spreading it over time exposes it to
 price risk. Optimal execution chooses the schedule that balances these costs, measured as
-implementation shortfall, the difference between the arrival price and the prices actually
-paid~\cite{perold1988}. The classical theory, from Bertsimas and Lo~\cite{bertsimas1998}
-and Almgren and Chriss~\cite{almgren2001} onward, gives closed-form or convex solutions for
-stylized cost models; practical constraints such as lot sizes, minimum fills and venue
-choices make the problem discrete.
+implementation shortfall (IS), the difference between the arrival price and the prices
+actually paid \cite{perold1988}. The classical theory, from Bertsimas and Lo
+\cite{bertsimas1998} and Almgren and Chriss (AC) \cite{almgren2001} onward, gives closed-form
+or convex solutions for stylized cost models; practical constraints such as lot sizes,
+minimum fills, and venue choices make the problem discrete.
 
 Discreteness is the usual argument for quantum optimization: a discretized schedule can be
-written as a QUBO problem, equivalently an Ising Hamiltonian~\cite{lucas2014}, and handed to
-a quantum annealer~\cite{kadowaki1998} or to the quantum approximate optimization algorithm
-(QAOA)~\cite{farhi2014}. Rosenberg et al.~\cite{rosenberg2016} solved a trading-trajectory
-QUBO on a quantum annealer, and surveys of quantum computing for
-finance~\cite{orus2019,egger2020} list execution among candidate applications. What is
-usually missing is the question a practitioner would ask first: on real data, does the
-QUBO schedule execute more cheaply than TWAP, VWAP or a discretized Almgren--Chriss (AC)
-schedule, and does the quantum solver find better QUBO solutions than classical ones or than
-chance?
+written as a quadratic unconstrained binary optimization (QUBO) problem, equivalently an
+Ising Hamiltonian \cite{lucas2014}, and handed to a quantum annealer \cite{kadowaki1998} or
+to the quantum approximate optimization algorithm (QAOA) \cite{farhi2014}. Rosenberg
+\emph{et al.} \cite{rosenberg2016} solved a trading-trajectory QUBO on a quantum annealer,
+and surveys of quantum computing for finance \cite{orus2019,egger2020} list execution among
+candidate applications. What is usually missing is the question a practitioner would ask
+first: on real data, does the QUBO schedule execute more cheaply than a time-weighted average
+price (TWAP) schedule, a volume-weighted average price (VWAP) schedule, or a discretized AC
+schedule, and does the quantum solver find better QUBO solutions than classical solvers or
+than chance?
 
-This paper answers that question for one concrete system, and the answer is no. An earlier
-draft of this work reported large shortfall reductions and ideal QAOA solution quality on
-IBM hardware; an audit of the code base found that several of those numbers were not
-produced by the code, that the strategy comparison was unfair (different fill models per
-strategy), and that the hardware records could not be verified. We rebuilt the evaluation
-from the ground up, pre-registered the real-data protocol before downloading any data, and
-report the results whatever they were. The contributions are the following.
+This article answers that question for one concrete system, and the answer is no. An
+earlier draft of this work reported large shortfall reductions and ideal QAOA solution
+quality on IBM hardware; an audit found that several of those numbers were not produced by
+the code, that the strategies were executed by different fill models, and that the hardware
+records could not be verified. We rebuilt the evaluation, pre-registered the real-data
+protocol before downloading any data, and report the results as they came out. The
+contributions are as follows.
 \begin{enumerate}
-\item \emph{A latency-decoupled hybrid execution architecture} (Section~\ref{sec:arch}) in
-  which the fast path never blocks on the optimizer, with honestly measured CPython
-  latencies, including the tick lateness caused by interpreter-lock contention.
-\item \emph{An exact binary QUBO encoding} (Section~\ref{sec:formulation}) of the discretized
-  execution problem that shares one cost model with the evaluator and with discretized AC,
-  a penalty rule with a short exactness proof, a dynamic-programming ground truth, and a
-  measured QUBO--AC gap.
+\item \emph{A latency-decoupled hybrid execution architecture} (Section~\ref{sec:arch}), in
+  which the fast path never blocks on the optimizer, with measured CPython latencies,
+  including the tick lateness caused by interpreter-lock contention.
+\item \emph{An exact binary QUBO encoding} (Section~\ref{sec:formulation}) of the
+  discretized execution problem that shares one cost model with the evaluator and with
+  discretized AC, with a penalty rule and its proof, a dynamic-programming ground truth, and
+  a measured QUBO--AC gap.
 \item \emph{A pre-registered evaluation on held-out Binance data}
-  (Sections~\ref{sec:protocol}--\ref{sec:results}) with paired statistics and Holm
-  correction, showing no significant improvement over TWAP, VWAP or AC, and an explanation:
-  in liquid markets the costs a schedule controls are two orders of magnitude smaller than
-  the price noise it does not.
-\item \emph{A solver study} comparing a corrected simulated annealer (SA), exhaustive
+  (Sections~\ref{sec:protocol} and~\ref{sec:results}) with paired statistics and Holm
+  correction, which shows no significant improvement over TWAP, VWAP, or AC, and explains
+  why: in liquid markets, the costs a schedule controls are two orders of magnitude smaller
+  than the price noise it does not control.
+\item \emph{A solver study} that compares a corrected simulated annealer (SA), exhaustive
   search, QAOA on ideal and noisy simulators, and uniform random sampling with the same shot
-  budget, using a signed-energy approximation ratio and the success probability; it shows
-  that best-of-shots metrics are uninformative at the sizes used in the literature. The same
-  metrics, with per-job tests, are applied to the recovered raw counts of \HwNumJobs{} IBM
-  hardware jobs.
-\item \emph{An open, one-command reproducible artifact}: every number in this paper is a
-  macro generated from committed result files with provenance manifests
+  budget, using the success probability and a signed-energy approximation ratio. It shows
+  that best-of-shots metrics are uninformative at the sizes used in the literature, and it
+  applies the same metrics, with per-job tests, to the recovered raw counts of \HwNumJobs{}
+  jobs on an IBM quantum processor (Section~\ref{sec:hardware}).
+\item \emph{An open, one-command reproducible artifact} in which every number in this
+  article is a macro generated from committed result files with provenance manifests
   (Section~\ref{sec:repro}).
 \end{enumerate}
 Section~\ref{sec:discussion} states, as hypotheses, the conditions under which a quantum
 optimizer could matter for execution, and Section~\ref{sec:limitations} lists the
-limitations and threats to validity. Section~\ref{sec:hardware} reports QAOA on IBM's
-\texttt{ibm\_fez} processor, recomputed from the recovered raw counts of every job.
+limitations and threats to validity.
 
 % ======================================================================================
 \section{Related Work}
 \label{sec:related}
 
-\emph{Classical optimal execution.} Bertsimas and Lo~\cite{bertsimas1998} solved the
+\emph{Classical optimal execution:} Bertsimas and Lo \cite{bertsimas1998} solved the
 risk-neutral problem by dynamic programming under linear temporary impact; Almgren and
-Chriss~\cite{almgren2001} introduced the mean--variance formulation with its efficient
-frontier of schedules. Almgren et al.~\cite{almgren2005} estimated impact functions from
-institutional order data. Extensions include limit-order liquidation~\cite{gueant2012},
-mean-quadratic-variation objectives~\cite{forsyth2012}, order placement across
-venues~\cite{cont2017}, and reinforcement-learning policies~\cite{ning2021}; Cartea et
-al.~\cite{cartea2015} give a textbook treatment. We use a discretized AC schedule, computed
+Chriss \cite{almgren2001} introduced the mean--variance formulation and its efficient
+frontier of schedules. Almgren \emph{et al.} \cite{almgren2005} estimated impact functions
+from institutional order data. Extensions include limit-order liquidation \cite{gueant2012},
+mean-quadratic-variation objectives \cite{forsyth2012}, order placement across venues
+\cite{cont2017}, and reinforcement-learning policies \cite{ning2021}; Cartea \emph{et al.}
+\cite{cartea2015} give a textbook treatment. We use a discretized AC schedule, computed
 exactly for our cost model, as the strongest model-based baseline.
 
-\emph{Quantum optimization in finance.} QUBO and Ising formulations of combinatorial problems
-are catalogued by Lucas~\cite{lucas2014}; QAOA was introduced by Farhi et
-al.~\cite{farhi2014}, and quantum annealing by Kadowaki and Nishimori~\cite{kadowaki1998}.
-Surveys~\cite{orus2019,egger2020} cover finance applications. The closest prior work is
-Rosenberg et al.~\cite{rosenberg2016}, who solved a multi-period trading-trajectory QUBO on
-a D-Wave annealer; Brandhofer et al.~\cite{brandhofer2023} benchmarked QAOA on portfolio
-optimization, and Braine et al.~\cite{braine2021} applied quantum optimization to transaction
-settlement. Amplitude-estimation methods for option pricing~\cite{stamatopoulos2020} and
-risk analysis~\cite{woerner2019,egger2021credit} address a different problem class. To our
-knowledge, previous execution studies did not evaluate the resulting schedules against
-classical baselines on held-out market data under a pre-registered protocol; we do not
-claim this is the first such study, only that it is designed so that a negative result is
+\emph{Quantum optimization in finance:} QUBO and Ising formulations of combinatorial problems
+are catalogued by Lucas \cite{lucas2014}; QAOA was introduced by Farhi \emph{et al.}
+\cite{farhi2014}, and quantum annealing by Kadowaki and Nishimori \cite{kadowaki1998}.
+Surveys \cite{orus2019,egger2020} cover applications in finance. The closest prior work is
+that of Rosenberg \emph{et al.} \cite{rosenberg2016}, who solved a multiperiod
+trading-trajectory QUBO on a D-Wave annealer; Brandhofer \emph{et al.} \cite{brandhofer2023}
+benchmarked QAOA on portfolio optimization, and Braine \emph{et al.} \cite{braine2021}
+applied quantum optimization to transaction settlement. Amplitude-estimation methods for
+option pricing \cite{stamatopoulos2020} and risk analysis \cite{woerner2019,egger2021credit}
+address a different problem class. To our knowledge, previous execution studies did not
+evaluate the resulting schedules against classical baselines on held-out market data under a
+pre-registered protocol; we claim no priority, only a design in which a negative result is
 reported as such.
 
-\emph{Microstructure and statistics.} We calibrate price impact with a Kyle-style
-regression~\cite{kyle1985} of returns on signed volume; the spread component follows the
-standard adverse-selection view~\cite{glosten1985,ohara1995}. Shortfall is measured as in
-Perold~\cite{perold1988}. Paired differences are tested with the Wilcoxon signed-rank
-test~\cite{wilcoxon1945} and multiplicity is controlled with Holm's step-down
-procedure~\cite{holm1979}. Simulated annealing follows Kirkpatrick et
-al.~\cite{kirkpatrick1983}.
+\emph{Microstructure and statistics:} We calibrate price impact with a Kyle-style regression
+\cite{kyle1985} of returns on signed volume; the spread component follows the standard
+adverse-selection view \cite{glosten1985,ohara1995}. Paired differences are tested with the
+Wilcoxon signed-rank test \cite{wilcoxon1945}, and multiplicity is controlled with Holm's
+step-down procedure \cite{holm1979}. Simulated annealing follows Kirkpatrick \emph{et al.}
+\cite{kirkpatrick1983}.
 
 % ======================================================================================
 \section{Problem Formulation}
@@ -178,9 +180,9 @@ A buy or sell order of $N$ lots is executed over minutes $k=1,\dots,K$. A schedu
 $q_k\ge 0$ lots to minute $k$ with $\sum_k q_k=N$; write $f_k=q_k/N$ for the fractions and
 $R_k=\sum_{j\ge k} f_j$ for the fraction still unexecuted at the start of minute $k$. From
 development-day data we estimate, per minute of the day, the expected volume $\bar V_k$, the
-half spread $\bar h_k$ (bps) and the one-minute volatility $\sigma_k$ (bps), together with a
-linear temporary-impact coefficient $\beta$ (bps per unit participation). The model cost of a
-schedule, in bps of arrival notional, is
+half spread $\bar h_k$ and the one-minute volatility $\sigma_k$, both in basis points (bps),
+together with a linear temporary-impact coefficient $\beta$ (bps per unit participation). The
+model cost of a schedule, in bps of arrival notional, is
 \begin{align}
 \E[\mathrm{IS}](f) &= \sum_{k=1}^{K} f_k\Bigl(\bar h_k + \beta\,\frac{N f_k}{\bar V_k}\Bigr),
 \label{eq:mean}\\
@@ -204,7 +206,7 @@ f_k^{\mathrm{AC}} = \max\Bigl(0,\ \frac{(\nu-\bar h_k)\,\bar V_k}{2\beta N}\Bigr
 \end{equation}
 with $\nu$ found by bisection so that the fractions sum to one; for $\lambda>0$ a convex
 quadratic program is solved from this starting point. Integer lots are obtained by
-largest-remainder rounding. Equation~\eqref{eq:waterfill} has a consequence that matters
+largest-remainder rounding. Equation \eqref{eq:waterfill} has a consequence that matters
 below: when the half spread is constant across minutes, $f^{\mathrm{AC}}\propto\bar V$,
 i.e., AC coincides with VWAP whatever the value of $\beta$.
 
@@ -239,7 +241,7 @@ integers, hence $E(z)\ge P > J(Wc^{\mathrm{ref}}/U) \ge \min \mathrm{IP}$.
 We use the balanced allocation as $c^{\mathrm{ref}}$ and $P=1.5\,J(Wc^{\mathrm{ref}}/U)$.
 Because each slice's cost depends only on $c_t$ and the units still unexecuted before it,
 the IP has a chain structure and is solved exactly by dynamic programming (DP) in
-$O(TU2^B)$ time. DP is the ground truth against which we check every solver. The QUBO's
+$O(TU2^B)$ time. DP is the ground truth against which we check every solver. The QUBO
 feasible set is a restriction of the AC problem (slices trade in proportion to volume, in
 whole units), so its optimal model cost can only be at least that of AC; we measure the
 difference, the \emph{QUBO--AC gap}, rather than assume it is small.
@@ -269,7 +271,8 @@ prepares
 |\gamma,\beta\rangle=\prod_{l=1}^{p} e^{-i\beta_l H_B}\, e^{-i\gamma_l H_C}\,
 |{+}\rangle^{\otimes n},\qquad H_B=\sum_i X_i,
 \end{equation}
-and a classical optimizer (COBYLA here) adjusts the $2p$ angles to minimize the sampled
+and a classical optimizer, here constrained optimization by linear approximation (COBYLA),
+adjusts the $2p$ angles to minimize the sampled
 $\langle H_C\rangle$. The final state is sampled, and the samples are scored with the
 metrics below. Because every energy is recomputed from the QUBO, the same scoring applies to
 simulator and hardware counts.
@@ -301,10 +304,10 @@ first policy arrives). Solver failures or invalid schedules fall back to a unifo
 \label{fig:arch}
 \end{figure}
 
-Fig.~\ref{fig:arch} shows the runtime and Algorithm~\ref{alg:runtime} its two loops. Its design goal is that the component that submits
-child orders never depends on the latency, or the availability, of the optimizer. This is
-the property that would make a remote or queue-based quantum solver usable at all in an
-execution system.
+Fig.~\ref{fig:arch} shows the runtime, and Algorithm~\ref{alg:runtime} shows its two
+loops. The design goal is that the component that submits child orders never depends on
+the latency, or the availability, of the optimizer, which is the property that would make a
+remote or queue-based quantum solver usable at all in an execution system.
 
 \emph{Fast path.} A tick thread wakes on a fixed schedule, polls the policy slot, and
 submits the child order for the current tick. If a new policy has been published, the fast
@@ -314,7 +317,7 @@ completes exactly after any number of policy switches and never overfills.
 
 \emph{Slow path.} An optimizer thread periodically reads the order state, builds the
 execution QUBO, solves it (SA in the runtime; exhaustive search and QAOA are available
-offline), validates the schedule and publishes it. Exceptions and invalid schedules trigger a
+offline), validates the schedule, and publishes it. Exceptions and invalid schedules trigger a
 uniform fallback; the thread never terminates on a solver error.
 
 \begin{algorithm}[t]
@@ -343,10 +346,10 @@ system. Section~\ref{sec:latency} shows what this costs.
 
 In the real-data evaluation (Section~\ref{sec:results}) the hybrid strategy is simulated
 offline: at its re-planning checkpoint it re-solves the remaining units over the remaining
-minutes with the same QUBO and SA, after rescaling $\bar V$, $\bar h$ and $\sigma$ by the
+minutes with the same QUBO and SA, after rescaling $\bar V$, $\bar h$, and $\sigma$ by the
 ratios observed so far in the same order (bars strictly before the checkpoint), clipped to
-$[\HybridClipLow,\HybridClipHigh]$. The frozen setting uses \TuneCheckpoints{} checkpoint. The runtime latency
-measurements use the same threads and policy slot with synthetic workloads.
+$[\HybridClipLow,\HybridClipHigh]$. The frozen setting uses \TuneCheckpoints{} checkpoint. The
+runtime latency measurements use the same threads and policy slot with synthetic workloads.
 
 % ======================================================================================
 \section{Experimental Protocol}
@@ -354,26 +357,27 @@ measurements use the same threads and policy slot with synthetic workloads.
 
 \subsection{Pre-registration and data}
 
-The real-data protocol was written and committed before any market data were downloaded. It
-fixes the data, the split, the orders, the strategies, the primary metric, the primary
-comparisons, the statistics, the decision rule and the sensitivity analysis; later changes
+The real-data protocol was written and committed before any market data were downloaded. It fixes the data, the split, the orders, the strategies, the primary metric, the primary
+comparisons, the statistics, the decision rule, and the sensitivity analysis; later changes
 are listed as deviations in the protocol document, with reasons, and none altered the
 primary analysis.
 
-\emph{Data.} Public Binance spot aggregated trades, each daily file verified against its
-published SHA-256 checksum, aggregated into one-minute bars (volume, bar VWAP, signed volume
-from the taker side, and a trade-sign half-spread estimate). Two symbols were chosen in the
-protocol: BTCUSDT, the most liquid USDT pair, and LINKUSDT, chosen before any evaluation as
+\emph{Data:} Public Binance spot aggregated trades, each daily file verified against its
+published SHA-256 checksum, aggregated into one-minute bars (volume, volume-weighted bar price, signed volume from the
+taker side, and a trade-sign half-spread estimate). Two symbols were chosen in the protocol:
+BTCUSDT (bitcoin quoted in the Tether stablecoin USDT), the most liquid USDT pair, and
+LINKUSDT (Chainlink quoted in USDT), chosen before any evaluation as
 a pair whose quote volume was in a pre-specified 1--3\% band of BTCUSDT's.
 
-\emph{Split.} \NumDevDays{} development days (\DevFirstDay{} to \DevLastDay) were used for
+\emph{Split:} \NumDevDays{} development days (\DevFirstDay{} to \DevLastDay) were used for
 every estimate and every tuning decision; \NumTestDays{} held-out days (\TestFirstDay{} to
 \TestLastDay) were evaluated exactly once, from the clean frozen commit \texttt{\TestCommit}
 recorded in the result manifest.
 
 \begin{table}[t]
-\caption{Cost-model calibration on development days (OLS impact slope with a day-block
-bootstrap standard error; half spread and volatility are means of the intraday profiles).}
+\caption{Cost-model calibration on development days. ADV: average daily volume (in units of
+the base asset); $\beta$: ordinary least squares impact slope with its day-block bootstrap
+standard error (SE); half spread and volatility are means of the intraday profiles.}
 \label{tab:calibration}
 \centering
 \footnotesize
@@ -388,7 +392,7 @@ LINKUSDT & \LinkAdv{} & \LinkLot & \LinkBeta{} [\LinkBetaSe] & \LinkBetaRsq & \L
 \end{tabular}
 \end{table}
 
-\emph{Calibration.} Table~\ref{tab:calibration} summarizes the development-day cost model.
+\emph{Calibration:} Table~\ref{tab:calibration} summarizes the development-day cost model.
 The impact slope comes from a Kyle-style regression, through the origin, of one-minute
 returns on signed volume divided by expected volume, over \BtcImpactBars{} bars per symbol.
 Its fit is weak ($R^2=\BtcBetaRsq$ and \LinkBetaRsq), which is why the protocol includes an
@@ -397,10 +401,9 @@ impact sensitivity analysis. BTCUSDT's half spread is essentially one price tick
 \subsection{Orders, strategies and evaluator}
 \label{sec:evaluator}
 
-For each symbol, day and each of \NumStartTimes{} start times four hours apart (from 00:00
-UTC; a \emph{window}) we
+For each symbol, day and each of \NumStartTimes{} start times four hours apart (from 00:00 Coordinated Universal Time; a \emph{window}), we
 execute one order in each of \NumCells{} cells: size \EvalSizes{} of development ADV, horizon
-\EvalHorizons{} minutes. Sides alternate by start time so that drift does not favour front- or
+\EvalHorizons{} minutes. Sides alternate by start time so that drift does not favor front- or
 back-loading. This gives \NumTestWindows{} held-out windows and \NumTestOrders{} orders per
 symbol.
 
@@ -413,20 +416,20 @@ Every strategy is executed by the same evaluator. There is no order book for the
 the fill model is bar based: a child order for $q$ lots in bar $k$ fills
 $\min(q,\lfloor \rho V_k\rfloor)$ lots (a participation cap $\rho=\ParticipationCapPct\%$ of
 realized volume $V_k$),
-at the bar VWAP moved against the trader by the realized half spread plus
+at the volume-weighted bar price moved against the trader by the realized half spread plus
 $\beta\,q^{\mathrm{fill}}/V_k$ (linear temporary impact). Unfilled lots carry forward; any
 remainder after the last bar is completed by a clean-up order at the same formula without the
 cap and charged as opportunity cost, so a strategy cannot look cheaper by not trading. There
 is no permanent impact, and fees are omitted because they are the same per unit for every
 strategy. Implementation shortfall is measured in bps of arrival notional, positive meaning
-cost, and decomposes exactly into spread, impact, timing (price moves before each fill) and
+cost, and decomposes exactly into spread, impact, timing (price moves before each fill), and
 opportunity (clean-up) components.
 
 \subsection{Statistics and decision rule}
 
 The unit of analysis is the window: for each window we average the shortfall difference
 \emph{strategy minus baseline} over its \NumCells{} cells. For each of the \NumPrimaryComparisons{} primary comparisons
-(QUBO and Hybrid versus TWAP, VWAP and AC, per symbol; $\lambda=0$, impact at 1$\times$) we
+(QUBO and Hybrid versus TWAP, VWAP, and AC, per symbol; $\lambda=0$, impact at 1$\times$) we
 report the mean paired difference, a 95\% percentile-bootstrap confidence interval (CI) over
 windows (10{,}000 seeded resamples), a day-clustered bootstrap CI, and the two-sided
 Wilcoxon signed-rank $p$-value, Holm-adjusted over the \NumPrimaryComparisons{} comparisons. A strategy
@@ -440,13 +443,11 @@ adjustment.
 
 \subsection{Synthetic experiments and solver benchmarks}
 
-Before the real-data study, the same strategies were compared on a synthetic market (minute
-geometric Brownian motion with an intraday volatility and volume profile, and a synthetic
-ten-level book per bar), with \SynSeeds{} seeds per experiment and common random numbers so
+Before the real-data study, the same strategies were compared on a synthetic market (minute geometric Brownian motion with an intraday volatility and volume profile, and a
+synthetic ten-level order book per bar), with \SynSeeds{} seeds per experiment and common random numbers so
 that every strategy faces the same book in every minute. These experiments used an earlier
-level-encoded QUBO and are reported as a secondary result. Solver benchmarks use the toy
-QUBO that was also submitted to IBM hardware, random Gaussian QUBOs, and the binary execution
-encoding of Section~\ref{sec:qubo}, with exact bounds by enumeration up to
+level-encoded QUBO and are reported as a secondary result. Solver benchmarks use a small level-encoded execution QUBO with fixed coefficients
+(the \emph{toy} QUBO, also submitted to IBM hardware), random Gaussian QUBOs, and the binary execution encoding of Section~\ref{sec:qubo}, with exact bounds by enumeration up to
 $n=\SolverMaxN$. QAOA runs on the Qiskit Aer simulator, ideal and with a generic depolarizing
 and readout noise model (error rate \QaoaNoise, $n\le\QaoaNoisyMaxN$; not a device
 calibration), for depths $p\in\{\QaoaDepths\}$ and \QaoaSeeds{} seeds, optimizing angles with
