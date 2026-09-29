@@ -1,0 +1,172 @@
+{
+  "experiment": "real_data_test",
+  "status": "ok",
+  "config_type": "Config",
+  "config": {
+    "split": "test",
+    "symbols": [
+      "BTCUSDT",
+      "LINKUSDT"
+    ],
+    "dev_days": [
+      "2026-07-22",
+      "2026-07-23",
+      "2026-07-24",
+      "2026-07-25",
+      "2026-07-26",
+      "2026-07-27",
+      "2026-07-28",
+      "2026-07-29",
+      "2026-07-30",
+      "2026-07-31",
+      "2026-08-01",
+      "2026-08-02",
+      "2026-08-03",
+      "2026-08-04",
+      "2026-08-05",
+      "2026-08-06"
+    ],
+    "eval_days": [
+      "2026-08-07",
+      "2026-08-08",
+      "2026-08-09",
+      "2026-08-10",
+      "2026-08-11",
+      "2026-08-12",
+      "2026-08-13",
+      "2026-08-14",
+      "2026-08-15",
+      "2026-08-16",
+      "2026-08-17",
+      "2026-08-18"
+    ],
+    "start_hours": [
+      0,
+      4,
+      8,
+      12,
+      16,
+      20
+    ],
+    "sizes_pct_adv": [
+      0.1,
+      0.5
+    ],
+    "horizons": [
+      60,
+      240
+    ],
+    "participation_cap": 0.25,
+    "bucket_minutes": 15,
+    "min_lots": 10000,
+    "qubo": {
+      "num_slices": 4,
+      "bits": 3,
+      "units": 16,
+      "sweeps": 1000,
+      "restarts": 16
+    },
+    "hybrid_checkpoints": 1,
+    "hybrid_clip": [
+      0.5,
+      2.0
+    ],
+    "variants": [
+      {
+        "name": "primary",
+        "risk": "zero",
+        "eval_multiple": 1.0,
+        "opt_multiple": 1.0
+      },
+      {
+        "name": "eval_x0.5",
+        "risk": "zero",
+        "eval_multiple": 0.5,
+        "opt_multiple": 1.0
+      },
+      {
+        "name": "eval_x2",
+        "risk": "zero",
+        "eval_multiple": 2.0,
+        "opt_multiple": 1.0
+      },
+      {
+        "name": "both_x0.5",
+        "risk": "zero",
+        "eval_multiple": 0.5,
+        "opt_multiple": 0.5
+      },
+      {
+        "name": "both_x2",
+        "risk": "zero",
+        "eval_multiple": 2.0,
+        "opt_multiple": 2.0
+      },
+      {
+        "name": "risk_averse",
+        "risk": "rule",
+        "eval_multiple": 1.0,
+        "opt_multiple": 1.0
+      }
+    ],
+    "robustness_seeds": 5,
+    "synthetic": false,
+    "bars_root": "data/binance/bars",
+    "workers": 10,
+    "seed": 0
+  },
+  "seeds": [
+    0
+  ],
+  "git": {
+    "commit": "d2f227c6e50d12656d07e767443df3c84e4e1a0e",
+    "dirty": false
+  },
+  "environment": {
+    "python": "3.12.14",
+    "implementation": "CPython",
+    "packages": {
+      "qexec": "0.1.0",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "pandas": "3.0.6",
+      "matplotlib": "3.11.2",
+      "qiskit": "2.5.2",
+      "qiskit-aer": "0.17.2"
+    },
+    "platform": "macOS-26.5.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "cpu_count": 10,
+    "memory_gb": 16.0,
+    "cpu_model": "Apple M5"
+  },
+  "started_utc": "2026-09-29T18:03:48+00:00",
+  "wall_time_s": 249.869,
+  "files": {
+    "orders.csv": "a394edfd447d5352093ce533c31f4806e2e7f540ae088479a82e67c31f08bdd9",
+    "calibration.csv": "72d8aeb03ae22bb9637686121ebbe7f236a07ed1f11a22d43e4b2944558ce65a",
+    "gaps.csv": "2ff3fb60a5b0adeea0d3c1b6655601b8a20904801eaf42661383968c139a704c",
+    "comparisons.csv": "25d92a99ebc8cbbb5847159f97308ce3449ba8dae6efc2280cf00960b5607a14",
+    "comparisons_secondary.csv": "3960b02e824639f7c4ec6afbbf3e600a8107f87e9df4fcfe8e7693c9bed9265a",
+    "cells.csv": "61761d64fc0189a4477b38fd8a4fbd14a4be8be10a8698c7901e219a42c085d9",
+    "strategy_summary.csv": "4bda9fd71854f44e50ec1b0b18aed8b73e39946462ba2a3476ca2df3aa3d1973",
+    "robustness.csv": "1fef1b17980aeb3ad5d5206152831c4b2b1e1bd5d931145ab6ca678bf24641fc"
+  },
+  "quick": false,
+  "data": "Binance aggTrades",
+  "eval_days": [
+    "2026-08-07",
+    "2026-08-08",
+    "2026-08-09",
+    "2026-08-10",
+    "2026-08-11",
+    "2026-08-12",
+    "2026-08-13",
+    "2026-08-14",
+    "2026-08-15",
+    "2026-08-16",
+    "2026-08-17",
+    "2026-08-18"
+  ]
+}
