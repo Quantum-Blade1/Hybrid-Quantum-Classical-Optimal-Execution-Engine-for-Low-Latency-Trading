@@ -27,8 +27,10 @@ Full numbers with confidence intervals are in [`docs/RESULTS.md`](docs/RESULTS.m
   binary execution encoding, and best-of-shots metrics cannot separate solvers at these sizes.
 * **Latency:** fast-path work is microseconds, but ticks start tens of milliseconds late
   because the pure-Python solver holds the GIL. This is CPython, not kernel bypass.
-* **IBM hardware:** no hardware claim is made until the raw counts of the `ibm_fez` jobs are
-  recovered (see below).
+* **IBM hardware:** on `ibm_fez`, p = 1 QAOA at n = 4 and n = 10 (three runs each, recomputed
+  from the recovered raw counts of every job) gives a better-than-uniform mean energy in every
+  run, but a significantly higher probability of the optimum in only one of six; SA solves
+  both sizes exactly.
 
 The manuscript is [`paper/ieee/main.tex`](paper/ieee/main.tex) (IEEE Transactions on Quantum
 Engineering format). [`docs/CLAIMS_AUDIT.md`](docs/CLAIMS_AUDIT.md) records every claim of the
@@ -93,24 +95,22 @@ tests/               unit, property and regression tests mirroring src/qexec/
 examples/, apps/     short API examples and a Streamlit dashboard
 ```
 
-## Adding the IBM hardware counts
+## IBM hardware counts
 
-The `ibm_fez` records committed during the original run are not usable (empty count tables,
-inconsistent derived fields), so the paper's hardware subsection is a visible placeholder. To
-complete it:
+The `ibm_fez` records committed during the original run (`results/bench_hw_*.json`) are not
+usable (empty count tables, inconsistent derived fields) and are kept only as superseded
+history. The paper's hardware results come from the raw counts recovered from IBM Quantum:
 
-1. Recover the raw counts of the jobs from IBM Quantum (job IDs, status, creation time, number
-   of measured bits, shots and counts in Qiskit bit order) and write one JSON object per job to
-   `results/ibm_fez_recovered.jsonl`. The format is described in
-   `src/qexec/hardware/jobs.py`; `tests/fixtures/ibm_jobs_sample.jsonl` is a synthetic example.
-2. Run `python -m experiments.hardware_analysis`. It recomputes every energy from the counts
-   with the known toy QUBO, separates optimization-loop and final-sampling jobs by shot count,
-   compares each with same-shot uniform sampling and the Aer results, and writes
-   `results/hardware/`.
-3. Run `make figures` (builds `fig_hw_ibm_success_prob.pdf` and `fig_hw_ibm_approx_ratio.pdf`)
-   and `make paper-numbers` (sets `\HwRecovered` to 1 and adds the hardware macros).
-4. Rewrite the hardware subsection of `paper/ieee/main.tex` from those results and remove the
-   `\hwpending` box; `make paper` shows a red reminder until then.
+1. `results/ibm_fez_recovered.jsonl` holds one JSON object per job record (job ID, status,
+   creation time, number of measured bits, shots and counts in Qiskit bit order); the format
+   is described in `src/qexec/hardware/jobs.py`.
+2. `python -m experiments.hardware_analysis` (part of `make experiments`) recomputes every
+   energy from the counts with the known toy QUBO, separates loop and final jobs by shot
+   count, assigns loop jobs to runs by creation time, tests each final job against uniform
+   sampling and compares it with the Aer results, and writes `results/hardware/` (its
+   `manifest.json` lists every job ID).
+3. `make figures` draws `fig_hw_ibm_success_prob.pdf`, `fig_hw_ibm_approx_ratio.pdf` and
+   `fig_hw_ibm_trajectory.pdf`; `make paper-numbers` writes the hardware macros of Section VI-E.
 
 ## Citation
 
