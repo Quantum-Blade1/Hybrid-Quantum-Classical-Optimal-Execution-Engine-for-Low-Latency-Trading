@@ -822,8 +822,8 @@ optimum against low energy overall. At $n=10$, \HwNOneZeroRunsAbove{} of three r
 above $2^{-10}$ but none significantly ($p_>=\HwNOneZeroPMin$ to \HwNOneZeroPMax), with
 $\Popt$ between \HwNOneZeroPoptMin{} and \HwNOneZeroPoptMax{} against \HwNOneZeroUniform. The
 spread between runs is of the same order as the spread between simulator seeds (ideal Aer
-at $n=4$: \HwNFourIdealPoptMin--\HwNFourIdealPoptMax), which points to the starting angles
-rather than the device as its main source. The optimum was sampled in every final job, but,
+at $n=4$: \HwNFourIdealPoptMin--\HwNFourIdealPoptMax), so it need not come from the
+device: different starting angles alone produce a spread this large in simulation. The optimum was sampled in every final job, but,
 as in Section~\ref{sec:solvers}, this carries no information: uniform sampling with
 \HwFinalShots{} shots misses it with probability \HwNOneZeroUniformMiss{} at $n=10$.
 
