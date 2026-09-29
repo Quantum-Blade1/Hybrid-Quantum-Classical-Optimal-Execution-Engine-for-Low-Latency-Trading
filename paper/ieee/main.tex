@@ -414,11 +414,12 @@ impact sensitivity analysis. BTCUSDT's half spread is essentially one price tick
 \subsection{Orders, Strategies, and Evaluator}
 \label{sec:evaluator}
 
-For each symbol and day, and for each of \NumStartTimes{} start times four hours apart (from 00:00 Coordinated Universal Time; a \emph{window}), we
-execute one order in each of \NumCells{} cells: size \EvalSizes{} of development ADV, horizon
-\EvalHorizons{} minutes. Sides alternate by start time so that drift does not favor front- or
-back-loading. This gives \NumTestWindows{} held-out windows and \NumTestOrders{} orders per
-symbol.
+For each symbol and day, and for each of \NumStartTimes{} start times four hours apart (from
+00:00 Coordinated Universal Time; a \emph{window}), we execute one order in each of
+\NumCells{} cells: size \EvalSizes{} of the development-day average daily volume (ADV),
+horizon \EvalHorizons{} minutes. Sides alternate by start time so that drift does not favor
+front- or back-loading. This gives \NumTestWindows{} held-out windows and \NumTestOrders{}
+orders per symbol.
 
 Five strategies are compared: TWAP (uniform), VWAP (proportional to the development volume
 profile), AC (Section~\ref{sec:ac}), QUBO (Section~\ref{sec:qubo}, solved by SA with
@@ -456,11 +457,14 @@ adjustment.
 
 \subsection{Synthetic Experiments and Solver Benchmarks}
 
-Before the real-data study, the same strategies were compared on a synthetic market (minute geometric Brownian motion with an intraday volatility and volume profile, and a
-synthetic ten-level order book per bar), with \SynSeeds{} seeds per experiment and common random numbers so
-that every strategy faces the same book in every minute. These experiments used an earlier
-level-encoded QUBO and are reported as a secondary result. Solver benchmarks use a small level-encoded execution QUBO with fixed coefficients
-(the \emph{toy} QUBO, also submitted to IBM hardware), random Gaussian QUBOs, and the binary execution encoding of Section~\ref{sec:qubo}, with exact bounds by enumeration up to
+Before the real-data study, the same strategies were compared on a synthetic market (minute
+geometric Brownian motion with an intraday volatility and volume profile, and a synthetic
+ten-level order book per bar), with \SynSeeds{} seeds per experiment and common random
+numbers so that every strategy faces the same book in every minute. These experiments used
+an earlier level-encoded QUBO and are reported as a secondary result. Solver benchmarks use a
+small level-encoded execution QUBO with fixed coefficients (the \emph{toy} QUBO, also
+submitted to IBM hardware), random Gaussian QUBOs, and the binary execution encoding of
+Section~\ref{sec:qubo}, with exact bounds by enumeration up to
 $n=\SolverMaxN$. QAOA runs on the Qiskit Aer simulator, ideal and with a generic depolarizing
 and readout noise model (error rate \QaoaNoise, $n\le\QaoaNoisyMaxN$; not a device
 calibration), for depths $p\in\{\QaoaDepths\}$ and \QaoaSeeds{} seeds, optimizing angles with
