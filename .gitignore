@@ -59,3 +59,8 @@ data/
 # Curated images live in assets/ and paper/figures/ and are tracked.
 /*.png
 /*.pdf
+
+# npm
+node_modules/
+package.json
+package-lock.json
