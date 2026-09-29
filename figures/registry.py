@@ -1,9 +1,11 @@
 """Figure registry: every PDF in paper/figures/ -> plot function -> results inputs -> experiment.
 
 `kind` is "empirical" (numbers read from results/) or "illustrative" (a diagram computed
-directly from qexec that makes no empirical claim). `REMOVED` lists figures the paper
-still references that were deleted because they plotted fabricated numbers
-(docs/CLAIMS_AUDIT.md, section 1); they have no producer and must not be recreated.
+directly from qexec that makes no empirical claim). `optional` figures read inputs that can
+legitimately be absent (real data before `make data`, recovered IBM counts); they are
+skipped with a message instead of failing when an input is missing. `REMOVED` lists
+figures the paper still references that were deleted because they plotted fabricated
+numbers (docs/CLAIMS_AUDIT.md, section 1); they have no producer and must not be recreated.
 """
 
 from collections.abc import Callable
@@ -11,7 +13,7 @@ from dataclasses import dataclass
 
 from matplotlib.figure import Figure
 
-from figures import diagrams, execution, formulation, market, solvers
+from figures import diagrams, execution, formulation, market, realdata, solvers
 from figures.common import Results
 
 
@@ -22,6 +24,7 @@ class FigureSpec:
     inputs: tuple[str, ...]
     kind: str = "empirical"
     note: str = ""
+    optional: bool = False
 
     @property
     def experiments(self) -> tuple[str, ...]:
@@ -34,8 +37,9 @@ def _spec(
     *inputs: str,
     kind: str = "empirical",
     note: str = "",
+    optional: bool = False,
 ) -> FigureSpec:
-    return FigureSpec(file, plot, tuple(inputs), kind, note)
+    return FigureSpec(file, plot, tuple(inputs), kind, note, optional)
 
 
 QB = "qaoa_benchmark/runs.csv"
@@ -185,6 +189,59 @@ FIGURES: tuple[FigureSpec, ...] = (
         "fig_hw_count_distribution.pdf",
         solvers.fig_hw_count_distribution,
         "qaoa_benchmark/top_counts.csv",
+    ),
+    _spec(
+        "fig_real_primary_comparisons.pdf",
+        realdata.fig_real_primary_comparisons,
+        "real_data_test/comparisons.csv",
+        optional=True,
+        note="Held-out test days; the 12 pre-registered primary comparisons.",
+    ),
+    _spec(
+        "fig_real_dev_comparisons.pdf",
+        realdata.fig_real_dev_comparisons,
+        "real_data_dev/comparisons.csv",
+        optional=True,
+        note="Development days, in-sample.",
+    ),
+    _spec(
+        "fig_real_sensitivity.pdf",
+        realdata.fig_real_sensitivity,
+        "real_data_test/comparisons.csv",
+        optional=True,
+    ),
+    _spec(
+        "fig_real_cost_components.pdf",
+        realdata.fig_real_cost_components,
+        "real_data_test/strategy_summary.csv",
+        optional=True,
+    ),
+    _spec(
+        "fig_real_impact_calibration.pdf",
+        realdata.fig_real_impact_calibration,
+        "real_data_dev/impact_bins.csv",
+        optional=True,
+    ),
+    _spec(
+        "fig_real_qubo_ac_gap.pdf",
+        realdata.fig_real_qubo_ac_gap,
+        "real_data_test/gaps.csv",
+        optional=True,
+    ),
+    _spec(
+        "fig_hw_ibm_success_prob.pdf",
+        realdata.fig_hw_ibm_success_prob,
+        "hardware/summary.csv",
+        "hardware/manifest.json",
+        optional=True,
+        note="Recovered ibm_fez counts; absent until recovered.",
+    ),
+    _spec(
+        "fig_hw_ibm_approx_ratio.pdf",
+        realdata.fig_hw_ibm_approx_ratio,
+        "hardware/jobs.csv",
+        optional=True,
+        note="Recovered ibm_fez counts; absent until recovered.",
     ),
 )
 

@@ -1,4 +1,7 @@
-"""Run every experiment that feeds the paper (IBM hardware excluded).
+"""Run every experiment that feeds the paper (IBM hardware *runs* excluded).
+
+Experiments whose inputs are absent (real data before `make data`, recovered IBM counts)
+are skipped with a message and leave existing results untouched.
 
 Usage:
     python -m experiments.run_all [--quick] [--results-dir DIR] [--only NAME ...]
@@ -15,7 +18,12 @@ import time
 import traceback
 from pathlib import Path
 
-from experiments.common import DEFAULT_RESULTS_DIR, QUICK_RESULTS_DIR, Experiment
+from experiments.common import (
+    DEFAULT_RESULTS_DIR,
+    QUICK_RESULTS_DIR,
+    Experiment,
+    SkipExperiment,
+)
 
 # Order: cheap deterministic experiments first, QAOA last.
 EXPERIMENTS = (
@@ -32,11 +40,19 @@ EXPERIMENTS = (
     "latency",
     "load_test",
     "qaoa_benchmark",
+    "real_data_tune",
+    "real_data_dev",
+    "real_data_test",
+    "hardware",
 )
+# Experiment (results directory) name -> module, where they differ.
+MODULES = {"hardware": "hardware_analysis"}
 
 
 def load(name: str) -> Experiment:
-    experiment: Experiment = importlib.import_module(f"experiments.{name}").EXPERIMENT
+    experiment: Experiment = importlib.import_module(
+        f"experiments.{MODULES.get(name, name)}"
+    ).EXPERIMENT
     return experiment
 
 
@@ -55,6 +71,9 @@ def main() -> None:
         # Keep running the remaining experiments if one fails; the exit code reports it.
         try:
             elapsed = load(name).execute(quick=args.quick, results_dir=results_dir)
+        except SkipExperiment as exc:
+            print(f"{name:<22} {exc}", flush=True)
+            continue
         except Exception:
             traceback.print_exc()
             failures.append(name)

@@ -3,9 +3,14 @@
 PYTHON ?= python
 export PYTHONPATH := src:.
 
-.PHONY: all experiments figures quick experiments-quick figures-quick check-figures test lint
+.PHONY: all data experiments figures quick experiments-quick figures-quick check-figures test lint
 
-all: experiments figures
+all: data experiments figures
+
+# Public Binance aggTrades for docs/PROTOCOL.md (~255 MB, checksum-verified, git-ignored).
+# Experiments that need them skip with a message when they are absent.
+data:
+	$(PYTHON) -m experiments.fetch_binance
 
 experiments:
 	$(PYTHON) -m experiments.run_all

@@ -27,6 +27,10 @@ DEFAULT_RESULTS_DIR = Path("results")
 QUICK_RESULTS_DIR = Path("build/quick/results")
 
 
+class SkipExperiment(Exception):  # noqa: N818 - a control-flow signal, not an error
+    """Raised before any output is written when an experiment's inputs are unavailable."""
+
+
 @dataclass(frozen=True)
 class Experiment:
     name: str
@@ -35,12 +39,18 @@ class Experiment:
     run: Callable[[Any, ExperimentRecorder], None]
     seeds: Callable[[Any], list[int]]
     description: str = ""
+    precheck: Callable[[Any], str | None] | None = None
 
     def execute(self, *, quick: bool, results_dir: Path, seed: int | None = None) -> float:
         """Run with the full or quick config (optionally re-seeded); returns wall time."""
         config = self.quick if quick else self.full
         if seed is not None:
             config = dataclasses.replace(config, seed=seed)
+        if self.precheck is not None:
+            reason = self.precheck(config)
+            if reason:
+                # Leave any existing results untouched.
+                raise SkipExperiment(f"{self.name}: skipped ({reason})")
         start = time.perf_counter()
         with ExperimentRecorder(
             self.name, config, self.seeds(config), root=results_dir, extra={"quick": quick}
@@ -56,7 +66,11 @@ class Experiment:
         args = parser.parse_args(argv)
         logging.basicConfig(level=logging.WARNING)
         results_dir = args.results_dir or (QUICK_RESULTS_DIR if args.quick else DEFAULT_RESULTS_DIR)
-        elapsed = self.execute(quick=args.quick, results_dir=results_dir, seed=args.seed)
+        try:
+            elapsed = self.execute(quick=args.quick, results_dir=results_dir, seed=args.seed)
+        except SkipExperiment as exc:
+            print(exc)
+            return
         print(f"{self.name}: {elapsed:.1f}s -> {results_dir / self.name}/")
 
 

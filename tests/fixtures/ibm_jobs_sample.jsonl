@@ -1,0 +1,6 @@
+{"job_id": "FAKE-fixture-0001", "status": "DONE", "created": "2000-01-01T00:00:00Z", "num_bits": 4, "shots": 10000, "counts": {"0101": 4000, "1010": 1000, "0110": 2000, "1001": 1500, "0000": 1500}, "note": "synthetic test fixture, not hardware data"}
+{"job_id": "FAKE-fixture-0002", "status": "DONE", "created": "2000-01-01T00:01:00Z", "num_bits": 4, "shots": 2000, "counts": {"0101": 500, "1111": 1500}, "note": "synthetic optimisation-loop job"}
+{"job_id": "FAKE-fixture-0003", "status": "DONE", "created": "2000-01-01T00:02:00Z", "num_bits": 6, "shots": 20000, "counts": {"010101": 3000, "101010": 7000, "000000": 10000}, "note": "synthetic"}
+{"job_id": "FAKE-fixture-0004", "status": "ERROR", "created": "2000-01-01T00:03:00Z", "num_bits": 6, "shots": 20000, "counts": {}, "note": "synthetic failed job"}
+{"job_id": "FAKE-fixture-0005", "status": "DONE", "created": "2000-01-01T00:04:00Z", "num_bits": 5, "shots": 10000, "counts": {"00000": 10000}, "note": "synthetic job of a non-benchmark size"}
+{"job_id": "FAKE-fixture-0006", "status": "DONE", "created": "2000-01-01T00:05:00Z", "num_bits": 8, "shots": 3000, "counts": {"01010101": 3000}, "note": "synthetic job with ambiguous shots"}

@@ -59,9 +59,15 @@ def main() -> None:
     results = Results(args.results_dir)
     specs = [s for s in FIGURES if args.only is None or s.file.startswith(tuple(args.only))]
     failures = 0
+    skipped = 0
     start = time.perf_counter()
     for spec in specs:
         t0 = time.perf_counter()
+        missing = [i for i in spec.inputs if not (results.root / i).exists()]
+        if spec.optional and missing:
+            print(f"{spec.file:<45} skipped (optional; missing {', '.join(missing)})")
+            skipped += 1
+            continue
         # Keep building the other figures if one fails; the exit code reports it.
         try:
             path = build(spec, results, args.output_dir)
@@ -71,7 +77,9 @@ def main() -> None:
             failures += 1
             continue
         print(f"{spec.file:<45} {time.perf_counter() - t0:5.1f}s  [{spec.kind}] -> {path}")
-    print(f"{len(specs) - failures}/{len(specs)} figures in {time.perf_counter() - start:.1f}s")
+    built = len(specs) - failures - skipped
+    elapsed = time.perf_counter() - start
+    print(f"{built}/{len(specs)} figures ({skipped} optional skipped) in {elapsed:.1f}s")
     if failures or orphans:
         sys.exit(1)
 
