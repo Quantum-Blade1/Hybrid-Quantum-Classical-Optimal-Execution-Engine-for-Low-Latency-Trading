@@ -1,7 +1,7 @@
-"""Phase 7 figures: real-data execution (results/real_data_dev, results/real_data_test) and
-the recovered IBM hardware counts (results/hardware).
+"""Phase 7 figures: real-data execution (results/real_data_dev, results/real_data_test).
+The IBM hardware figures are in `figures.hardware`.
 
-These inputs can be legitimately absent (no downloaded data, no recovered IBM counts);
+These inputs can be legitimately absent (no downloaded data);
 their registry entries are `optional` and are skipped, not failed, when absent.
 """
 
@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
 
-from figures.common import SOLVER_COLORS, Results, new_figure
+from figures.common import Results, new_figure
 
 REAL_COLORS = {
     "TWAP": "#9E9E9E",
@@ -158,49 +158,6 @@ def fig_real_qubo_ac_gap(res: Results) -> Figure:
     ax.set_xticks(x, labels, rotation=40, fontsize=6)
     ax.set_ylabel("Model objective gap (bps)")
     ax.set_title("QUBO vs discretized AC in the cost model")
-    ax.legend(fontsize=6)
-    fig.tight_layout()
-    return fig
-
-
-def fig_hw_ibm_success_prob(res: Results) -> Figure:
-    s = res.table("hardware", "summary")
-    note = str(res.manifest("hardware").get("data", ""))
-    fig, ax = new_figure(figsize=(3.6, 2.6))
-    ax.semilogy(s["n"], s["success_probability"], "o-", color="#D32F2F", label="IBM (final jobs)")
-    ax.semilogy(
-        s["n"],
-        s["uniform_success_probability"],
-        "--",
-        color=SOLVER_COLORS["Random"],
-        label="uniform random",
-    )
-    for solver in ("qaoa_ideal", "qaoa_noisy"):
-        col = f"{solver}_p1_success_probability"
-        if col in s:
-            key = "QAOA_Ideal" if solver == "qaoa_ideal" else "QAOA_Noisy"
-            ax.semilogy(s["n"], s[col], "s:", color=SOLVER_COLORS[key], label=f"Aer {key[5:]} p=1")
-    ax.set_xlabel("n (qubits)")
-    ax.set_ylabel("P(optimal bitstring)")
-    ax.set_title(
-        f"Success probability{' [' + note + ']' if 'SYNTHETIC' in note else ''}", fontsize=8
-    )
-    ax.legend(fontsize=6)
-    fig.tight_layout()
-    return fig
-
-
-def fig_hw_ibm_approx_ratio(res: Results) -> Figure:
-    jobs = res.table("hardware", "jobs")
-    fig, ax = new_figure(figsize=(3.6, 2.6))
-    for role, marker in (("optimization", "."), ("final", "o")):
-        g = jobs[jobs["role"] == role]
-        ax.plot(g["n"], g["approx_ratio_mean"], marker, ls="none", label=f"IBM {role} jobs")
-    u = jobs.groupby("n")["uniform_approx_ratio_mean"].first()
-    ax.plot(u.index, u.values, "k--", label="uniform random")
-    ax.set_xlabel("n (qubits)")
-    ax.set_ylabel("Approximation ratio of mean energy")
-    ax.set_title("Recomputed from raw counts")
     ax.legend(fontsize=6)
     fig.tight_layout()
     return fig

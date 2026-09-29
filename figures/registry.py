@@ -13,7 +13,16 @@ from dataclasses import dataclass
 
 from matplotlib.figure import Figure
 
-from figures import diagrams, execution, formulation, market, paper, realdata, solvers
+from figures import (
+    diagrams,
+    execution,
+    formulation,
+    hardware,
+    market,
+    paper,
+    realdata,
+    solvers,
+)
 from figures.common import Results
 
 
@@ -230,18 +239,29 @@ FIGURES: tuple[FigureSpec, ...] = (
     ),
     _spec(
         "fig_hw_ibm_success_prob.pdf",
-        realdata.fig_hw_ibm_success_prob,
+        hardware.fig_hw_ibm_success_prob,
+        "hardware/final_tests.csv",
         "hardware/summary.csv",
         "hardware/manifest.json",
         optional=True,
-        note="Recovered ibm_fez counts; absent until recovered.",
+        note="Recovered ibm_fez counts: P(optimum) per final job vs uniform and Aer p=1.",
     ),
     _spec(
         "fig_hw_ibm_approx_ratio.pdf",
-        realdata.fig_hw_ibm_approx_ratio,
-        "hardware/jobs.csv",
+        hardware.fig_hw_ibm_approx_ratio,
+        "hardware/final_tests.csv",
+        "hardware/summary.csv",
+        "hardware/manifest.json",
         optional=True,
-        note="Recovered ibm_fez counts; absent until recovered.",
+        note="Recovered ibm_fez counts: mean-energy ratio per final job vs uniform and Aer.",
+    ),
+    _spec(
+        "fig_hw_ibm_trajectory.pdf",
+        hardware.fig_hw_ibm_trajectory,
+        "hardware/jobs.csv",
+        "hardware/manifest.json",
+        optional=True,
+        note="Recovered ibm_fez counts: COBYLA-loop jobs by run and position.",
     ),
 )
 

@@ -108,7 +108,7 @@ def test_optional_figures_are_skipped_when_inputs_are_absent(tmp_path, monkeypat
     monkeypatch.setattr(sys, "argv", [*argv, "--only", "fig_real", "fig_hw_ibm"])
     make_figures.main()
     out = capsys.readouterr().out
-    assert "0/8 figures (8 optional skipped)" in out
+    assert "0/9 figures (9 optional skipped)" in out
     assert not list(tmp_path.glob("*.pdf"))
 
 
