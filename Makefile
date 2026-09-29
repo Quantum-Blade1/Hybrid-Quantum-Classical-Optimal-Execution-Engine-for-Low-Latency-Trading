@@ -3,9 +3,10 @@
 PYTHON ?= python
 export PYTHONPATH := src:.
 
-.PHONY: all data experiments figures quick experiments-quick figures-quick check-figures test lint
+.PHONY: all data experiments figures quick experiments-quick figures-quick check-figures test lint \
+	paper-numbers check-paper paper
 
-all: data experiments figures
+all: data experiments figures paper-numbers
 
 # Public Binance aggTrades for docs/PROTOCOL.md (~255 MB, checksum-verified, git-ignored).
 # Experiments that need them skip with a message when they are absent.
@@ -34,3 +35,22 @@ lint:
 
 test:
 	$(PYTHON) -m pytest && $(PYTHON) -m pytest -m slow
+
+# Every number in paper/ieee/main.tex is a macro in paper/ieee/numbers.tex, written from results/.
+paper-numbers:
+	$(PYTHON) -m experiments.paper_numbers
+
+# Fails if numbers.tex is stale or the manuscript references a missing figure/macro.
+check-paper:
+	$(PYTHON) -m experiments.paper_numbers --check
+	$(PYTHON) -m experiments.check_paper
+
+# Builds paper/ieee/main.pdf with latexmk if installed, else tectonic.
+paper: check-paper
+	cd paper/ieee && if command -v latexmk >/dev/null 2>&1; then \
+		latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex; \
+	elif command -v tectonic >/dev/null 2>&1; then \
+		tectonic --keep-logs main.tex; \
+	else \
+		echo "No TeX toolchain (latexmk or tectonic) found; ran the source checks only."; \
+	fi
