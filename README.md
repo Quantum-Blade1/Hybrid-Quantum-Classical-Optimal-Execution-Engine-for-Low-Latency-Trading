@@ -1,130 +1,133 @@
-# Hybrid Quantum-Classical Trading Execution System
+# Quantum Optimization for Optimal Trade Execution: research artifact
 
-![Status](https://img.shields.io/badge/Status-Project%20Complete-success)
-![Quantum](https://img.shields.io/badge/Quantum-Ready-blueviolet)
+This repository is the code, data pipeline, results and manuscript for a reproducible study of
+a hybrid quantum-classical trade-execution system. The system runs a fast execution loop that
+never waits for the optimizer, and a slow path that solves an execution QUBO (simulated
+annealing; exhaustive search and QAOA on Qiskit Aer offline) and publishes schedules through a
+single latest-value slot. The study evaluates the resulting schedules against TWAP, VWAP and
+discretized Almgren-Chriss under a pre-registered protocol on held-out Binance data. **The
+result is negative:** the QUBO and hybrid schedules do not execute more cheaply than the
+classical baselines, and QAOA on simulators does not beat uniform random sampling at finding
+the optimum of the binary execution QUBO. The repository is built so that anyone can rerun
+every number and check it.
 
-A research-grade hybrid architecture for optimal trade execution, combining low-latency classical execution with quantum-inspired optimization (QUBO/QAOA) to minimize implementation shortfall.
+## Headline findings
 
-![Architecture](assets/figure1_architecture.png)
+Full numbers with confidence intervals are in [`docs/RESULTS.md`](docs/RESULTS.md).
 
-##  Key Features
+* **Held-out real data (12 days, BTCUSDT and LINKUSDT, evaluated once from a frozen commit):**
+  none of the 12 pre-registered comparisons (QUBO and hybrid vs TWAP, VWAP, AC) is significant
+  after Holm correction (every adjusted p = 1.00; mean differences -0.27 to +0.22 bps), and on
+  BTCUSDT they are practically equivalent (all CIs within +-0.5 bps).
+* **Why:** spread plus impact, the cost a schedule controls, is 0.16 bps (BTC) and 0.60 bps
+  (LINK) for every strategy, while per-order shortfall has a standard deviation of 43-58 bps.
+* **Synthetic market:** no setting shows a significant improvement over TWAP or VWAP.
+* **Solvers:** the fixed simulated annealer finds the exact optimum in every seed up to 16
+  variables; QAOA's small advantage over same-budget uniform sampling is not significant on the
+  binary execution encoding, and best-of-shots metrics cannot separate solvers at these sizes.
+* **Latency:** fast-path work is microseconds, but ticks start tens of milliseconds late
+  because the pure-Python solver holds the GIL. This is CPython, not kernel bypass.
+* **IBM hardware:** no hardware claim is made until the raw counts of the `ibm_fez` jobs are
+  recovered (see below).
 
-*   **Hybrid Architecture**: Decoupled "Fast Path" (tick loop) and "Slow Path" (optimizer thread) exchanging policies through a latest-value queue; measured Python latencies are in `docs/RESULTS.md`.
-*   **Asynchronous Optimization**: Trading never blocks; execution policy is updated in real-time via a thread-safe queue.
-*   **Quantum Solvers**: Supports Simulated Annealing (SA) and QAOA (via Qiskit).
-*   **Real Data Ready**: Includes `qexec.market.loader.DataLoader` for NSE/Binance/NYSE tick data ingestion and backtesting.
-*   **Real-Time Dashboard**: Streamlit interface for live monitoring, strategy comparison, and quantum visualization.
-*   **Robustness**: Built-in resilience against solver timeouts and crashes with exponential backoff and classical fallback.
-*   **Advanced Analytics**: Implementation Shortfall decomposition (Delay, Impact, Timing Risk).
+The manuscript is [`paper/ieee/main.tex`](paper/ieee/main.tex) (IEEE Transactions on Quantum
+Engineering format). [`docs/CLAIMS_AUDIT.md`](docs/CLAIMS_AUDIT.md) records every claim of the
+earlier draft (archived in `paper/springer_qip_old/`) and what happened to it;
+[`docs/PROTOCOL.md`](docs/PROTOCOL.md) is the pre-registered protocol;
+[`docs/MATHEMATICAL_MODEL.md`](docs/MATHEMATICAL_MODEL.md) documents what the code computes.
 
-##  System Requirements
+## Install
 
-*   **OS**: Windows 10/11, Linux (Ubuntu 20.04+), or macOS (M1/Intel).
-*   **Python**: Version 3.10 or higher.
-*   **RAM**: Minimum 8GB (16GB recommended for heavy simulations).
-*   **CPU**: Multi-core processor (Hybrid engine is multi-threaded).
-*   **Optional**:
-    *   **GPU**: For Qiskit Aer GPU support (CUDA 11+).
-    *   **IBMQ Account**: For running on real Quantum Hardware.
-
-##  Installation
+Python 3.10 or newer.
 
 ```bash
-# Clone repository
 git clone https://github.com/Quantum-Blade1/Hybrid-Quantum-Classical-Optimal-Execution-Engine-for-Low-Latency-Trading.git
 cd Hybrid-Quantum-Classical-Optimal-Execution-Engine-for-Low-Latency-Trading
-
-# Install dependencies (requires Python 3.10+)
-pip install -e ".[dev]"          # core + test/lint tools
-pip install -e ".[app]"          # Streamlit dashboard (streamlit, plotly)
-pip install -e ".[hardware]"     # IBM Quantum hardware runs (qiskit-ibm-runtime)
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"          # library, experiments, tests
+pip install -e ".[hardware]"     # optional: IBM Quantum access (qiskit-ibm-runtime)
+pip install -e ".[app]"          # optional: Streamlit dashboard
 ```
 
-Dependencies are declared in `pyproject.toml`. The library is the `qexec` package under `src/`; experiment and example scripts import it, so install it first and run the scripts from the repository root (figure and result paths are relative to it).
+Building the PDF needs `latexmk` (TeX Live) or [`tectonic`](https://tectonic-typesetting.github.io).
 
-##  Quick Start
-
-### 1. Interactive Dashboard (Recommended)
-Launch the real-time control center:
-```bash
-streamlit run apps/dashboard.py
-```
-*Features: Live P&L, Execution Trajectory, Quantum Heatmap, TWAP Benchmark.*
-
-### 2. Examples
-Short scripts showing the library API:
-```bash
-python examples/vwap_twap_execution.py   # classical baselines through the ExecutionEngine
-python examples/qubo_solvers.py          # build the execution QUBO; exact vs SA vs greedy
-python examples/qubo_vs_baselines.py     # QUBO-optimised schedule vs VWAP/TWAP
-python examples/hybrid_runtime.py        # fast/slow-path runtime and the HFT pipeline
-```
-
-### 3. Reproducing the paper's numbers and figures
-Every number and figure comes from an experiment script that writes machine-readable results with provenance; figures are drawn only from those results.
+## Reproduce
 
 ```bash
-make all                  # every experiment (results/), then every figure (paper/figures/)
-make quick                # tiny sizes -> build/quick/{results,figures}; what CI runs (~20 s)
-make experiments          # python -m experiments.run_all
-make figures              # python -m figures.make_figures
-make check-figures        # every PDF in paper/figures/ must have a registered producer
-python -m experiments.walk_forward --quick   # one experiment; --results-dir, --seed
-```
-Use `make PYTHON=.venv/bin/python ...` if `python` is not your environment's interpreter. The full suite takes about 15 minutes on an Apple M5 (10 cores); per-experiment wall times are in each `manifest.json`.
-
-| Layer | Location | Contents |
-|---|---|---|
-| Experiments | `experiments/<name>.py` | One per result group; a `Config` dataclass with `FULL` and `QUICK` sizes; writes `results/<name>/` through `qexec.experiment.ExperimentRecorder` |
-| Results | `results/<name>/` | CSV tables, JSON summaries and `manifest.json` (config, seeds, git commit + dirty flag, package versions, platform, UTC time, wall time, SHA-256 of every file) |
-| Figures | `figures/` | Plot functions that read `results/` only (enforced by `tests/test_figures_registry.py`); `figures/registry.py` maps each PDF to its function, inputs and experiment |
-| Summary | `docs/RESULTS.md` | Headline numbers with 95% CIs, including where the QUBO/hybrid approach does not beat the baselines |
-
-Strategy comparisons (`is_comparison`, `strategy_comparison`, `stress_test`, `walk_forward`) run 30 seeds, execute every strategy through the same engine and book (no fills in zero-volume bars, carry-forward, opportunity cost of unfilled shares) and report bootstrap CIs and paired Wilcoxon tests against TWAP/VWAP; see `docs/MATHEMATICAL_MODEL.md`, "Evaluation Model". `experiments/hardware_benchmark.py` runs QAOA on IBM hardware when credentials are set (`IBM_QUANTUM_TOKEN`, or `IBM_CLOUD_API_KEY` + `IBM_CLOUD_CRN`); it is not part of `run_all`, and it appends every job's ID and raw counts to `results/hw_jobs.jsonl`. `results/bench_*.json` are historical records (claims audit F10) and are not read by any figure.
-
-##  System Architecture
-
-The system operates on two timescales:
-1.  **Fast Loop (100ms)**: The `ExecutionEngine` consumes tick data and executes orders based on the current *Execution Policy*.
-2.  **Slow Loop (1s+)**: The `HybridController` aggregates market state, formulates a QUBO problem, solves it (SA/Quantum), and pushes a new *Execution Policy*.
-
-##  Benchmarks & Results
-
-See `docs/RESULTS.md`. In short: on the synthetic market used here, the SA-QUBO and hybrid schedules do **not** reduce implementation shortfall relative to TWAP or VWAP (paired differences within a few bps, confidence intervals include zero), and QAOA on simulators does not beat uniform random sampling at finding the optimum of the benchmark QUBOs. `docs/CLAIMS_AUDIT.md` gives the status of every quantitative claim in the paper.
-
-##  Project Structure
-
-```
-Hybrid-Quantum-Classical-Optimal-Execution-Engine-for-Low-Latency-Trading/
-├── src/qexec/             # Library (import-only; no scripts)
-│   ├── market/            # simulator, order_book, loader
-│   ├── execution/         # engine + strategies/ (base, twap, vwap, almgren_chriss, qubo)
-│   ├── optimization/      # qubo, hft_qubo, ising, schedule, toy, solvers/ (exact, annealing, greedy, qaoa)
-│   ├── microstructure/    # kyle, vpin, adverse_selection, analyzer, regime
-│   ├── runtime/           # policy, optimizer, engine, controller, hft_pipeline, decision, resilience, latency
-│   ├── hardware/          # ibm (IBM Quantum runtime access), mitigation
-│   └── analysis/          # shortfall, walk_forward, stress, runners
-├── experiments/           # One script per result group -> results/<name>/ (run_all runs them all)
-├── figures/               # Plot functions reading results/ only; registry.py maps PDFs to producers
-├── examples/              # Short scripts demonstrating the library
-├── apps/dashboard.py      # Streamlit dashboard
-├── results/               # Experiment outputs with manifest.json provenance (+ historical bench_*.json)
-├── paper/                 # Manuscript (main.tex) and figures/
-├── docs/                  # MATHEMATICAL_MODEL.md, CLAIMS_AUDIT.md, RESULTS.md
-├── Makefile               # make all | experiments | figures | quick
-├── assets/                # README images
-├── tests/                 # Property and regression tests, mirroring src/qexec/
-└── pyproject.toml     # Project metadata and dependencies
+make quick          # every experiment at tiny sizes + every figure -> build/quick/ (about a minute; CI)
+make all            # download Binance data (~255 MB, checksum-verified), run every experiment,
+                    # draw every figure, write paper/ieee/numbers.tex (about 45 min of
+                    # experiment time on an Apple M5, plus the download)
+make paper          # check the manuscript sources, then build paper/ieee/main.pdf
+make check-paper    # numbers.tex up to date; figures, macros, references and claims check
+make check-figures  # every PDF in paper/figures/ has a registered producer
+make lint test      # ruff, mypy, pytest (fast and slow suites)
 ```
 
-## Tests
+Use `make PYTHON=.venv/bin/python ...` if `python` is not the environment's interpreter. One
+experiment can be run on its own, e.g. `python -m experiments.walk_forward --quick`.
 
-```bash
-pip install -e ".[dev]"
-pytest                                   # fast suite (< 60 s), excludes @pytest.mark.slow
-pytest -m slow                           # QAOA runs on the Aer simulator
-pytest --cov=qexec --cov-report=term-missing
+Provenance: every experiment writes `results/<name>/manifest.json` (config, seeds, git commit
+and dirty flag, package versions, platform, wall time, SHA-256 of each output). Figures are
+drawn only from `results/` by functions registered in `figures/registry.py` (a test enforces
+that figure code reads results and computes nothing). Every number in the manuscript is a
+macro in `paper/ieee/numbers.tex`, generated from `results/` by
+`python -m experiments.paper_numbers`.
+
+## Repository layout
+
+```
+src/qexec/           library: market data and calibration, execution engine and strategies,
+                     cost model, QUBO encodings and solvers (exact, SA, greedy, QAOA),
+                     runtime (fast/slow path, policy slot), statistics, IBM job analysis
+experiments/         one script per result group -> results/<name>/ ; run_all runs them all;
+                     paper_numbers.py and check_paper.py serve the manuscript
+figures/             plot functions reading results/ only; registry.py maps PDFs to producers
+results/             committed outputs with manifests (results/bench_*.json are historical,
+                     unverifiable records and are not used)
+paper/ieee/          IEEE TQE manuscript (main.tex, generated numbers.tex)
+paper/figures/       figure PDFs (generated)
+paper/springer_qip_old/  archived earlier draft (superseded; see the claims audit)
+docs/                RESULTS, PROTOCOL, MATHEMATICAL_MODEL, CLAIMS_AUDIT
+tests/               unit, property and regression tests mirroring src/qexec/
+examples/, apps/     short API examples and a Streamlit dashboard
 ```
 
-##  License
-Apache License 2.0. See `LICENSE`.
+## Adding the IBM hardware counts
+
+The `ibm_fez` records committed during the original run are not usable (empty count tables,
+inconsistent derived fields), so the paper's hardware subsection is a visible placeholder. To
+complete it:
+
+1. Recover the raw counts of the jobs from IBM Quantum (job IDs, status, creation time, number
+   of measured bits, shots and counts in Qiskit bit order) and write one JSON object per job to
+   `results/ibm_fez_recovered.jsonl`. The format is described in
+   `src/qexec/hardware/jobs.py`; `tests/fixtures/ibm_jobs_sample.jsonl` is a synthetic example.
+2. Run `python -m experiments.hardware_analysis`. It recomputes every energy from the counts
+   with the known toy QUBO, separates optimization-loop and final-sampling jobs by shot count,
+   compares each with same-shot uniform sampling and the Aer results, and writes
+   `results/hardware/`.
+3. Run `make figures` (builds `fig_hw_ibm_success_prob.pdf` and `fig_hw_ibm_approx_ratio.pdf`)
+   and `make paper-numbers` (sets `\HwRecovered` to 1 and adds the hardware macros).
+4. Rewrite the hardware subsection of `paper/ieee/main.tex` from those results and remove the
+   `\hwpending` box; `make paper` shows a red reminder until then.
+
+## Citation
+
+If you use this code or its results, please cite the paper (details to be updated on
+publication):
+
+```bibtex
+@article{sharma_quantum_execution,
+  author  = {Sharma, Krish Kumar and Rajarajeswari, S. and Chaudhari, Shilpa},
+  title   = {Quantum Optimization for Optimal Trade Execution: A Reproducible Hybrid
+             Architecture and a Pre-Registered Benchmark on Real Market Data},
+  journal = {IEEE Transactions on Quantum Engineering},
+  note    = {Manuscript in preparation},
+  year    = {2026}
+}
+```
+
+## License
+
+Apache License 2.0. See [`LICENSE`](LICENSE).
