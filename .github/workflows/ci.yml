@@ -29,4 +29,6 @@ jobs:
       - name: Type check
         run: mypy src/qexec
       - name: Test
-        run: python -m pytest
+        run: python -m pytest --cov=qexec --cov-report=term-missing:skip-covered --cov-fail-under=80
+      - name: Slow tests
+        run: python -m pytest -m slow

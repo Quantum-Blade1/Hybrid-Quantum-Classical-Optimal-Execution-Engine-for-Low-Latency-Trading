@@ -97,7 +97,7 @@ Hybrid-Quantum-Classical-Optimal-Execution-Engine-for-Low-Latency-Trading/
 ├── src/qexec/             # Library (import-only; no scripts)
 │   ├── market/            # simulator, order_book, loader
 │   ├── execution/         # engine + strategies/ (base, twap, vwap, almgren_chriss, qubo)
-│   ├── optimization/      # qubo, hft_qubo, ising, schedule, solvers/ (exact, annealing, greedy, qaoa)
+│   ├── optimization/      # qubo, hft_qubo, ising, schedule, toy, solvers/ (exact, annealing, greedy, qaoa)
 │   ├── microstructure/    # kyle, vpin, adverse_selection, analyzer, regime
 │   ├── runtime/           # policy, optimizer, engine, controller, hft_pipeline, decision, resilience, latency
 │   ├── hardware/          # ibm (IBM Quantum runtime access), mitigation
@@ -109,8 +109,17 @@ Hybrid-Quantum-Classical-Optimal-Execution-Engine-for-Low-Latency-Trading/
 ├── paper/                 # Manuscript (main.tex) and figures/
 ├── docs/                  # MATHEMATICAL_MODEL.md, CLAIMS_AUDIT.md
 ├── assets/                # README images
-├── tests/                 # Unit tests
+├── tests/                 # Property and regression tests, mirroring src/qexec/
 └── pyproject.toml     # Project metadata and dependencies
+```
+
+## Tests
+
+```bash
+pip install -e ".[dev]"
+pytest                                   # fast suite (< 60 s), excludes @pytest.mark.slow
+pytest -m slow                           # QAOA runs on the Aer simulator
+pytest --cov=qexec --cov-report=term-missing
 ```
 
 ##  License

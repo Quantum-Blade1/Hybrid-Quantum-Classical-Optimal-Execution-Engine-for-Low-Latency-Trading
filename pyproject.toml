@@ -36,6 +36,7 @@ hardware = ["qiskit-ibm-runtime>=0.21"]
 app = ["streamlit>=1.20.0", "plotly>=5.13.0"]
 dev = [
     "pytest>=7.0.0",
+    "pytest-cov>=4.0",
     "hypothesis>=6.0",
     "ruff>=0.6",
     "mypy>=1.10",
@@ -54,6 +55,10 @@ pythonpath = ["src"]
 # importlib mode: test files in different directories may share a basename, no __init__.py.
 addopts = "-q --import-mode=importlib -m 'not slow'"
 markers = ["slow: takes more than a few seconds (QAOA on Aer); run with `pytest -m slow`"]
+
+[tool.coverage.run]
+source = ["qexec"]
+branch = false
 
 [tool.ruff]
 line-length = 100
