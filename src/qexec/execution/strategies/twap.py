@@ -44,7 +44,7 @@ class TWAPStrategy(BaseStrategy):
             if shares_allocated >= total_shares:
                 break
             slice_size = base_slice_size + (1 if i < remainder else 0)
-            slice_size = min(slice_size, total_shares - shares_allocated)
+            slice_size = min(slice_size, max_slice_shares, total_shares - shares_allocated)
             schedule[point] = slice_size
             shares_allocated += slice_size
 

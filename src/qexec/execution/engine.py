@@ -279,13 +279,17 @@ class ExecutionEngine:
     def _generate_child_orders(
         parent: ParentOrder, schedule: NDArray[Any], market_data: pd.DataFrame
     ) -> list[ChildOrder]:
+        """One child per scheduled minute, truncated so the children never exceed the parent."""
         children: list[ChildOrder] = []
-        for minute_idx, target_qty in enumerate(schedule):
+        unassigned = parent.total_quantity
+        for minute_idx, scheduled in enumerate(schedule):
+            target_qty = min(int(scheduled), unassigned)
             if target_qty > 0:
+                unassigned -= target_qty
                 children.append(
                     ChildOrder(
                         parent_id=parent.order_id,
-                        target_quantity=int(target_qty),
+                        target_quantity=target_qty,
                         target_time=market_data.iloc[minute_idx]["timestamp"],
                         sequence=len(children) + 1,
                         minute_index=minute_idx,

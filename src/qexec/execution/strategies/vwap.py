@@ -44,7 +44,7 @@ class VWAPStrategy(BaseStrategy):
 
     def calculate_schedule(self, total_shares: int, market_data: pd.DataFrame) -> NDArray[np.int_]:
         """Round the capped volume-weighted schedule, then allocate leftover shares at random
-        (weighted by volume) among slices still below the participation cap."""
+        (weighted by volume) among slices still below both the participation and slice caps."""
         volume_profile = self._volume_profile(market_data)
         vol_weights = volume_profile / volume_profile.sum()
         participation_cap = volume_profile * self.participation_rate
@@ -55,8 +55,9 @@ class VWAPStrategy(BaseStrategy):
         while schedule.sum() > total_shares:
             schedule[np.argmax(schedule)] -= 1
 
+        slice_cap = np.minimum(participation_cap, total_shares * self.max_slice_pct)
         for _ in range(total_shares - int(schedule.sum())):
-            weights = vol_weights * (schedule < participation_cap)
+            weights = vol_weights * (schedule < slice_cap)
             if weights.sum() > 0:
                 idx = self.rng.choice(len(schedule), p=weights / weights.sum())
                 schedule[idx] += 1

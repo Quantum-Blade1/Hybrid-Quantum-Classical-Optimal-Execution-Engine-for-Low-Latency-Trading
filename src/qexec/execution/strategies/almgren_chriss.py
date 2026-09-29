@@ -73,11 +73,16 @@ class AlmgrenChrissSolver:
         )
 
     def calculate_expected_cost(self, trajectory: pd.DataFrame) -> float:
-        """E[C] = gamma X^2 / 2 + (eta / tau) sum n_k^2 (fixed cost epsilon omitted)."""
+        """E[C] = gamma X^2 / 2 + (eta_tilde / tau) sum n_k^2, eta_tilde = eta - gamma tau / 2.
+
+        Almgren & Chriss (2000), eq. 20, with the fixed cost epsilon omitted. The
+        -gamma tau / 2 correction is the discrete-time permanent impact within an interval.
+        """
         X = self.config.total_shares
         n = trajectory["shares_to_trade"].to_numpy()
+        eta_tilde = self.config.eta - 0.5 * self.config.rho * self._tau
         permanent = 0.5 * self.config.rho * X**2
-        temporary = float(np.sum(self.config.eta * n**2 / self._tau))
+        temporary = float(np.sum(eta_tilde * n**2 / self._tau))
         return permanent + temporary
 
     def calculate_variance(self, trajectory: pd.DataFrame) -> float:
