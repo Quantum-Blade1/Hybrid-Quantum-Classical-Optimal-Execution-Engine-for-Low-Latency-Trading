@@ -54,6 +54,8 @@ jobs:
         run: make figures-quick
       - name: Every paper figure has a producer
         run: make check-figures
+      - name: Paper numbers up to date; manuscript sources consistent
+        run: make check-paper
       - uses: actions/upload-artifact@v4
         if: always()
         with:
