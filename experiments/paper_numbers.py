@@ -102,6 +102,16 @@ PRIMARY_ORDER = [
 MAIN_STRATEGIES = ("TWAP", "VWAP", "AC", "QUBO", "Hybrid")
 
 
+def published_commit(t: Tables, commit: str) -> str:
+    """Public ID of a recorded commit (results/commit_map.json); unchanged if unmapped."""
+    path = t.root / "commit_map.json"
+    if path.exists():
+        for c in json.loads(path.read_text())["commits"]:
+            if c["recorded"] == commit:
+                return str(c["published"])
+    return commit
+
+
 def real_data(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of numbers
     cal = t.csv("real_data_test", "calibration").set_index("symbol")
     for symbol, s in SYMBOL_NAMES.items():
@@ -128,7 +138,7 @@ def real_data(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of
     m["TestLastDay"] = test_manifest["config"]["eval_days"][-1]
     m["DevFirstDay"] = test_manifest["config"]["dev_days"][0]
     m["DevLastDay"] = test_manifest["config"]["dev_days"][-1]
-    m["TestCommit"] = test_manifest["git"]["commit"][:7]
+    m["TestCommit"] = published_commit(t, test_manifest["git"]["commit"])[:7]
     m["TestCommitClean"] = "clean" if not test_manifest["git"]["dirty"] else "dirty"
     m["TestWallTime"] = fmt_int(test_manifest["wall_time_s"])
     cfg = test_manifest["config"]
@@ -280,7 +290,7 @@ def real_data(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of
     m["TuneHybridMinusTwapMax"] = fmt(hyb["mean_minus_twap_bps"].max())
 
     dev_manifest = t.json("real_data_dev", "manifest")
-    m["DevCommit"] = dev_manifest["git"]["commit"][:7]
+    m["DevCommit"] = published_commit(t, dev_manifest["git"]["commit"])[:7]
     m["DevCommitClean"] = "clean" if not dev_manifest["git"]["dirty"] else "dirty"
     dev = t.csv("real_data_dev", "comparisons")
     dev = dev[dev["variant"] == "primary"]

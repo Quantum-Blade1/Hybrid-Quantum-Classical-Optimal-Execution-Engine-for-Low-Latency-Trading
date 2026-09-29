@@ -1,0 +1,385 @@
+{
+  "note": "Commit IDs recorded in results/*/manifest.json before the history was published. Only author metadata changed; each pair has the same tree.",
+  "commits": [
+    {
+      "recorded": "a12fe3921372224449429780ff11ecda90c8e7c6",
+      "published": "42fc8d4e5b2e4ecbc75eb34cb39bd2d08efdd2bf",
+      "tree": "a9bc569b9c92c860e40b70b7d74029ae2b85a6f2"
+    },
+    {
+      "recorded": "978ed3290d4a2423b92e63329f6f19a19d278a24",
+      "published": "62e0fddc2c97588bc34f56aec397a0964f61f15f",
+      "tree": "6b861c5b0b3a2970bec97b64ead566d32e828730"
+    },
+    {
+      "recorded": "94f959046d9099f205227b58fd82daef994962ac",
+      "published": "9bb2179f4755fa45aca5c88abb805033ce300bbc",
+      "tree": "385a9ecd6dde6ab7f4884ba6d763b56317afc3a8"
+    },
+    {
+      "recorded": "20622f048591d838ce55db6ff54dfb1bffef06f1",
+      "published": "cea9e7f1f17cbdb64d999cd23cbb09630bc27c33",
+      "tree": "262e9c994efaf0edc34fca0fb784663fb89ea5be"
+    },
+    {
+      "recorded": "2155f83298d8eb09bac530da74047c170d128fad",
+      "published": "9288577c0c2a155f006fe8d35427c3fba037d313",
+      "tree": "3c0565f5c87b3b8b35d5c6b3c1c4fd050bb924e6"
+    },
+    {
+      "recorded": "101a9c09cc3e10db61ad9150309c5ffcc3ce3743",
+      "published": "48da3bed456ff1ead10323d44d00874c90229e0c",
+      "tree": "4e1a9bc144b81944bfa1acb43bf6a8314f26a568"
+    },
+    {
+      "recorded": "c9bb4f92f0206d75155b0585334a638513b1cae2",
+      "published": "3ac6b23fd74dc0e6bf9288eba6efeec5c26162e3",
+      "tree": "1195325b21969da081e8644b2a21b73751a8a3ae"
+    },
+    {
+      "recorded": "bc5d8de5c65ba13d85d6f6076e70fa782afb4818",
+      "published": "4891c32ce4a3d6441890286e6a688cd2b23911ff",
+      "tree": "8ac1b84027789114157d01b2084f5e455eb247ae"
+    },
+    {
+      "recorded": "bd2d30603478ac5a738d9ce6ab2faf3446327898",
+      "published": "803efdb44e33d754d4087cea3c8771de321f69c5",
+      "tree": "9d92310c169e063a68e8bc6ec8bb8e9e429ea8f3"
+    },
+    {
+      "recorded": "5ddc2648d1ba113eb4f2f666a5c70b2c836d87a1",
+      "published": "ccb7a3f3ee5f8bc3e3cd05ab19ccfaa86b8e8219",
+      "tree": "f4eca4e6f449b2e25103efcd7f81158a26189ffb"
+    },
+    {
+      "recorded": "76dc1081a2d72f367de13b238869c16a77aa9b42",
+      "published": "d14d0d81d3765a9e5edc3d597f7db2c9b09bceca",
+      "tree": "5e4546f8e7258e4563c8f1bcdee71fb97c48ea7a"
+    },
+    {
+      "recorded": "f50788b8092b91204cb869fc4e58a0d7a88b1583",
+      "published": "cbfa98fd40145d9944e98f3774b1b00bcb668af4",
+      "tree": "f92c01cab4fd6b197df475622670a3b476835236"
+    },
+    {
+      "recorded": "f3cd175585e6e15963e10537e51e658098a0873e",
+      "published": "ff173547a9a24588ec9bf87cae25ac744347856c",
+      "tree": "9a2ba7c1874ba09cc8ca5614b71d9377c9afae66"
+    },
+    {
+      "recorded": "ac5f8cd6e82b041a58a11b747351aba3e9d62968",
+      "published": "7035abd791b1bef1bb46fca7610f64b25f5f1435",
+      "tree": "7e676cb00c8fd95852454dd768bc5536ee31941c"
+    },
+    {
+      "recorded": "8868038163dbe983cb5f1033a187fcab0564535b",
+      "published": "bc5e2bf9232e25b687b88d399a9d211d670cf92a",
+      "tree": "231dc1e29899889f75fb411c995cc4ed63a5db3c"
+    },
+    {
+      "recorded": "024b912ce4f6db4e24661c6fc9b8bded5a1fe0be",
+      "published": "6da675275c7c59727f81d3a0dc736ac7df55d574",
+      "tree": "7b0fa2a1796b154ad30262b74a5e6d4a346a3a10"
+    },
+    {
+      "recorded": "db7f80f18e1b8d83824ace2542727f652224ee82",
+      "published": "e87bd55b5bea60f27b8ce98046d00860c4091f01",
+      "tree": "0f5019e7c2d33aaf84dd5238eab89371e74d51ac"
+    },
+    {
+      "recorded": "568369946983cfc4ce83740d6403cb81bfe0c65d",
+      "published": "14e820276779b43a3218a7860a06bd97eb51a423",
+      "tree": "8364ab11e222c9eb38534da0dd4d6da462f3e9b1"
+    },
+    {
+      "recorded": "cf3d0b8514a2f3906eb7db83606e01db771a89b7",
+      "published": "efa1e235a9f88cea33bc6866332ba8b807b6d7ca",
+      "tree": "6b57938547406703de7ed037bcbf55d7143dee4f"
+    },
+    {
+      "recorded": "24ee7abf09cb9665ebe296efadc54ec848dd17d4",
+      "published": "5e3ced8ba7dfddc6100777dfdf2e05e4cabee197",
+      "tree": "543b86bf010fff53ae355163393696c31fec0efe"
+    },
+    {
+      "recorded": "07d0278434bc3e71c0cb886ba524a7e6c54660a5",
+      "published": "19b615806eb0091cd876747671039dddb02d22b4",
+      "tree": "4efd952b712fc2d9645bda157e308066ecc5dd7d"
+    },
+    {
+      "recorded": "1e5c5228383e1f73d7a3b10b3af9a5f44b63a4df",
+      "published": "7ea795454a049bd6f36b2fbac7f3597c1223fd1e",
+      "tree": "622bb26d10b425bee5c6d444ba0d5057219d8cdb"
+    },
+    {
+      "recorded": "e833d8bc2f443f62ffcfa944fb033d48ed9b8a5a",
+      "published": "d9fcb9f4029f8cd4a448295281024c19d892c7bd",
+      "tree": "14414fd488904836010e7a965137d9de6eca539a"
+    },
+    {
+      "recorded": "e4657e8ca1993dbcdf007f4e7190f27f95773a9a",
+      "published": "57cc332c175fe8609517d0d63ed272978a2d39f6",
+      "tree": "1bfba0d9caf73c1b8296a6f845c91ea22536a04b"
+    },
+    {
+      "recorded": "56f5ab268a98c4faeb684b92bcb3dae4f31fd863",
+      "published": "f68bda92eb3e5f8b2d7a9bbdb6dee057ba86a26b",
+      "tree": "f61ab75df040b983c58708f92aa777585c268565"
+    },
+    {
+      "recorded": "0cce619fc7d7381433b25514119cc1876eed04aa",
+      "published": "e604c2938a9f847fd75324c9c9b77953a34514c8",
+      "tree": "cd70973c4b9cfb399bd665ec3e081c94da56be3a"
+    },
+    {
+      "recorded": "88900d8c9f6b6158b2c78a6e16a340fa8d7bd869",
+      "published": "5d6989a2cd191686fe7d88421256aa69c41e3a3b",
+      "tree": "dde6bcefeb85cf2bd75b2200185a35961b36af92"
+    },
+    {
+      "recorded": "c7942fd9855d9947e21838fd8bdec931de022170",
+      "published": "bae2179961291c2bad064f27b267d37276d700d6",
+      "tree": "2b040ffcd2d4182553d84547b673962d81b5cdae"
+    },
+    {
+      "recorded": "b18e9c23e30ca85fa4356e91ed24dbf7023f57be",
+      "published": "78527f0205deaad637bd05fc6b824f7bf8915bdd",
+      "tree": "daeb8adb20d8f314bbd24d9edcf15bd8ce3f0600"
+    },
+    {
+      "recorded": "c57d652e67eb1e8fc1cd5042fc7510f20bac7fef",
+      "published": "91fd42880451ae31ad78bdcbf313d616a94dc72c",
+      "tree": "551d5fae9f696f39114a0ba45f46480e2ca164c8"
+    },
+    {
+      "recorded": "6f7b523f9d2f2db97571ba258de1177795c3e0cf",
+      "published": "3ca96c22579e7b97f5865301a54ae66e75418715",
+      "tree": "cbd232fe6064352b662210c6accd304fbf6bbeb0"
+    },
+    {
+      "recorded": "741283ff351fd71343b4cf4d2b0e228a3f0cf29f",
+      "published": "ebb6ec7eda9b636a93c38703d21c5b878ed011a1",
+      "tree": "27eee2d9548b64305ff01bdd096184eeb903a744"
+    },
+    {
+      "recorded": "049776eebe793415de3978a0a88e9a2dafa1dc54",
+      "published": "dfb279bac7c79cd4caa5d0ad799e5ac9f752c2c7",
+      "tree": "fc6e7afb60fdb98dd57a40513dd4247acac41468"
+    },
+    {
+      "recorded": "31c365943e3949ea0926df8d0d90ab01243c9454",
+      "published": "bd539e8c95aed0575bd3ce66f961e856ace39e12",
+      "tree": "9410168b873f0f47c1e0ba962bfe769ac7834e4c"
+    },
+    {
+      "recorded": "2c4ae14ecf0f53fb8bfa5b19c2eb63983771fc30",
+      "published": "9dcc94fb5cfe3ee62c48efe8d152dc9a7e19bbda",
+      "tree": "ba5490db6466bf398aeee2a76278f40032690268"
+    },
+    {
+      "recorded": "e539a5b6bb80683362b50abc7a30eeac4964daa1",
+      "published": "24a01021880b5436b87d04340668585fbd3faf49",
+      "tree": "373764333f18fd02a2ac7b8a88d017771848eab5"
+    },
+    {
+      "recorded": "b95701ff585c50c816a7e3fb223a9f77240087d9",
+      "published": "9359a5f6c6585d4da0d3c99a9bfbf1da3df310d6",
+      "tree": "14b45e62422b5e8fbbd102dd5bedeb5c0ec26f36"
+    },
+    {
+      "recorded": "28df913273d525e8c79489a069b40473b748ee55",
+      "published": "ac114a495b23bbd5ce9ccc3252f268705b071ca8",
+      "tree": "338d193810be94f85004e801cf50e5c2c5cd5175"
+    },
+    {
+      "recorded": "bcd00ebbcd1ba74fbe83863d36ade6078abd86b2",
+      "published": "f34e64e3d2a153cccf4ab75ebd7a48d93f99a6a6",
+      "tree": "27782336d9f016f993908a44b01f2919bcdb98e9"
+    },
+    {
+      "recorded": "86b57b436811fb973f3ee29d24d262f75784c06f",
+      "published": "2e5f0289dcd29bfb320ac46c4cd6ef309c42f380",
+      "tree": "c50775d45cb257b462129dfff27b343f4417ee55"
+    },
+    {
+      "recorded": "5c4002a5adf2dd02551cf956633da39be6522af2",
+      "published": "25f55de85e3a9dc2e4275cbea5e85eefb1bb1ef0",
+      "tree": "418caeab75b3e7894be98701bb2bbd90802ab2d9"
+    },
+    {
+      "recorded": "4ee07c9106dad439eb0b92cfeb15bc8f2074e0da",
+      "published": "bb024b956a5d3c0eca768021cdc41ea313de8dde",
+      "tree": "21a26dfde0c038b4813a259613760ed84947d1fc"
+    },
+    {
+      "recorded": "68930164ac1ea270dbd3e76235b699e2f5814204",
+      "published": "42d3d6e4914679fa9681fa07acde3d2a6766d7be",
+      "tree": "9e2bfff9f6e58c77255315f48763952111d073ce"
+    },
+    {
+      "recorded": "c4e6669bd8f0f4cfc94b9c0629e7ba77c74c5c6e",
+      "published": "c6fbd000176e238af3d98b8c11046fab190042a2",
+      "tree": "5678c8ab6f7a8fa1f5c3a0ce024bc8ff07f41476"
+    },
+    {
+      "recorded": "04bbdcadbe3243569dd7acfcb56b806d2ab2f563",
+      "published": "2e7f858d10003e6fbbfd81a9affea2013f00a028",
+      "tree": "1b1f026bffd4b40b09cae1e7037ba7f45307fdf9"
+    },
+    {
+      "recorded": "d8ca034e17198874de2146497c9df4b6f6aacb7f",
+      "published": "00114d6c2bd8f26a60bb06814797680d593007c0",
+      "tree": "e6f53d20d210289321d40171055dfd6fb80c912a"
+    },
+    {
+      "recorded": "b8633dcd0216225056e0f9f9ed8a88b14f1072a3",
+      "published": "2a2cba0ad21d7c4e082189b4f090e19602d79d06",
+      "tree": "49081c966c36217ffc92cccf192b6226ddc4fe71"
+    },
+    {
+      "recorded": "5bc38d8cbb2909f8870c21f4e59c8bf7a8558078",
+      "published": "396ba3410c2a4850c9ea85a77f2d29ba74c1cc9a",
+      "tree": "d101470ff0f37cea76b757daf0a959cb926cfdac"
+    },
+    {
+      "recorded": "164b4c5002688169f7dc915cd2bbb60c8d798082",
+      "published": "57a1fbfeb3293993924be8d050da38ac173abcb8",
+      "tree": "b9f3b03bb44a81d76adecffb83b8b08cec0bb7dc"
+    },
+    {
+      "recorded": "36fccf7709a1faa63e1c4c95754c7ea532af22c5",
+      "published": "3f7e6f5dd72ebfc0f8a3d05d083041449aba2f87",
+      "tree": "0feda0252ac686d8fc9968f389b9dd32aa31bacc"
+    },
+    {
+      "recorded": "d2f227c6e50d12656d07e767443df3c84e4e1a0e",
+      "published": "f64de876e80eebcc4ae5a5f9d62249ad6411f140",
+      "tree": "498c4a1060ba247bcd2b32b3291f25d631b44eda"
+    },
+    {
+      "recorded": "ea315c2d277f3a09d182f3d2e53bfaa1fabcb620",
+      "published": "037d5ef68b0305a667af9ae0b1bdb6fc03f19a34",
+      "tree": "b534e5370d7025cd0faaa21f187976bd145362df"
+    },
+    {
+      "recorded": "d72372cb256b2e5d53d37d1d7b394cfa9ea7bdd0",
+      "published": "1a7c78da1c73ae177b82bb24e566fbabd7655de4",
+      "tree": "b160bb06c7b7cf7f54ce39eff0f8318abc07e967"
+    },
+    {
+      "recorded": "0d6da9f533ddf39b04b0ad3d3b5a021b6aae0b31",
+      "published": "49fdb5633e09d0dda33f4eeafcd20db0662b7773",
+      "tree": "a74a0019fb873aa133ff53f83b7966a50c1088e4"
+    },
+    {
+      "recorded": "ba34e7417e3ff4c3fc271a481645acde1d9fef4a",
+      "published": "279ec768ae88d04b981012ec2c5d12935071786b",
+      "tree": "2043d92f7abe0ccb52e4f06a5f419369978de158"
+    },
+    {
+      "recorded": "dfefad8b5b0334c6d84ce65212bccc724fd9af70",
+      "published": "2d5df32d8c680f00d10c3e8b32aee11230665095",
+      "tree": "c5accfda910368b980d767ac99ffd5e48dfd0f15"
+    },
+    {
+      "recorded": "5b370d08faf04f21f7302d1f578e827b894d2bbf",
+      "published": "dd696ea162f6e112c80ef6d0c035cb0ee48133e2",
+      "tree": "6e3eef5af50c86dc445a9e72e32809179fff6c8c"
+    },
+    {
+      "recorded": "155747108c27247ff2b7153babfac38700370b5f",
+      "published": "77f093fa9555f986518030583249c8d9851718cc",
+      "tree": "e81194371162194de97e1a48fb9212d3c55f3bc6"
+    },
+    {
+      "recorded": "5c63b4df68649a48e576503484bd6cabcba767df",
+      "published": "4062784a9d855d08b4f2190660495ff3f1c71d97",
+      "tree": "153f3f6bd01a7e6a6db5231647b93926caa8ed60"
+    },
+    {
+      "recorded": "177e7ed673a8cd2fea2df2c68a6a232b32c5d1c6",
+      "published": "3d4ebe0ff8d5cfc9c715dd36592a0a6d3699fb26",
+      "tree": "ec555ab9f359f59cc8b806cae835f7385ef1570c"
+    },
+    {
+      "recorded": "302cfdc76b4da764f2a42bb9d3752c759a910835",
+      "published": "32607d0d0f9a5f1c6a49985599711badb394a30f",
+      "tree": "c662a53661010875633010296c48ca8f41e5f7eb"
+    },
+    {
+      "recorded": "6ae6843728dd012d336d1c4b8507749890e518ee",
+      "published": "6f9a465e42f48c7a6ae1822e16fd89f934b85f03",
+      "tree": "02150aedd58c264fa2ba687a9d6347b62487ef6a"
+    },
+    {
+      "recorded": "d6d5c6d6373676e3cd90198e16121ed0a17f49a4",
+      "published": "8960537f4eb9c5a8d50aed5fe59f67cb04a5a03b",
+      "tree": "cd94098eedca9bff6782c00424824830322cdbc6"
+    },
+    {
+      "recorded": "d7eb0eb69a27086bce3a3e50ffa1896491a953b0",
+      "published": "47a786f530987f2e300cb098644ffd63905651e6",
+      "tree": "cae0c6351e20cd9745bbfb226bfaaced1b60486c"
+    },
+    {
+      "recorded": "2cb8e33b8c4cf04efd6196117aa3be3c1f92cf70",
+      "published": "4098cb33295505eb43ce9cfd29772d0b551ec549",
+      "tree": "2621baece6a692d9b67a668762924f5a2c1ed4a8"
+    },
+    {
+      "recorded": "c677ef8be859413c458c85b7287d367fecf0c386",
+      "published": "5934a14183f5b0699cfdfa22ca6b1050b1ec06e1",
+      "tree": "b8253f841d24fea4379726c489489a6803ff0708"
+    },
+    {
+      "recorded": "a74285dca205d181d0d1b3b22c7d77ab19a4186f",
+      "published": "8edffbe1d6a0dbdc25740d318350f46c783b11bd",
+      "tree": "5bd812f97e9be2793b71c47d20e577538800cb77"
+    },
+    {
+      "recorded": "ca35b0178d47635d2bff60d2157e39cd15a69447",
+      "published": "d4ff308f9aec7f8c404806e99f905286f63305e8",
+      "tree": "1a91ab42eb5f21a8a1505489e61a0cf742420b4e"
+    },
+    {
+      "recorded": "be17f11a24c9aea545d5bf26ef18f113dbe239b4",
+      "published": "f6b45daae313d8269b2761cbcc433aaa5d204957",
+      "tree": "4ee5bed1fcddfc2b2f51e6f8412369843acb4b22"
+    },
+    {
+      "recorded": "01d4fee564454b7f1cc6d0a9e21ec2988dc83f6b",
+      "published": "c02001112a45bc708f44798560116e00c5b39cbe",
+      "tree": "56f98709b14c0fea0b62e170f51bed75689a22bc"
+    },
+    {
+      "recorded": "ccad8a92c817ddbb12b92d7d0ba47814f14dd576",
+      "published": "292a0968af66960888bfb8721b777ecab1129978",
+      "tree": "f397c67549d325f3d091dcdadfbd0f73391e1af5"
+    },
+    {
+      "recorded": "d0e1939d327de073ca85b1bced80b5c7d80007d8",
+      "published": "f298da80a0a1aa07beb70f82e21bad407850054a",
+      "tree": "b14c657045e9a99dc8afe9e64d233f232f0f4e2a"
+    },
+    {
+      "recorded": "a36917f62f9ce02278ae11899cff091d41fc80d9",
+      "published": "cc1847e55014ec8db585cb6404972c45a98ff5ce",
+      "tree": "f3da1dc17f566f86f65a3c73abe0a61d9b21d16a"
+    },
+    {
+      "recorded": "1562371a963757a191726392d2089c27b568d136",
+      "published": "b2d15aae39cf433839f638fbf4d515b68bea9f21",
+      "tree": "99f582d4a5f4565eedb336ea95d092368d311f7c"
+    },
+    {
+      "recorded": "2698746a57225b21905f01eba5fc583a09f13c83",
+      "published": "b2c49334be2e87194a8b66d41c1f75a83753c69f",
+      "tree": "47bab84e237884a039dcb98e4e620d183a22efd1"
+    },
+    {
+      "recorded": "c7aa08bbd0c0309ffd2b59d40c2c3ceade8dc4ab",
+      "published": "6eed2d0221d48b99c6e676207480286b4b6f479c",
+      "tree": "6f2809f78a7b414c3d005c81566f5e6c6d41ee86"
+    }
+  ]
+}

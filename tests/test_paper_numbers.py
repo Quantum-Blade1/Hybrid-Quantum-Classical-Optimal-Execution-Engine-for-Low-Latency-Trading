@@ -88,3 +88,12 @@ def test_author_todos_are_listed_and_other_todos_fail(tmp_path):
     problems = check_paper.check_todos(raw)
     assert len(problems) == 2
     assert "line 2" in problems[0] and "line 3" in problems[1]
+
+
+def test_published_commit_maps_recorded_ids(tmp_path):
+    (tmp_path / "commit_map.json").write_text(
+        '{"commits": [{"recorded": "aaa111", "published": "bbb222", "tree": "t"}]}'
+    )
+    tables = paper_numbers.Tables(tmp_path)
+    assert paper_numbers.published_commit(tables, "aaa111") == "bbb222"
+    assert paper_numbers.published_commit(tables, "ccc333") == "ccc333"
