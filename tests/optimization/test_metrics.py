@@ -68,3 +68,26 @@ def test_degenerate_bounds_score_every_energy_as_optimal():
     assert approximation_ratio(0.0, bounds) == 1.0
     # E_min = 0: the gap is absolute rather than relative.
     assert optimality_gap(0.5, bounds) == 0.5
+
+
+def test_counts_quality_counts_every_optimal_bitstring():
+    # Two degenerate optima (x = 01 and 10 with Q = [[-1, 1], [1, -1]]: E = -1, E(11) = 0).
+    from qexec.optimization.solvers.metrics import counts_quality, energy_bounds
+
+    Q = np.array([[-1.0, 1.0], [1.0, -1.0]])
+    bounds = energy_bounds(Q)
+    q = counts_quality({"01": 30, "10": 20, "11": 40, "00": 10}, Q, bounds)
+    assert q.success_probability == pytest.approx(0.5)
+    assert q.mean_energy == pytest.approx((30 * -1 + 20 * -1 + 0 + 0) / 100)
+    assert q.best_energy == -1.0 and q.shots == 100
+
+
+def test_random_baseline_is_exact_for_uniform_sampling():
+    from qexec.optimization.solvers.metrics import random_sampling_baseline
+
+    Q = np.array([[-1.0, 1.0], [1.0, -1.0]])
+    base = random_sampling_baseline(Q, shots=1000, rng=np.random.default_rng(0))
+    assert base.num_optimal == 2
+    assert base.success_probability == 0.5
+    assert base.mean_energy == pytest.approx((0 - 1 - 1 + 0) / 4)
+    assert base.best_energy == -1.0

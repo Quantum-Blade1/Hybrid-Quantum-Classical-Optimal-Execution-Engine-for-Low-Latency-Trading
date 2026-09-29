@@ -67,3 +67,72 @@ def optimality_gap(energy: float, bounds: EnergyBounds) -> float:
     gap = energy - bounds.min_energy
     scale = abs(bounds.min_energy)
     return gap / scale if scale > 0 else gap
+
+
+OPTIMUM_TOL = 1e-6
+
+
+@dataclass(frozen=True)
+class DistributionQuality:
+    """Quality of a sampled distribution over bitstrings (e.g. QAOA's final shots).
+
+    `success_probability` is the fraction of shots on *any* optimal bitstring, not the
+    frequency of the best sampled one; `mean_energy` is the sample mean of x^T Q x.
+    """
+
+    shots: int
+    success_probability: float
+    mean_energy: float
+    best_energy: float
+
+
+def counts_quality(
+    counts: dict[str, int], Q: NDArray[np.float64], bounds: EnergyBounds
+) -> DistributionQuality:
+    """Quality of Qiskit-style counts (qubit 0 is the rightmost character)."""
+    n = Q.shape[0]
+    total = sum(counts.values())
+    if total == 0:
+        raise ValueError("empty counts")
+    energies = np.empty(len(counts))
+    weights = np.empty(len(counts))
+    for k, (bitstring, count) in enumerate(counts.items()):
+        x = np.array([int(b) for b in bitstring[::-1]][:n], dtype=np.float64)
+        energies[k] = float(x @ Q @ x)
+        weights[k] = count
+    hit = energies <= bounds.min_energy + OPTIMUM_TOL
+    return DistributionQuality(
+        shots=int(total),
+        success_probability=float(weights[hit].sum() / total),
+        mean_energy=float(weights @ energies / total),
+        best_energy=float(energies.min()),
+    )
+
+
+@dataclass(frozen=True)
+class RandomBaseline:
+    """Uniform sampling of {0,1}^n: exact success probability and mean energy, and the
+    best energy among `shots` seeded samples (the same budget a sampler was given)."""
+
+    shots: int
+    success_probability: float
+    mean_energy: float
+    best_energy: float
+    num_optimal: int
+
+
+def random_sampling_baseline(
+    Q: NDArray[np.float64], shots: int, rng: np.random.Generator
+) -> RandomBaseline:
+    energies = enumerate_energies(Q)
+    n = Q.shape[0]
+    min_energy = float(energies.min())
+    num_optimal = int(np.sum(energies <= min_energy + OPTIMUM_TOL))
+    samples = rng.integers(0, 2**n, size=shots)
+    return RandomBaseline(
+        shots=int(shots),
+        success_probability=num_optimal / 2**n,
+        mean_energy=float(energies.mean()),
+        best_energy=float(energies[samples].min()),
+        num_optimal=num_optimal,
+    )
