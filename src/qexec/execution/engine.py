@@ -12,9 +12,9 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
+from qexec.execution.fill import BookFillModel, FillModel
 from qexec.execution.strategies.base import (
     BaseStrategy,
-    half_spread_cost,
     share_weighted_std,
     slippage_bps,
 )
@@ -295,8 +295,10 @@ class ExecutionEngine:
     and reports cost and slippage against VWAP, TWAP and arrival price.
 
     Fill model (the same for every strategy, docs/MATHEMATICAL_MODEL.md, "Execution
-    simulation"): each minute's child order walks a fresh synthetic book whose depth
-    scales with that bar's volume; a bar with zero volume fills nothing. With
+    simulation"): by default each minute's child order walks a fresh synthetic book whose
+    depth scales with that bar's volume (`BookFillModel`); a bar with zero volume fills
+    nothing. Another `fill_model` (e.g. `ImpactFillModel` for real bars) changes only how
+    a child order and the final clean-up order are priced. With
     `carry_forward` (default), shares a child could not fill are added to the next
     minute's target, so a liquidity gap delays shares instead of dropping them; shares
     still unfilled after the last bar count as opportunity cost in the report. The
@@ -309,8 +311,10 @@ class ExecutionEngine:
         order_book: OrderBook | None = None,
         seed: int | None = None,
         carry_forward: bool = True,
+        fill_model: FillModel | None = None,
     ) -> None:
         self.order_book = order_book or OrderBook(seed=seed)
+        self.fill_model: FillModel = fill_model or BookFillModel(self.order_book)
         self.carry_forward = carry_forward
         self._minute_offset = 0
         self.state: ExecutionState | None = None
@@ -323,8 +327,13 @@ class ExecutionEngine:
         strategy: BaseStrategy,
         start_minute: int = 0,
         end_minute: int | None = None,
+        *,
+        arrival_price: float | None = None,
     ) -> ExecutionReport:
-        """Execute `parent_order` over `market_data[start_minute:end_minute]`."""
+        """Execute `parent_order` over `market_data[start_minute:end_minute]`.
+
+        The arrival price defaults to the first bar's `price`.
+        """
         if parent_order.total_quantity <= 0:
             raise ValueError("Order quantity must be positive")
         if end_minute is None:
@@ -336,7 +345,8 @@ class ExecutionEngine:
 
         execution_data = market_data.iloc[start_minute:end_minute].reset_index(drop=True)
         self._minute_offset = start_minute
-        arrival_price = float(execution_data.iloc[0]["price"])
+        if arrival_price is None:
+            arrival_price = float(execution_data.iloc[0]["price"])
         num_minutes = len(execution_data)
         plan = self._cap_schedule(
             strategy.calculate_schedule(parent_order.total_quantity, execution_data),
@@ -412,19 +422,14 @@ class ExecutionEngine:
         child.executed_at = row["timestamp"]
         self.state.current_minute = minute_idx + 1
 
-        snapshot = self.order_book.generate_snapshot(
-            mid_price=mid,
-            spread=row["spread"],
-            minute_volume=int(row["volume"]),
-            key=minute_offset + minute_idx,
+        fill = self.fill_model.fill(
+            row, child.target_quantity, side, key=minute_offset + minute_idx
         )
-        avg_price, filled, impact = self.order_book.simulate_execution(
-            snapshot=snapshot, order_size=child.target_quantity, side=side
-        )
+        filled, avg_price = fill.quantity, fill.average_price
 
         child.filled_quantity = filled
         child.execution_price = avg_price
-        child.market_impact = impact
+        child.market_impact = fill.market_impact
         if filled == 0:
             child.status = OrderStatus.REJECTED
             return
@@ -438,8 +443,8 @@ class ExecutionEngine:
         self.state.total_value_executed += avg_price * filled
         self.state.fill_prices.append(avg_price)
         self.state.fill_quantities.append(filled)
-        self.state.total_spread_cost += half_spread_cost(snapshot, mid, side, filled)
-        self.state.total_impact_cost += abs(impact) * filled
+        self.state.total_spread_cost += fill.half_spread_cost
+        self.state.total_impact_cost += fill.impact_cost
 
     def _calculate_metrics(
         self, market_data: pd.DataFrame, arrival_price: float, strategy_name: str
@@ -485,30 +490,16 @@ class ExecutionEngine:
         )
 
     def _completion_price(self, market_data: pd.DataFrame, unfilled: int, side: str) -> float:
-        """Average price of a clean-up market order for `unfilled` shares at the last bar.
+        """Average price of a clean-up order for `unfilled` shares at the last bar.
 
-        It walks the final bar's (keyed) book; shares beyond the book's depth are priced at
-        its deepest level. With no liquidity in the final bar, the far touch P_T +- s_T/2.
+        Priced by the fill model (for the book model: walk the final bar's keyed book,
+        shares beyond its depth at its deepest level, the far touch without liquidity).
         A buy's remainder is therefore charged at least the half spread and the impact of
         trading it at once, so underfilling cannot make a strategy look cheaper.
         """
-        row = market_data.iloc[-1]
-        mid, spread = float(row["price"]), float(row["spread"])
-        far_touch = mid + spread / 2 if side == "buy" else mid - spread / 2
-        if unfilled <= 0:
-            return far_touch
-        snapshot = self.order_book.generate_snapshot(
-            mid_price=mid,
-            spread=spread,
-            minute_volume=int(row["volume"]),
-            key=len(market_data) - 1 + self._minute_offset,
+        return self.fill_model.completion_price(
+            market_data.iloc[-1], unfilled, side, key=len(market_data) - 1 + self._minute_offset
         )
-        levels = snapshot.asks if side == "buy" else snapshot.bids
-        if not levels:
-            return far_touch
-        avg_price, filled, _ = self.order_book.simulate_execution(snapshot, unfilled, side)
-        beyond = unfilled - filled
-        return (avg_price * filled + levels[-1].price * beyond) / unfilled
 
     def get_execution_report(self) -> ExecutionReport | None:
         """Most recent report, if any."""
