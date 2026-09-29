@@ -641,7 +641,7 @@ are optimal in every run, so this metric cannot distinguish the solvers at these
 \caption{QAOA minus same-budget uniform sampling. $\Delta\Popt$: success-probability
 difference with 95\% bootstrap CI; $p$: Wilcoxon, unadjusted; $\Delta r$: difference in
 the mean-energy ratio; last column: \% of runs whose best sample is optimal, QAOA / uniform.
-Instance: one level-encoded execution QUBO, $n=12$.}
+Instance: one level-encoded execution QUBO, $n=\InstanceN$.}
 \label{tab:qaoa}
 \centering
 \scriptsize
@@ -672,12 +672,12 @@ model does not act as a uniform discount: across families, sizes and depths the 
 noisy to ideal $\Popt$ ranges from \NoiseRatioMin{} to \NoiseRatioMax.
 
 \emph{Best-of-shots metrics are uninformative here.} The share of runs whose best sample is
-optimal is \QaoaSliceIdealBestOpt\% for ideal QAOA on the binary encoding and 100\% for uniform
+optimal is \QaoaSliceIdealBestOpt\% for ideal QAOA on the binary encoding and \QaoaSliceIdealUniformBestOpt\% for uniform
 sampling with the same budget. This is arithmetic, not a quantum effect: with
 $S\ge\QaoaShotBudgetMin$ shots, uniform sampling misses a unique optimum at $n=\QaoaMaxN$ with
-probability $(1-2^{-n})^S$, i.e., \UniformMissProbMaxN. Any QAOA study at $n\lesssim 15$ that
+probability $(1-2^{-n})^S$, i.e., \UniformMissProbMaxN. Any QAOA study whose shot budget is comparable to or larger than $2^n$ and that
 reports the best sampled bitstring, or an approximation ratio computed from it, therefore
-measures the shot budget. On the single level-encoded instance with $n=12$, SA found the
+measures the shot budget. On the single level-encoded instance with $n=\InstanceN$, SA found the
 optimum in \InstanceSaOptimal{} seeds in \InstanceSaTime~s, while ideal QAOA took
 \InstanceQaoaTimeMin--\InstanceQaoaTimeMax~s of simulation. The QUBO-to-Ising mapping itself
 is exact: over \IsingSamples{} random QUBOs per size for $n=\IsingMinN$--\IsingMaxN, the
@@ -756,7 +756,7 @@ subsection from them (see \texttt{experiments/hardware\_analysis.py}) before sub
 
 The negative result has a simple structure. The execution problem studied here is a small,
 convex-in-the-relaxation program with a chain structure: discretized AC solves the continuous
-version exactly, DP solves the integer version exactly in milliseconds, and a correctly
+version exactly, DP solves the integer version exactly, and a correctly
 implemented SA finds the QUBO optimum reliably. A quantum solver cannot improve on an exact
 solution, and on liquid markets even the exact solution is worth a fraction of a basis point
 relative to TWAP. The following are \emph{hypotheses}, not findings, about where these
@@ -850,8 +850,8 @@ The code, results and manuscript sources are available at
 \url{https://github.com/Quantum-Blade1/Hybrid-Quantum-Classical-Optimal-Execution-Engine-for-Low-Latency-Trading}
 under the Apache~2.0 license. \texttt{make all} downloads the public Binance files (verified
 against their published checksums), runs every experiment, draws every figure and writes the
-number macros used in this paper; \texttt{make quick} runs everything at tiny sizes in under
-a minute, as the continuous-integration job does. Each experiment writes a
+number macros used in this paper; \texttt{make quick} runs everything at tiny sizes, as the
+continuous-integration job does. Each experiment writes a
 \texttt{manifest.json} with its configuration, seeds, commit hash and dirty flag, package
 versions, platform, wall time and the SHA-256 of every output file. A figure registry maps
 each figure to the function that draws it and the result files it reads, and a test enforces
@@ -870,7 +870,8 @@ evaluated it under a pre-registered protocol on held-out Binance data. The QUBO 
 schedules are not distinguishable from TWAP, VWAP or discretized Almgren--Chriss, on BTCUSDT
 within half a basis point, and the reason is that the costs a schedule controls are small
 compared with the price noise it does not. On the solver side, a correct classical annealer
-solves every instance we can verify, and QAOA on simulators does not beat uniform sampling at
+solves every real-data instance and every benchmark instance up to
+$n=\SaSliceAllOptimalUpTo$, and QAOA on simulators does not beat uniform sampling at
 finding the optimum of the binary execution encoding. The contribution is therefore a
 reproducible system, an evaluation method, and a clear statement of what a quantum optimizer
 would have to demonstrate, on which problems, to matter for trade execution.

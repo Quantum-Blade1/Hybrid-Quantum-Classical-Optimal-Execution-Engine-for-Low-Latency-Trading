@@ -1,7 +1,7 @@
 # Claims Audit
 
 Phase 1 of the refactor: remove fabricated results so that every reported number traces to a real computation.
-Baseline: tag `pre-refactor`. This ledger covers `src/`, `examples/`, `README.md`, the docs, the figures in `figures/` and `assets/`, and every quantitative claim in `paper/main.tex`. `paper/main.tex` was not edited in this phase.
+Baseline: tag `pre-refactor`. This ledger covers `src/`, `examples/`, `README.md`, the docs, the figures in `figures/` and `assets/`, and every quantitative claim in `paper/main.tex`. `paper/main.tex` was not edited in this phase. (Phase 8: the draft was moved unchanged to `paper/springer_qip_old/main.tex`; the new manuscript is `paper/ieee/main.tex`, see section 8.)
 
 "Fabricated" here means a number shown as a result that comes from a hand-typed literal, a random draw, or a hardcoded multiplier instead of from running the project's code.
 

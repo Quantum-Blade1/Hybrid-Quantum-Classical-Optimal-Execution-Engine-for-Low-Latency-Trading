@@ -484,6 +484,7 @@ def solvers(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of n
     f7 = runs[runs["family"] == "fig07"]
     sa7 = f7[f7["solver"] == "SA"]
     q7 = f7[f7["solver"] == "QAOA_Ideal"]
+    m["InstanceN"] = str(int(f7["n"].iloc[0]))
     m["InstanceSaOptimal"] = f"{int(sa7['optimal_found'].sum())} of {len(sa7)}"
     m["InstanceSaTime"] = fmt(sa7["time_s"].mean())
     m["InstanceQaoaTimeMin"] = fmt(q7["time_s"].min(), 1)
