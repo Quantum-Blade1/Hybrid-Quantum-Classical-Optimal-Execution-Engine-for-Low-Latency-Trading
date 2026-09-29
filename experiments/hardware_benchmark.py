@@ -1,10 +1,9 @@
-"""
-Hardware benchmark: simulated annealing vs QAOA (ideal Aer, noisy Aer and,
-with credentials, IBM Quantum hardware) on the toy execution QUBO.
+"""SA vs QAOA (ideal Aer, noisy Aer, optionally IBM hardware) on the toy execution QUBO.
 
-All solvers see the same toy_execution_qubo(n) instance. Hardware jobs go
-through qexec.hardware.ibm, which appends every job's ID and raw counts to
-a JSONL file (--counts-log) as soon as the job returns.
+All solvers see the same toy_execution_qubo(n). Quality is the approximation ratio
+(E_max - E)/(E_max - E_opt) and the relative optimality gap, with exact bounds from
+exhaustive enumeration. Hardware jobs go through qexec.hardware.ibm, which appends every
+job's ID and raw counts to --counts-log as soon as the job returns.
 
 Usage:
     python experiments/hardware_benchmark.py --simulator-only --output-dir /tmp/hw_figs
@@ -13,702 +12,611 @@ Usage:
 """
 
 import argparse
-import os
-import numpy as np
-import time
 import logging
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+import os
+import time
 from collections import Counter
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import matplotlib.pyplot as plt
+import numpy as np
+from numpy.typing import NDArray
+from qiskit_aer import AerSimulator
+from qiskit_aer.noise import NoiseModel, ReadoutError, depolarizing_error
 
 from qexec.hardware.ibm import backend_properties, connect_service, run_qaoa_on_hardware
 from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
-from qexec.optimization.solvers.qaoa import aer_sampler, run_qaoa
+from qexec.optimization.solvers.metrics import (
+    EnergyBounds,
+    approximation_ratio,
+    energy_bounds,
+    optimality_gap,
+)
+from qexec.optimization.solvers.qaoa import QAOAResult, aer_sampler, run_qaoa
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_COUNTS_LOG = "results/hw_jobs.jsonl"
+DEFAULT_COUNTS_LOG = Path("results/hw_jobs.jsonl")
+SOLVERS = ("SA", "QAOA_Ideal", "QAOA_Noisy", "QAOA_Hardware")
+COLORS = {
+    "SA": "#2196F3",
+    "QAOA_Ideal": "#4CAF50",
+    "QAOA_Noisy": "#FF9800",
+    "QAOA_Hardware": "#E91E63",
+}
+MARKERS = {"SA": "s", "QAOA_Ideal": "o", "QAOA_Noisy": "^", "QAOA_Hardware": "D"}
+LABELS = {
+    "SA": "Sim. Annealing",
+    "QAOA_Ideal": "QAOA (Ideal)",
+    "QAOA_Noisy": "QAOA (Noisy)",
+    "QAOA_Hardware": "QAOA (IBM HW)",
+}
+OPTIMUM_TOL = 1e-6
+MAX_HARDWARE_QUBITS = 12
+MAX_HARDWARE_MAXITER = 30
+PLOT_RC = {
+    "font.size": 9,
+    "axes.labelsize": 10,
+    "axes.titlesize": 11,
+    "xtick.labelsize": 8,
+    "ytick.labelsize": 8,
+    "legend.fontsize": 8,
+    "figure.dpi": 300,
+    "savefig.dpi": 300,
+    "savefig.bbox": "tight",
+    "font.family": "serif",
+}
 
 
-@dataclass
+@dataclass(frozen=True)
 class HardwareBenchmarkConfig:
-    """Configuration for IBM hardware benchmarks."""
-    num_qubits_range: List[int] = field(default_factory=lambda: [4, 6, 8, 10, 12])
-    qaoa_depths: List[int] = field(default_factory=lambda: [1, 2, 3])
+    num_qubits_range: list[int] = field(default_factory=lambda: [4, 6, 8, 10, 12])
+    qaoa_depths: list[int] = field(default_factory=lambda: [1, 2, 3])
     shots: int = 4000
     optimizer_maxiter: int = 50
     sa_sweeps: int = 1000
     num_runs_per_config: int = 5
     seed: int = 42
+    noise_level: float = 0.02
     backend_name: str = "ibm_brisbane"
 
 
 @dataclass
 class SingleRunResult:
-    """Result from a single solver run."""
     solver: str
     num_qubits: int
     qaoa_depth: int
     energy: float
     optimal_energy: float
     approximation_ratio: float
+    optimality_gap: float
     solve_time_s: float
     success_probability: float
-    counts: Dict[str, int] = field(default_factory=dict)
+    counts: dict[str, int] = field(default_factory=dict)
     run_id: int = 0
 
 
 @dataclass
 class HardwareBenchmarkResult:
-    """Aggregated results across all benchmark configurations."""
     config: HardwareBenchmarkConfig
-    runs: List[SingleRunResult] = field(default_factory=list)
-    backend_properties: Dict = field(default_factory=dict)
+    runs: list[SingleRunResult] = field(default_factory=list)
+    backend_properties: dict[str, Any] = field(default_factory=dict)
     timestamp: str = ""
 
-    def get_runs(self, solver: str = None, n_qubits: int = None,
-                 depth: int = None) -> List[SingleRunResult]:
-        filtered = self.runs
-        if solver:
-            filtered = [r for r in filtered if r.solver == solver]
-        if n_qubits:
-            filtered = [r for r in filtered if r.num_qubits == n_qubits]
-        if depth:
-            filtered = [r for r in filtered if r.qaoa_depth == depth]
-        return filtered
+    def get_runs(
+        self, solver: str | None = None, n_qubits: int | None = None, depth: int | None = None
+    ) -> list[SingleRunResult]:
+        return [
+            r
+            for r in self.runs
+            if (solver is None or r.solver == solver)
+            and (n_qubits is None or r.num_qubits == n_qubits)
+            and (depth is None or r.qaoa_depth == depth)
+        ]
 
-    def summary_table(self) -> Dict[str, Dict[str, float]]:
+    def summary_table(self) -> dict[str, dict[str, float]]:
         table = {}
-        for solver in ["SA", "QAOA_Ideal", "QAOA_Noisy", "QAOA_Hardware"]:
+        for solver in SOLVERS:
             runs = self.get_runs(solver=solver)
             if runs:
                 energies = [r.energy for r in runs]
-                ratios = [r.approximation_ratio for r in runs]
-                times = [r.solve_time_s for r in runs]
                 table[solver] = {
                     "mean_energy": float(np.mean(energies)),
-                    "std_energy": float(np.std(energies)),
-                    "mean_approx_ratio": float(np.mean(ratios)),
-                    "mean_time_s": float(np.mean(times)),
                     "best_energy": float(np.min(energies)),
+                    "mean_approx_ratio": float(np.mean([r.approximation_ratio for r in runs])),
+                    "mean_gap": float(np.mean([r.optimality_gap for r in runs])),
+                    "mean_time_s": float(np.mean([r.solve_time_s for r in runs])),
                     "num_runs": len(runs),
                 }
         return table
 
 
-def toy_execution_qubo(n_qubits: int, seed: int = 42) -> Tuple[np.ndarray, float]:
-    """Toy QUBO used for the ibm_fez runs in results/bench_hw_*.json (not the six-term HFT QUBO); returns (Q, brute-force optimum)."""
-    rng = np.random.default_rng(seed)
+def toy_execution_qubo(n_qubits: int) -> NDArray[np.float64]:
+    """Toy QUBO of the ibm_fez runs in results/bench_hw_*.json (not the six-term HFT QUBO).
+
+    n/2 slices x 2 levels q in {1, 2}: impact 0.1 q^2 + timing 0.05 (t+1) q on the diagonal
+    and the equality penalty 10 (sum q_i x_i - n/2)^2.
+    """
     Q = np.zeros((n_qubits, n_qubits))
-
-    num_slices = n_qubits // 2
     num_levels = 2
-
+    num_slices = n_qubits // num_levels
     impact_coeff = 0.1
     timing_coeff = 0.05
-    total_target = num_slices
+    penalty = 10.0
 
     for t in range(num_slices):
         for k in range(num_levels):
             i = t * num_levels + k
-            if i >= n_qubits:
-                break
-            q = (k + 1)
+            q = k + 1
             Q[i, i] += impact_coeff * q * q
             Q[i, i] += timing_coeff * (t + 1) * q
 
-    penalty = 10.0
     for i in range(n_qubits):
-        t_i = i // num_levels
-        k_i = i % num_levels
-        q_i = (k_i + 1)
-        Q[i, i] += penalty * q_i * q_i - 2 * penalty * total_target * q_i
+        q_i = i % num_levels + 1
+        Q[i, i] += penalty * q_i * q_i - 2 * penalty * num_slices * q_i
         for j in range(i + 1, n_qubits):
-            k_j = j % num_levels
-            q_j = (k_j + 1)
+            q_j = j % num_levels + 1
             Q[i, j] += 2 * penalty * q_i * q_j
 
-    Q = (Q + Q.T) / 2
-
-    optimal_energy = float('inf')
-    for bits in range(2 ** n_qubits):
-        x = np.array([(bits >> b) & 1 for b in range(n_qubits)], dtype=float)
-        e = float(x @ Q @ x)
-        if e < optimal_energy:
-            optimal_energy = e
-
-    return Q, optimal_energy
+    return (Q + Q.T) / 2
 
 
-def _approximation_ratio(energy: float, optimal_energy: float) -> float:
-    ratio = optimal_energy / energy if abs(energy) > 1e-10 else 1.0
-    return min(ratio, 1.0)
-
-
-def solve_with_sa(Q: np.ndarray, optimal_energy: float,
-                  num_sweeps: int = 1000, seed: int = 42) -> SingleRunResult:
-    """Solve QUBO with simulated annealing."""
-    n = Q.shape[0]
-    start = time.time()
-    solver = SimulatedAnnealingSolver(num_sweeps=num_sweeps, seed=seed)
-    result = solver.solve(Q, verbose=False)
-    elapsed = time.time() - start
-
+def _run_result(
+    solver: str,
+    Q: NDArray[np.float64],
+    bounds: EnergyBounds,
+    energy: float,
+    elapsed: float,
+    *,
+    depth: int = 0,
+    success_probability: float,
+    run_id: int,
+    counts: dict[str, int] | None = None,
+) -> SingleRunResult:
     return SingleRunResult(
-        solver="SA",
-        num_qubits=n,
-        qaoa_depth=0,
-        energy=result.energy,
-        optimal_energy=optimal_energy,
-        approximation_ratio=_approximation_ratio(result.energy, optimal_energy),
+        solver=solver,
+        num_qubits=Q.shape[0],
+        qaoa_depth=depth,
+        energy=energy,
+        optimal_energy=bounds.min_energy,
+        approximation_ratio=approximation_ratio(energy, bounds),
+        optimality_gap=optimality_gap(energy, bounds),
         solve_time_s=elapsed,
-        success_probability=1.0 if abs(result.energy - optimal_energy) < 1e-6 else 0.0,
+        success_probability=success_probability,
+        counts=counts or {},
+        run_id=run_id,
     )
 
 
-def noisy_aer_backend(noise_level: float = 0.02):
-    """Aer backend with depolarizing gate noise and asymmetric readout error."""
-    from qiskit_aer import AerSimulator
-    from qiskit_aer.noise import NoiseModel, depolarizing_error, ReadoutError
+def solve_with_sa(
+    Q: NDArray[np.float64], bounds: EnergyBounds, num_sweeps: int, seed: int, run_id: int
+) -> SingleRunResult:
+    start = time.perf_counter()
+    result = SimulatedAnnealingSolver(num_sweeps=num_sweeps, seed=seed).solve(Q)
+    hit = abs(result.energy - bounds.min_energy) < OPTIMUM_TOL
+    return _run_result(
+        "SA",
+        Q,
+        bounds,
+        result.energy,
+        time.perf_counter() - start,
+        success_probability=1.0 if hit else 0.0,
+        run_id=run_id,
+    )
 
+
+def noisy_aer_backend(noise_level: float = 0.02) -> AerSimulator:
+    """Depolarizing gate noise (p on 1q gates, 5p on 2q gates) and readout errors
+    p(0|1) = p, p(1|0) = 0.8p."""
     noise_model = NoiseModel()
-    error_1q = depolarizing_error(noise_level, 1)
-    error_2q = depolarizing_error(noise_level * 5, 2)
-    noise_model.add_all_qubit_quantum_error(error_1q, ['rx', 'rz', 'h'])
-    noise_model.add_all_qubit_quantum_error(error_2q, ['rzz', 'cx'])
-
+    noise_model.add_all_qubit_quantum_error(depolarizing_error(noise_level, 1), ["rx", "rz", "h"])
+    noise_model.add_all_qubit_quantum_error(depolarizing_error(noise_level * 5, 2), ["rzz", "cx"])
     p_0_given_1 = noise_level
     p_1_given_0 = noise_level * 0.8
-    readout_err = ReadoutError(
-        [[1 - p_1_given_0, p_1_given_0],
-         [p_0_given_1, 1 - p_0_given_1]]
+    noise_model.add_all_qubit_readout_error(
+        ReadoutError([[1 - p_1_given_0, p_1_given_0], [p_0_given_1, 1 - p_0_given_1]])
     )
-    noise_model.add_all_qubit_readout_error(readout_err)
     return AerSimulator(noise_model=noise_model)
 
 
-def solve_with_qaoa_simulator(
-    Q: np.ndarray,
-    optimal_energy: float,
-    p: int = 2,
-    shots: int = 4000,
-    maxiter: int = 50,
-    noisy: bool = False,
-    noise_level: float = 0.02,
-    seed: int = 42
+def _qaoa_run_result(
+    solver: str,
+    Q: NDArray[np.float64],
+    bounds: EnergyBounds,
+    result: QAOAResult,
+    *,
+    elapsed: float,
+    depth: int,
+    run_id: int,
 ) -> SingleRunResult:
-    """Solve QUBO with QAOA on Aer simulator (ideal or noisy)."""
-    from qiskit_aer import AerSimulator
-
-    n = Q.shape[0]
-    start = time.time()
-    backend = noisy_aer_backend(noise_level) if noisy else AerSimulator()
-    result = run_qaoa(
-        Q, p=p, sample=aer_sampler(backend), shots=shots, maxiter=maxiter,
-        final_shots=shots * 5, rng=np.random.default_rng(seed),
-    )
-    elapsed = time.time() - start
-
-    return SingleRunResult(
-        solver="QAOA_Noisy" if noisy else "QAOA_Ideal",
-        num_qubits=n,
-        qaoa_depth=p,
-        energy=result.energy,
-        optimal_energy=optimal_energy,
-        approximation_ratio=_approximation_ratio(result.energy, optimal_energy),
-        solve_time_s=elapsed,
+    return _run_result(
+        solver,
+        Q,
+        bounds,
+        result.energy,
+        elapsed,
+        depth=depth,
         success_probability=result.success_probability,
+        run_id=run_id,
         counts=dict(Counter(result.counts).most_common(20)),
     )
+
+
+def solve_with_qaoa_simulator(
+    Q: NDArray[np.float64],
+    bounds: EnergyBounds,
+    config: HardwareBenchmarkConfig,
+    *,
+    p: int,
+    noisy: bool,
+    seed: int,
+    run_id: int,
+) -> SingleRunResult:
+    start = time.perf_counter()
+    backend = noisy_aer_backend(config.noise_level) if noisy else AerSimulator()
+    result = run_qaoa(
+        Q,
+        p=p,
+        sample=aer_sampler(backend, seed=seed),
+        shots=config.shots,
+        maxiter=config.optimizer_maxiter,
+        final_shots=config.shots * 5,
+        rng=np.random.default_rng(seed),
+    )
+    solver = "QAOA_Noisy" if noisy else "QAOA_Ideal"
+    elapsed = time.perf_counter() - start
+    return _qaoa_run_result(solver, Q, bounds, result, elapsed=elapsed, depth=p, run_id=run_id)
 
 
 def solve_with_ibm_hardware(
-    Q: np.ndarray,
-    optimal_energy: float,
-    p: int = 2,
-    shots: int = 4000,
-    maxiter: int = 30,
-    token: str = None,
-    backend_name: str = "ibm_brisbane",
-    seed: int = 42,
-    instance: str = None,
-    channel: str = None,
-    counts_log: str = DEFAULT_COUNTS_LOG,
-    run_id: int = 0,
-) -> Tuple[SingleRunResult, Dict]:
-    """
-    Solve QUBO with QAOA on real IBM quantum hardware.
-
-    Every SamplerV2 job's ID and raw counts are appended to ``counts_log``
-    as soon as the job returns.
-    """
-    n = Q.shape[0]
-    start = time.time()
-
-    service = connect_service(token=token, channel=channel, instance=instance)
-    backend = service.backend(backend_name)
+    Q: NDArray[np.float64],
+    bounds: EnergyBounds,
+    config: HardwareBenchmarkConfig,
+    *,
+    p: int,
+    token: str,
+    instance: str | None,
+    counts_log: Path,
+    seed: int,
+    run_id: int,
+) -> tuple[SingleRunResult, dict[str, Any]]:
+    """QAOA on IBM hardware; every job's ID and raw counts are appended to `counts_log`."""
+    start = time.perf_counter()
+    service = connect_service(token=token, instance=instance)
+    backend = service.backend(config.backend_name)
     props = backend_properties(backend)
-
     result, job_ids = run_qaoa_on_hardware(
-        Q, backend, p=p, shots=shots, maxiter=maxiter, seed=seed,
+        Q,
+        backend,
+        p=p,
+        shots=config.shots,
+        maxiter=min(config.optimizer_maxiter, MAX_HARDWARE_MAXITER),
+        seed=seed,
         log_path=counts_log,
-        metadata={"experiment": "hardware_benchmark", "run_id": run_id,
-                  "seed": seed, "optimal_energy": optimal_energy},
+        metadata={
+            "experiment": "hardware_benchmark",
+            "run_id": run_id,
+            "seed": seed,
+            "optimal_energy": bounds.min_energy,
+        },
     )
-    elapsed = time.time() - start
     props["job_ids"] = job_ids
-
-    return SingleRunResult(
-        solver="QAOA_Hardware",
-        num_qubits=n,
-        qaoa_depth=p,
-        energy=result.energy,
-        optimal_energy=optimal_energy,
-        approximation_ratio=_approximation_ratio(result.energy, optimal_energy),
-        solve_time_s=elapsed,
-        success_probability=result.success_probability,
-        counts=dict(Counter(result.counts).most_common(20)),
-    ), props
+    elapsed = time.perf_counter() - start
+    hw = _qaoa_run_result(
+        "QAOA_Hardware", Q, bounds, result, elapsed=elapsed, depth=p, run_id=run_id
+    )
+    return hw, props
 
 
 def run_hardware_benchmark(
-    token: Optional[str] = None,
-    config: Optional[HardwareBenchmarkConfig] = None,
-    instance: Optional[str] = None,
-    channel: Optional[str] = None,
-    counts_log: str = DEFAULT_COUNTS_LOG,
+    config: HardwareBenchmarkConfig,
+    token: str | None = None,
+    instance: str | None = None,
+    counts_log: Path = DEFAULT_COUNTS_LOG,
 ) -> HardwareBenchmarkResult:
-    """
-    Run the full IBM hardware benchmark suite.
-
-    When token is None, runs simulator-only benchmarks (ideal + noisy).
-    When token is provided, also runs on real IBM quantum hardware.
-
-    Args:
-        token: IBM API key (ibm_cloud) or token (ibm_quantum)
-        config: Benchmark configuration
-        instance: IBM Cloud CRN for ibm_cloud channel
-        channel: "ibm_quantum" or "ibm_cloud" (auto-detected from instance)
-        counts_log: JSONL file receiving job IDs and raw counts of every hardware job
-    """
-    if config is None:
-        config = HardwareBenchmarkConfig()
-
-    result = HardwareBenchmarkResult(
-        config=config,
-        timestamp=time.strftime("%Y-%m-%d %H:%M:%S"),
+    """Simulator runs always; IBM hardware runs too when `token` is given."""
+    result = HardwareBenchmarkResult(config=config, timestamp=time.strftime("%Y-%m-%d %H:%M:%S"))
+    mode = f"backend {config.backend_name}" if token else "simulator only"
+    print(
+        f"Hardware benchmark ({mode}): qubits {config.num_qubits_range}, "
+        f"depths {config.qaoa_depths}, {config.num_runs_per_config} runs per configuration"
     )
 
-    hardware_available = token is not None
-
-    print("=" * 70)
-    print(" IBM Quantum Hardware Benchmark Suite")
-    print("=" * 70)
-    if hardware_available:
-        print(f" Backend: {config.backend_name}")
-    else:
-        print(" Mode: Simulator-only (no IBM token provided)")
-    print(f" Qubit range: {config.num_qubits_range}")
-    print(f" QAOA depths: {config.qaoa_depths}")
-    print(f" Runs per config: {config.num_runs_per_config}")
-
     for n_qubits in config.num_qubits_range:
-        print(f"\n{'─' * 60}")
-        print(f" Problem size: {n_qubits} qubits")
-        print(f"{'─' * 60}")
-
-        Q, opt_energy = toy_execution_qubo(n_qubits, seed=config.seed)
-        print(f" Optimal energy: {opt_energy:.4f}")
-
+        Q = toy_execution_qubo(n_qubits)
+        bounds = energy_bounds(Q)
+        print(f"\nn = {n_qubits}: optimum {bounds.min_energy:.4f}, worst {bounds.max_energy:.4f}")
         for run_id in range(config.num_runs_per_config):
             run_seed = config.seed + run_id * 100
-
-            sa_result = solve_with_sa(Q, opt_energy, config.sa_sweeps, run_seed)
-            sa_result.run_id = run_id
-            result.runs.append(sa_result)
-
-            for p_depth in config.qaoa_depths:
-                ideal = solve_with_qaoa_simulator(
-                    Q, opt_energy, p=p_depth, shots=config.shots,
-                    maxiter=config.optimizer_maxiter, noisy=False,
-                    seed=run_seed
-                )
-                ideal.run_id = run_id
-                result.runs.append(ideal)
-
-                noisy = solve_with_qaoa_simulator(
-                    Q, opt_energy, p=p_depth, shots=config.shots,
-                    maxiter=config.optimizer_maxiter, noisy=True,
-                    noise_level=0.02, seed=run_seed
-                )
-                noisy.run_id = run_id
-                result.runs.append(noisy)
-
-                if hardware_available and n_qubits <= 12:
+            result.runs.append(solve_with_sa(Q, bounds, config.sa_sweeps, run_seed, run_id))
+            for p in config.qaoa_depths:
+                for noisy in (False, True):
+                    result.runs.append(
+                        solve_with_qaoa_simulator(
+                            Q, bounds, config, p=p, noisy=noisy, seed=run_seed, run_id=run_id
+                        )
+                    )
+                if token and n_qubits <= MAX_HARDWARE_QUBITS:
+                    # A hardware job can fail for many external reasons (queue, quota,
+                    # network); record it and continue with the remaining runs.
                     try:
                         hw, props = solve_with_ibm_hardware(
-                            Q, opt_energy, p=p_depth, shots=config.shots,
-                            maxiter=min(config.optimizer_maxiter, 30),
-                            token=token, backend_name=config.backend_name,
-                            seed=run_seed, instance=instance,
-                            channel=channel, counts_log=counts_log,
+                            Q,
+                            bounds,
+                            config,
+                            p=p,
+                            token=token,
+                            instance=instance,
+                            counts_log=counts_log,
+                            seed=run_seed,
                             run_id=run_id,
                         )
-                        hw.run_id = run_id
-                        result.runs.append(hw)
-                        result.backend_properties = props
-                        print(f"   HW p={p_depth}: E={hw.energy:.4f} "
-                              f"(ratio={hw.approximation_ratio:.3f})")
-                    except Exception as e:
-                        logger.error(f"Hardware run failed: {e}")
-                        print(f"   HW p={p_depth}: FAILED - {e}")
+                    except Exception:
+                        logger.exception("Hardware run failed (n=%d, p=%d)", n_qubits, p)
+                        continue
+                    result.runs.append(hw)
+                    result.backend_properties = props
+        for run in result.get_runs(n_qubits=n_qubits):
+            if run.run_id == 0:
+                print(
+                    f"  {run.solver:<14} p={run.qaoa_depth}  E={run.energy:10.4f}  "
+                    f"ratio={run.approximation_ratio:.4f}  gap={run.optimality_gap:.2%}  "
+                    f"t={run.solve_time_s:.3f}s"
+                )
 
-            if run_id == 0:
-                print(f"   SA: E={sa_result.energy:.4f} "
-                      f"(ratio={sa_result.approximation_ratio:.3f}, "
-                      f"t={sa_result.solve_time_s:.4f}s)")
-                for p_depth in config.qaoa_depths:
-                    ideal_runs = [r for r in result.runs
-                                  if r.solver == "QAOA_Ideal"
-                                  and r.num_qubits == n_qubits
-                                  and r.qaoa_depth == p_depth
-                                  and r.run_id == 0]
-                    noisy_runs = [r for r in result.runs
-                                  if r.solver == "QAOA_Noisy"
-                                  and r.num_qubits == n_qubits
-                                  and r.qaoa_depth == p_depth
-                                  and r.run_id == 0]
-                    if ideal_runs:
-                        ir = ideal_runs[0]
-                        print(f"   Ideal p={p_depth}: E={ir.energy:.4f} "
-                              f"(ratio={ir.approximation_ratio:.3f}, "
-                              f"t={ir.solve_time_s:.2f}s)")
-                    if noisy_runs:
-                        nr = noisy_runs[0]
-                        print(f"   Noisy p={p_depth}: E={nr.energy:.4f} "
-                              f"(ratio={nr.approximation_ratio:.3f})")
-
-    print(f"\n{'=' * 70}")
-    print(" Benchmark Complete")
-    table = result.summary_table()
-    print(f"\n {'Solver':<18} {'Mean E':>10} {'Best E':>10} "
-          f"{'Approx':>10} {'Time(s)':>10} {'Runs':>6}")
-    print(" " + "─" * 66)
-    for solver, stats in table.items():
-        print(f" {solver:<18} {stats['mean_energy']:>10.2f} "
-              f"{stats['best_energy']:>10.2f} "
-              f"{stats['mean_approx_ratio']:>10.3f} "
-              f"{stats['mean_time_s']:>10.3f} "
-              f"{stats['num_runs']:>6}")
-    print("=" * 70)
-
+    columns = ("Mean E", "Best E", "Ratio", "Gap", "Time(s)", "Runs")
+    widths = (10, 10, 9, 9, 10, 6)
+    print(
+        "\n"
+        + f"{'Solver':<16}"
+        + "".join(f"{c:>{w}}" for c, w in zip(columns, widths, strict=True))
+    )
+    for solver, s in result.summary_table().items():
+        print(
+            f"{solver:<16}{s['mean_energy']:>10.2f}{s['best_energy']:>10.2f}"
+            f"{s['mean_approx_ratio']:>9.3f}{s['mean_gap']:>9.2%}"
+            f"{s['mean_time_s']:>10.3f}{s['num_runs']:>6}"
+        )
     return result
 
 
-def generate_hardware_figures(
-    result: HardwareBenchmarkResult,
-    output_dir: str = "paper/figures"
-) -> List[str]:
-    """Generate all hardware benchmark figures for the paper."""
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    import os
+def _solvers_present(result: HardwareBenchmarkResult) -> list[str]:
+    return [s for s in SOLVERS if result.get_runs(solver=s)]
 
-    os.makedirs(output_dir, exist_ok=True)
 
-    plt.rcParams.update({
-        'font.size': 9,
-        'axes.labelsize': 10,
-        'axes.titlesize': 11,
-        'xtick.labelsize': 8,
-        'ytick.labelsize': 8,
-        'legend.fontsize': 8,
-        'figure.dpi': 300,
-        'savefig.dpi': 300,
-        'savefig.bbox': 'tight',
-        'font.family': 'serif',
-    })
-
-    saved = []
-
-    # ── Figure 1: Approximation Ratio vs Problem Size ──
+def _fig_ratio_vs_size(result: HardwareBenchmarkResult, path: Path) -> None:
     fig, ax = plt.subplots(figsize=(3.5, 2.8))
-    solvers = ["SA", "QAOA_Ideal", "QAOA_Noisy", "QAOA_Hardware"]
-    colors = {"SA": "#2196F3", "QAOA_Ideal": "#4CAF50",
-              "QAOA_Noisy": "#FF9800", "QAOA_Hardware": "#E91E63"}
-    markers = {"SA": "s", "QAOA_Ideal": "o",
-               "QAOA_Noisy": "^", "QAOA_Hardware": "D"}
-    labels = {"SA": "Sim. Annealing", "QAOA_Ideal": "QAOA (Ideal)",
-              "QAOA_Noisy": "QAOA (Noisy)", "QAOA_Hardware": "QAOA (IBM HW)"}
-
-    for solver in solvers:
-        qubit_sizes = sorted(set(r.num_qubits for r in result.runs
-                                 if r.solver == solver))
-        if not qubit_sizes:
-            continue
-        means, stds = [], []
-        for nq in qubit_sizes:
-            runs = result.get_runs(solver=solver, n_qubits=nq)
-            ratios = [r.approximation_ratio for r in runs]
-            means.append(np.mean(ratios))
-            stds.append(np.std(ratios))
-
-        ax.errorbar(qubit_sizes, means, yerr=stds, marker=markers[solver],
-                     color=colors[solver], label=labels[solver],
-                     capsize=3, linewidth=1.2, markersize=4)
-
-    ax.set_xlabel("Number of Qubits")
-    ax.set_ylabel("Approximation Ratio")
+    for solver in _solvers_present(result):
+        sizes = sorted({r.num_qubits for r in result.get_runs(solver=solver)})
+        ratios = [[r.approximation_ratio for r in result.get_runs(solver, n)] for n in sizes]
+        ax.errorbar(
+            sizes,
+            [np.mean(r) for r in ratios],
+            yerr=[np.std(r) for r in ratios],
+            marker=MARKERS[solver],
+            color=COLORS[solver],
+            label=LABELS[solver],
+            capsize=3,
+            linewidth=1.2,
+            markersize=4,
+        )
+    ax.set(xlabel="Number of Qubits", ylabel="Approximation Ratio", ylim=(0, 1.1))
     ax.set_title("Solution Quality vs Problem Size")
-    ax.set_ylim(0, 1.1)
-    ax.legend(loc='lower left', framealpha=0.9)
+    ax.legend(loc="lower left", framealpha=0.9)
     ax.grid(True, alpha=0.3)
-    path = os.path.join(output_dir, "fig_hw_approx_ratio_vs_size.pdf")
     fig.savefig(path)
     plt.close(fig)
-    saved.append(path)
 
-    # ── Figure 2: Solve Time Comparison ──
+
+def _fig_time_scaling(result: HardwareBenchmarkResult, path: Path) -> None:
     fig, ax = plt.subplots(figsize=(3.5, 2.8))
-    for solver in solvers:
-        qubit_sizes = sorted(set(r.num_qubits for r in result.runs
-                                 if r.solver == solver))
-        if not qubit_sizes:
-            continue
-        means = []
-        for nq in qubit_sizes:
-            runs = result.get_runs(solver=solver, n_qubits=nq)
-            means.append(np.mean([r.solve_time_s for r in runs]))
-        ax.semilogy(qubit_sizes, means, marker=markers[solver],
-                     color=colors[solver], label=labels[solver],
-                     linewidth=1.2, markersize=4)
-
-    ax.set_xlabel("Number of Qubits")
-    ax.set_ylabel("Solve Time (s)")
-    ax.set_title("Computational Cost Scaling")
-    ax.legend(loc='upper left', framealpha=0.9)
-    ax.grid(True, alpha=0.3, which='both')
-    path = os.path.join(output_dir, "fig_hw_solve_time_scaling.pdf")
+    for solver in _solvers_present(result):
+        sizes = sorted({r.num_qubits for r in result.get_runs(solver=solver)})
+        times = [np.mean([r.solve_time_s for r in result.get_runs(solver, n)]) for n in sizes]
+        ax.semilogy(
+            sizes,
+            times,
+            marker=MARKERS[solver],
+            color=COLORS[solver],
+            label=LABELS[solver],
+            linewidth=1.2,
+            markersize=4,
+        )
+    ax.set(xlabel="Number of Qubits", ylabel="Solve Time (s)", title="Computational Cost Scaling")
+    ax.legend(loc="upper left", framealpha=0.9)
+    ax.grid(True, alpha=0.3, which="both")
     fig.savefig(path)
     plt.close(fig)
-    saved.append(path)
 
-    # ── Figure 3: Energy Distribution Box Plots ──
-    fig, axes = plt.subplots(1, len(result.config.num_qubits_range),
-                             figsize=(7, 2.5), sharey=False)
-    if len(result.config.num_qubits_range) == 1:
-        axes = [axes]
 
-    for idx, nq in enumerate(result.config.num_qubits_range):
-        ax = axes[idx]
-        data_for_box = []
-        box_labels = []
-        box_colors = []
-        for solver in solvers:
-            runs = result.get_runs(solver=solver, n_qubits=nq)
-            if runs:
-                data_for_box.append([r.energy for r in runs])
-                box_labels.append(solver.replace("QAOA_", "").replace("_", "\n"))
-                box_colors.append(colors[solver])
-
-        if data_for_box:
-            bp = ax.boxplot(data_for_box, patch_artist=True, widths=0.6)
-            ax.set_xticks(range(1, len(box_labels) + 1))
-            ax.set_xticklabels(box_labels)
-            for patch, color in zip(bp['boxes'], box_colors):
-                patch.set_facecolor(color)
+def _fig_energy_distribution(result: HardwareBenchmarkResult, path: Path) -> None:
+    sizes = result.config.num_qubits_range
+    fig, axes = plt.subplots(1, len(sizes), figsize=(7, 2.5), squeeze=False)
+    for ax, n in zip(axes[0], sizes, strict=True):
+        solvers = [s for s in SOLVERS if result.get_runs(s, n)]
+        if solvers:
+            bp = ax.boxplot(
+                [[r.energy for r in result.get_runs(s, n)] for s in solvers],
+                patch_artist=True,
+                widths=0.6,
+            )
+            ax.set_xticks(range(1, len(solvers) + 1))
+            ax.set_xticklabels([s.replace("QAOA_", "") for s in solvers])
+            for patch, solver in zip(bp["boxes"], solvers, strict=True):
+                patch.set_facecolor(COLORS[solver])
                 patch.set_alpha(0.6)
-
-            opt_e = result.get_runs(n_qubits=nq)[0].optimal_energy if result.get_runs(n_qubits=nq) else 0
-            ax.axhline(y=opt_e, color='red', linestyle='--', linewidth=0.8,
-                       label='Optimal')
-
-        ax.set_title(f"n={nq}", fontsize=9)
-        if idx == 0:
-            ax.set_ylabel("Energy")
-        ax.tick_params(axis='x', rotation=45)
-
+            ax.axhline(
+                result.get_runs(n_qubits=n)[0].optimal_energy,
+                color="red",
+                linestyle="--",
+                linewidth=0.8,
+            )
+        ax.set_title(f"n={n}", fontsize=9)
+        ax.tick_params(axis="x", rotation=45)
+    axes[0][0].set_ylabel("Energy")
     fig.suptitle("Energy Distribution by Solver and Problem Size", fontsize=10)
     fig.tight_layout()
-    path = os.path.join(output_dir, "fig_hw_energy_distribution.pdf")
     fig.savefig(path)
     plt.close(fig)
-    saved.append(path)
 
-    # ── Figure 4: QAOA Depth Effect ──
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7, 2.8))
 
-    for solver_type, ax, title in [
-        ("QAOA_Ideal", ax1, "Ideal Simulator"),
-        ("QAOA_Noisy", ax2, "Noisy Simulator")
+def _fig_depth_effect(result: HardwareBenchmarkResult, path: Path) -> None:
+    fig, axes = plt.subplots(1, 2, figsize=(7, 2.8))
+    for ax, solver, title in [
+        (axes[0], "QAOA_Ideal", "Ideal Simulator"),
+        (axes[1], "QAOA_Noisy", "Noisy Simulator"),
     ]:
-        for nq in result.config.num_qubits_range:
-            depths = sorted(set(r.qaoa_depth for r in result.runs
-                                if r.solver == solver_type
-                                and r.num_qubits == nq))
-            if not depths:
-                continue
-            means = []
-            for d in depths:
-                runs = result.get_runs(solver=solver_type, n_qubits=nq, depth=d)
-                means.append(np.mean([r.approximation_ratio for r in runs]))
-            ax.plot(depths, means, marker='o', label=f"n={nq}",
-                    linewidth=1.2, markersize=4)
-
-        ax.set_xlabel("QAOA Depth (p)")
-        ax.set_ylabel("Approximation Ratio")
-        ax.set_title(title)
-        ax.set_ylim(0, 1.1)
+        for n in result.config.num_qubits_range:
+            depths = sorted({r.qaoa_depth for r in result.get_runs(solver, n)})
+            if depths:
+                ratios = [
+                    np.mean([r.approximation_ratio for r in result.get_runs(solver, n, d)])
+                    for d in depths
+                ]
+                ax.plot(depths, ratios, marker="o", label=f"n={n}", linewidth=1.2, markersize=4)
+        ax.set(xlabel="QAOA Depth (p)", ylabel="Approximation Ratio", title=title, ylim=(0, 1.1))
         ax.legend(fontsize=7)
         ax.grid(True, alpha=0.3)
-
     fig.suptitle("Effect of Circuit Depth on Solution Quality", fontsize=10)
     fig.tight_layout()
-    path = os.path.join(output_dir, "fig_hw_depth_effect.pdf")
     fig.savefig(path)
     plt.close(fig)
-    saved.append(path)
 
-    # ── Figure 5: Success Probability Heatmap ──
-    depths = sorted(set(r.qaoa_depth for r in result.runs if r.qaoa_depth > 0))
-    qubit_sizes = sorted(set(r.num_qubits for r in result.runs))
 
-    if depths and qubit_sizes:
-        for solver_type in ["QAOA_Ideal", "QAOA_Noisy"]:
-            fig, ax = plt.subplots(figsize=(3.5, 2.8))
-            matrix = np.zeros((len(depths), len(qubit_sizes)))
-
-            for di, d in enumerate(depths):
-                for qi, nq in enumerate(qubit_sizes):
-                    runs = result.get_runs(solver=solver_type, n_qubits=nq, depth=d)
-                    if runs:
-                        matrix[di, qi] = np.mean([r.success_probability for r in runs])
-
-            im = ax.imshow(matrix, aspect='auto', cmap='YlOrRd',
-                           vmin=0, vmax=max(0.5, matrix.max()))
-            ax.set_xticks(range(len(qubit_sizes)))
-            ax.set_xticklabels(qubit_sizes)
-            ax.set_yticks(range(len(depths)))
-            ax.set_yticklabels([f"p={d}" for d in depths])
-            ax.set_xlabel("Number of Qubits")
-            ax.set_ylabel("QAOA Depth")
-            label = "Ideal" if "Ideal" in solver_type else "Noisy"
-            ax.set_title(f"Success Probability ({label})")
-            fig.colorbar(im, ax=ax, shrink=0.8)
-
-            for di in range(len(depths)):
-                for qi in range(len(qubit_sizes)):
-                    ax.text(qi, di, f"{matrix[di, qi]:.2f}",
-                            ha='center', va='center', fontsize=7,
-                            color='white' if matrix[di, qi] > 0.3 else 'black')
-
-            fig.tight_layout()
-            suffix = "ideal" if "Ideal" in solver_type else "noisy"
-            path = os.path.join(output_dir, f"fig_hw_success_prob_{suffix}.pdf")
-            fig.savefig(path)
-            plt.close(fig)
-            saved.append(path)
-
-    # ── Figure 6: Noise Impact Analysis ──
+def _fig_success_heatmap(result: HardwareBenchmarkResult, solver: str, path: Path) -> None:
+    depths = sorted({r.qaoa_depth for r in result.runs if r.qaoa_depth > 0})
+    sizes = sorted({r.num_qubits for r in result.runs})
+    matrix = np.zeros((len(depths), len(sizes)))
+    for di, d in enumerate(depths):
+        for qi, n in enumerate(sizes):
+            runs = result.get_runs(solver, n, d)
+            if runs:
+                matrix[di, qi] = np.mean([r.success_probability for r in runs])
     fig, ax = plt.subplots(figsize=(3.5, 2.8))
-    for nq in result.config.num_qubits_range:
-        ideal_runs = result.get_runs(solver="QAOA_Ideal", n_qubits=nq)
-        noisy_runs = result.get_runs(solver="QAOA_Noisy", n_qubits=nq)
-
-        if ideal_runs and noisy_runs:
-            ideal_mean = np.mean([r.approximation_ratio for r in ideal_runs])
-            noisy_mean = np.mean([r.approximation_ratio for r in noisy_runs])
-            degradation = (ideal_mean - noisy_mean) / ideal_mean * 100
-            ax.bar(nq, degradation, width=1.5, color='#FF5722', alpha=0.7,
-                   edgecolor='black', linewidth=0.5)
-
-    ax.set_xlabel("Number of Qubits")
-    ax.set_ylabel("Quality Degradation (%)")
-    ax.set_title("Noise-Induced Performance Loss")
-    ax.grid(True, alpha=0.3, axis='y')
+    im = ax.imshow(matrix, aspect="auto", cmap="YlOrRd", vmin=0, vmax=max(0.5, matrix.max()))
+    ax.set_xticks(range(len(sizes)))
+    ax.set_xticklabels(sizes)
+    ax.set_yticks(range(len(depths)))
+    ax.set_yticklabels([f"p={d}" for d in depths])
+    ax.set(xlabel="Number of Qubits", ylabel="QAOA Depth")
+    ax.set_title(f"Success Probability ({solver.removeprefix('QAOA_')})")
+    fig.colorbar(im, ax=ax, shrink=0.8)
+    for di in range(len(depths)):
+        for qi in range(len(sizes)):
+            value = matrix[di, qi]
+            color = "white" if value > 0.3 else "black"
+            ax.text(qi, di, f"{value:.2f}", ha="center", va="center", fontsize=7, color=color)
     fig.tight_layout()
-    path = os.path.join(output_dir, "fig_hw_noise_degradation.pdf")
     fig.savefig(path)
     plt.close(fig)
-    saved.append(path)
 
-    # ── Figure 7: Measurement Count Distribution ──
+
+def _fig_noise_degradation(result: HardwareBenchmarkResult, path: Path) -> None:
+    fig, ax = plt.subplots(figsize=(3.5, 2.8))
+    for n in result.config.num_qubits_range:
+        ideal = result.get_runs("QAOA_Ideal", n)
+        noisy = result.get_runs("QAOA_Noisy", n)
+        if ideal and noisy:
+            ideal_mean = np.mean([r.approximation_ratio for r in ideal])
+            noisy_mean = np.mean([r.approximation_ratio for r in noisy])
+            degradation = (ideal_mean - noisy_mean) / ideal_mean * 100
+            ax.bar(n, degradation, width=1.5, color="#FF5722", alpha=0.7, edgecolor="black")
+    ax.set(xlabel="Number of Qubits", ylabel="Quality Degradation (%)")
+    ax.set_title("Noise-Induced Performance Loss")
+    ax.grid(True, alpha=0.3, axis="y")
+    fig.tight_layout()
+    fig.savefig(path)
+    plt.close(fig)
+
+
+def _fig_count_distribution(result: HardwareBenchmarkResult, path: Path) -> None:
+    n = min(result.config.num_qubits_range)
     fig, axes = plt.subplots(1, 2, figsize=(7, 2.8))
-
-    for ax, solver_type, title in [
+    for ax, solver, title in [
         (axes[0], "QAOA_Ideal", "Ideal Simulator"),
-        (axes[1], "QAOA_Noisy", "Noisy Simulator")
+        (axes[1], "QAOA_Noisy", "Noisy Simulator"),
     ]:
-        target_nq = min(result.config.num_qubits_range)
-        runs = result.get_runs(solver=solver_type, n_qubits=target_nq)
+        runs = result.get_runs(solver, n)
         if runs and runs[0].counts:
-            counts = runs[0].counts
-            sorted_counts = sorted(counts.items(), key=lambda x: -x[1])[:15]
-            states = [s[0][:8] for s in sorted_counts]
-            values = [s[1] for s in sorted_counts]
-
-            bars = ax.bar(range(len(states)), values, color=colors[solver_type],
-                          alpha=0.7, edgecolor='black', linewidth=0.3)
-            ax.set_xticks(range(len(states)))
-            ax.set_xticklabels(states, rotation=90, fontsize=6)
-            ax.set_ylabel("Counts")
-            ax.set_title(f"{title} (n={target_nq})")
-            ax.grid(True, alpha=0.3, axis='y')
-
+            top = sorted(runs[0].counts.items(), key=lambda kv: -kv[1])[:15]
+            ax.bar(
+                range(len(top)),
+                [count for _, count in top],
+                color=COLORS[solver],
+                alpha=0.7,
+                edgecolor="black",
+                linewidth=0.3,
+            )
+            ax.set_xticks(range(len(top)))
+            ax.set_xticklabels([bs[:8] for bs, _ in top], rotation=90, fontsize=6)
+            ax.set(ylabel="Counts", title=f"{title} (n={n})")
+            ax.grid(True, alpha=0.3, axis="y")
     fig.suptitle("Measurement Output Distribution", fontsize=10)
     fig.tight_layout()
-    path = os.path.join(output_dir, "fig_hw_count_distribution.pdf")
     fig.savefig(path)
     plt.close(fig)
-    saved.append(path)
 
-    print(f"\n Generated {len(saved)} hardware benchmark figures:")
-    for p in saved:
-        print(f"   {p}")
 
+def generate_hardware_figures(result: HardwareBenchmarkResult, output_dir: Path) -> list[Path]:
+    """Write the fig_hw_*.pdf figures to `output_dir`."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    plt.rcParams.update(PLOT_RC)
+    figures = {
+        "fig_hw_approx_ratio_vs_size.pdf": _fig_ratio_vs_size,
+        "fig_hw_solve_time_scaling.pdf": _fig_time_scaling,
+        "fig_hw_energy_distribution.pdf": _fig_energy_distribution,
+        "fig_hw_depth_effect.pdf": _fig_depth_effect,
+        "fig_hw_noise_degradation.pdf": _fig_noise_degradation,
+        "fig_hw_count_distribution.pdf": _fig_count_distribution,
+    }
+    saved = []
+    for name, draw in figures.items():
+        draw(result, output_dir / name)
+        saved.append(output_dir / name)
+    for solver, suffix in [("QAOA_Ideal", "ideal"), ("QAOA_Noisy", "noisy")]:
+        path = output_dir / f"fig_hw_success_prob_{suffix}.pdf"
+        _fig_success_heatmap(result, solver, path)
+        saved.append(path)
     return saved
 
 
-def run_quick_benchmark(
-    output_dir: str = "paper/figures",
-    token: Optional[str] = None,
-    instance: Optional[str] = None,
-    channel: Optional[str] = None,
-    counts_log: str = DEFAULT_COUNTS_LOG,
-) -> HardwareBenchmarkResult:
-    """Quick benchmark for testing (smaller parameters)."""
-    config = HardwareBenchmarkConfig(
-        num_qubits_range=[4, 6, 8],
-        qaoa_depths=[1, 2],
-        shots=1000,
-        optimizer_maxiter=30,
-        sa_sweeps=500,
-        num_runs_per_config=3,
-    )
-    result = run_hardware_benchmark(
-        token=token, config=config,
-        instance=instance, channel=channel, counts_log=counts_log,
-    )
-    generate_hardware_figures(result, output_dir=output_dir)
-    return result
+QUICK_CONFIG = HardwareBenchmarkConfig(
+    num_qubits_range=[4, 6, 8],
+    qaoa_depths=[1, 2],
+    shots=1000,
+    optimizer_maxiter=30,
+    sa_sweeps=500,
+    num_runs_per_config=3,
+)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--simulator-only", action="store_true",
-                        help="skip IBM hardware even if credentials are set")
-    parser.add_argument("--output-dir", default="paper/figures")
-    parser.add_argument("--counts-log", default=DEFAULT_COUNTS_LOG)
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--simulator-only",
+        action="store_true",
+        help="skip IBM hardware even if credentials are set",
+    )
+    parser.add_argument("--output-dir", type=Path, default=Path("paper/figures"))
+    parser.add_argument("--counts-log", type=Path, default=DEFAULT_COUNTS_LOG)
+    parser.add_argument("--seed", type=int, default=QUICK_CONFIG.seed)
     args = parser.parse_args()
+    logging.basicConfig(level=logging.WARNING)
 
     token = None
     if not args.simulator_only:
         token = os.environ.get("IBM_QUANTUM_TOKEN") or os.environ.get("IBM_CLOUD_API_KEY")
-    run_quick_benchmark(
-        output_dir=args.output_dir, token=token,
-        instance=os.environ.get("IBM_CLOUD_CRN"), counts_log=args.counts_log,
+    config = HardwareBenchmarkConfig(**{**vars(QUICK_CONFIG), "seed": args.seed})
+    result = run_hardware_benchmark(
+        config,
+        token=token,
+        instance=os.environ.get("IBM_CLOUD_CRN"),
+        counts_log=args.counts_log,
     )
+    for path in generate_hardware_figures(result, args.output_dir):
+        print(f"Saved {path}")
 
 
 if __name__ == "__main__":

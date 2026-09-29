@@ -1,605 +1,321 @@
+"""Solver benchmark on random QUBOs: brute force, SA, fixed-angle QAOA and (if installed) Gurobi.
+
+QAOA here uses fixed heuristic angles (gamma = 0.5 + 0.1p, beta = 0.3 + 0.05p) without
+variational optimisation, sampled with shots (QASM) or read from the exact statevector.
+Quality is the approximation ratio (E_max - E)/(E_max - E_opt) and the optimality gap
+against exhaustive-search bounds.
+
+Usage:
+    python experiments/solver_benchmark.py [--runs 3] [--seed 42] [--output-dir results]
 """
-Hardware Comparison Benchmark
 
-Comprehensive benchmark comparing:
-- Quantum Simulators: QASM, Statevector
-- Classical Solvers: Simulated Annealing, Brute Force, Gurobi (if available)
+import argparse
+import importlib.util
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from pathlib import Path
+from time import perf_counter
 
-Problem sizes: 4, 6, 8 qubits (execution slices)
-Metrics: Solution quality, time, cost, reliability
-"""
-
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple, Callable
-from dataclasses import dataclass, field
-from datetime import datetime
-from time import time
-from abc import ABC, abstractmethod
-import logging
+from matplotlib.axes import Axes
+from numpy.typing import NDArray
+from qiskit import transpile
+from qiskit_aer import AerSimulator
 
+from qexec.optimization.ising import build_qaoa_circuit_from_ising, qubo_to_ising
 from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
-from qexec.optimization.solvers.exact import BruteForceSolver as ExactSolver
+from qexec.optimization.solvers.exact import BruteForceSolver
+from qexec.optimization.solvers.metrics import (
+    EnergyBounds,
+    approximation_ratio,
+    energy_bounds,
+    optimality_gap,
+)
 
-logger = logging.getLogger(__name__)
+Matrix = NDArray[np.float64]
+Solution = tuple[NDArray[np.int_], float]
+OPTIMUM_TOL = 1e-6
+STATEVECTOR_MIN_PROBABILITY = 0.01
 
-
-# =============================================================================
-# Benchmark Result
-# =============================================================================
-
-@dataclass
-class BenchmarkResult:
-    """Result from a single benchmark run."""
-    solver_name: str
-    solver_type: str  # 'quantum_sim', 'quantum_hw', 'classical'
-    problem_size: int
-    solution: np.ndarray
-    energy: float
-    optimal_energy: float
-    optimality_gap: float  # Percentage gap from optimal
-    solve_time: float  # Seconds
-    num_runs: int
-    success_rate: float  # Rate of finding optimal
-    metadata: Dict = field(default_factory=dict)
-    
-    @property
-    def is_optimal(self) -> bool:
-        return abs(self.energy - self.optimal_energy) < 1e-6
-
-
-# =============================================================================
-# Abstract Solver Interface
-# =============================================================================
 
 class Solver(ABC):
-    """Abstract base class for all solvers."""
-    
-    @property
+    name: str
+    solver_type: str
+
     @abstractmethod
-    def name(self) -> str:
-        pass
-    
-    @property
-    @abstractmethod
-    def solver_type(self) -> str:
-        pass
-    
-    @abstractmethod
-    def solve(self, Q: np.ndarray, **kwargs) -> Tuple[np.ndarray, float]:
-        """Solve QUBO and return (solution, energy)."""
-        pass
+    def solve(self, Q: Matrix) -> Solution:
+        """Return (solution, energy)."""
 
 
-# =============================================================================
-# Classical Solvers
-# =============================================================================
+class ExactSolver(Solver):
+    name = "BruteForce"
+    solver_type = "classical"
 
-class BruteForceSolver(Solver):
-    """Brute force enumeration (optimal but exponential); wraps qexec's exact solver."""
-    
-    @property
-    def name(self) -> str:
-        return "BruteForce"
-    
-    @property
-    def solver_type(self) -> str:
-        return "classical"
-    
-    def solve(self, Q: np.ndarray, **kwargs) -> Tuple[np.ndarray, float]:
-        result = ExactSolver().solve(Q)
-        return result.solution, result.energy
+    def solve(self, Q: Matrix) -> Solution:
+        result = BruteForceSolver().solve(Q)
+        return result.solution.astype(int), result.energy
 
 
 class SABenchmarkSolver(Solver):
-    """Simulated Annealing solver for benchmark."""
-    
-    def __init__(self, num_sweeps: int = 500, seed: int = 42):
-        self.num_sweeps = num_sweeps
-        self.seed = seed
-    
-    @property
-    def name(self) -> str:
-        return f"SA-{self.num_sweeps}"
-    
-    @property
-    def solver_type(self) -> str:
-        return "classical"
-    
-    def solve(self, Q: np.ndarray, **kwargs) -> Tuple[np.ndarray, float]:
-        solver = SimulatedAnnealingSolver(num_sweeps=self.num_sweeps, seed=self.seed)
-        result = solver.solve(Q, verbose=False)
-        return result.solution, result.energy
+    """SA with one generator across runs, so repeated runs differ but are reproducible."""
+
+    solver_type = "classical"
+
+    def __init__(self, num_sweeps: int = 500, seed: int = 42) -> None:
+        self.name = f"SA-{num_sweeps}"
+        self._solver = SimulatedAnnealingSolver(num_sweeps=num_sweeps, seed=seed)
+
+    def solve(self, Q: Matrix) -> Solution:
+        result = self._solver.solve(Q)
+        return result.solution.astype(int), result.energy
 
 
 class GurobiSolver(Solver):
-    """Gurobi solver (if available)."""
-    
-    _available = None
-    
-    @classmethod
-    def is_available(cls) -> bool:
-        if cls._available is None:
-            try:
-                import gurobipy
-                cls._available = True
-            except ImportError:
-                cls._available = False
-        return cls._available
-    
-    @property
-    def name(self) -> str:
-        return "Gurobi"
-    
-    @property
-    def solver_type(self) -> str:
-        return "classical"
-    
-    def solve(self, Q: np.ndarray, **kwargs) -> Tuple[np.ndarray, float]:
-        if not self.is_available():
-            raise RuntimeError("Gurobi not available")
-        
+    name = "Gurobi"
+    solver_type = "classical"
+
+    @staticmethod
+    def is_available() -> bool:
+        return importlib.util.find_spec("gurobipy") is not None
+
+    def solve(self, Q: Matrix) -> Solution:
         import gurobipy as gp
-        from gurobipy import GRB
-        
+
         n = Q.shape[0]
-        
         with gp.Env(empty=True) as env:
-            env.setParam('OutputFlag', 0)
+            env.setParam("OutputFlag", 0)
             env.start()
-            
             with gp.Model(env=env) as model:
-                x = model.addVars(n, vtype=GRB.BINARY, name="x")
-                
-                obj = gp.quicksum(
-                    Q[i, j] * x[i] * x[j]
-                    for i in range(n)
-                    for j in range(n)
+                x = model.addVars(n, vtype=gp.GRB.BINARY, name="x")
+                model.setObjective(
+                    gp.quicksum(Q[i, j] * x[i] * x[j] for i in range(n) for j in range(n)),
+                    gp.GRB.MINIMIZE,
                 )
-                model.setObjective(obj, GRB.MINIMIZE)
                 model.optimize()
-                
-                solution = np.array([x[i].X for i in range(n)])
-                energy = model.objVal
-        
-        return solution, energy
+                solution = np.array([round(x[i].X) for i in range(n)])
+                return solution, float(model.objVal)
 
 
-# =============================================================================
-# Quantum Simulators
-# =============================================================================
+def _fixed_angles(p: int) -> tuple[float, float]:
+    return 0.5 + 0.1 * p, 0.3 + 0.05 * p
+
+
+def _best_of(Q: Matrix, candidates: list[NDArray[np.int_]]) -> Solution:
+    best_x, best_e = np.zeros(Q.shape[0], dtype=int), float("inf")
+    for x in candidates:
+        e = float(x @ Q @ x)
+        if e < best_e:
+            best_x, best_e = x, e
+    return best_x, best_e
+
 
 class QASMSimulatorSolver(Solver):
-    """QASM simulator (shot-based)."""
-    
-    def __init__(self, shots: int = 4000, p: int = 1):
+    """Lowest-energy bitstring among `shots` samples of the fixed-angle circuit.
+
+    Each call uses a fresh simulator seed drawn from `seed`, so runs differ but repeat exactly.
+    """
+
+    solver_type = "quantum_sim"
+
+    def __init__(self, shots: int = 4000, p: int = 1, seed: int = 42) -> None:
+        self.name = f"QASM-p{p}"
         self.shots = shots
         self.p = p
-    
-    @property
-    def name(self) -> str:
-        return f"QASM-p{self.p}"
-    
-    @property
-    def solver_type(self) -> str:
-        return "quantum_sim"
-    
-    def solve(self, Q: np.ndarray, **kwargs) -> Tuple[np.ndarray, float]:
-        from qiskit_aer import AerSimulator
-        from qiskit import transpile
-        from qexec.optimization.ising import qubo_to_ising, build_qaoa_circuit_from_ising
-        
-        n = Q.shape[0]
-        
-        # Pre-optimized parameters (simple heuristic)
-        gamma = 0.5 + 0.1 * self.p
-        beta = 0.3 + 0.05 * self.p
-        
-        ising = qubo_to_ising(Q)
-        qc = build_qaoa_circuit_from_ising(ising, gamma, beta, self.p)
-        
-        simulator = AerSimulator()
-        compiled = transpile(qc, simulator)
-        result = simulator.run(compiled, shots=self.shots).result()
-        counts = result.get_counts()
-        
-        # Find best
-        best_x = None
-        best_e = float('inf')
-        
-        for bitstring in counts:
-            x = np.array([int(b) for b in bitstring[::-1]])
-            if len(x) == n:
-                e = x @ Q @ x
-                if e < best_e:
-                    best_e = e
-                    best_x = x
-        
-        return best_x if best_x is not None else np.zeros(n), best_e
+        self.simulator = AerSimulator()
+        self.rng = np.random.default_rng(seed)
+
+    def solve(self, Q: Matrix) -> Solution:
+        gamma, beta = _fixed_angles(self.p)
+        qc = build_qaoa_circuit_from_ising(qubo_to_ising(Q), gamma, beta, self.p)
+        result = self.simulator.run(
+            transpile(qc, self.simulator),
+            shots=self.shots,
+            seed_simulator=int(self.rng.integers(2**31)),
+        ).result()
+        candidates = [np.array([int(b) for b in bs[::-1]]) for bs in result.get_counts()]
+        return _best_of(Q, [x for x in candidates if len(x) == Q.shape[0]])
 
 
 class StatevectorSolver(Solver):
-    """Statevector simulator (exact)."""
-    
-    def __init__(self, p: int = 1):
+    """Lowest-energy basis state with probability > 1% in the exact output state."""
+
+    solver_type = "quantum_sim"
+
+    def __init__(self, p: int = 1) -> None:
+        self.name = f"Statevector-p{p}"
         self.p = p
-    
-    @property
-    def name(self) -> str:
-        return f"Statevector-p{self.p}"
-    
-    @property
-    def solver_type(self) -> str:
-        return "quantum_sim"
-    
-    def solve(self, Q: np.ndarray, **kwargs) -> Tuple[np.ndarray, float]:
-        from qiskit_aer import AerSimulator
-        from qiskit import transpile
-        from qexec.optimization.ising import qubo_to_ising, build_qaoa_circuit_from_ising
-        
+        self.simulator = AerSimulator(method="statevector")
+
+    def solve(self, Q: Matrix) -> Solution:
         n = Q.shape[0]
-        
-        gamma = 0.5 + 0.1 * self.p
-        beta = 0.3 + 0.05 * self.p
-        
-        ising = qubo_to_ising(Q)
-        qc = build_qaoa_circuit_from_ising(ising, gamma, beta, self.p)
+        gamma, beta = _fixed_angles(self.p)
+        qc = build_qaoa_circuit_from_ising(qubo_to_ising(Q), gamma, beta, self.p)
         qc.remove_final_measurements()
         qc.save_statevector()
-        
-        simulator = AerSimulator(method='statevector')
-        compiled = transpile(qc, simulator)
-        result = simulator.run(compiled).result()
-        
-        statevector = result.get_statevector()
-        probs = np.abs(statevector.data) ** 2
-        
-        # Find best
-        best_x = None
-        best_e = float('inf')
-        
-        for i, prob in enumerate(probs):
-            if prob > 0.01:
-                x = np.array([(i >> j) & 1 for j in range(n)])
-                e = x @ Q @ x
-                if e < best_e:
-                    best_e = e
-                    best_x = x
-        
-        return best_x if best_x is not None else np.zeros(n), best_e
+        state = self.simulator.run(transpile(qc, self.simulator)).result().get_statevector()
+        probs = np.abs(np.asarray(state)) ** 2
+        candidates = [
+            np.array([(i >> j) & 1 for j in range(n)])
+            for i in np.flatnonzero(probs > STATEVECTOR_MIN_PROBABILITY)
+        ]
+        return _best_of(Q, candidates)
 
 
-# =============================================================================
-# Benchmark Framework
-# =============================================================================
+@dataclass(frozen=True)
+class BenchmarkResult:
+    solver_name: str
+    solver_type: str
+    problem_size: int
+    energy: float
+    bounds: EnergyBounds
+    solve_time: float
+    num_runs: int
+    success_rate: float
+    all_energies: list[float] = field(default_factory=list)
 
-class Benchmark:
-    """Benchmark framework for comparing solvers."""
-    
-    def __init__(self, problem_sizes: List[int] = [4, 6, 8]):
-        self.problem_sizes = problem_sizes
-        self.results: List[BenchmarkResult] = []
-    
-    def generate_qubo(self, n: int, seed: int = 42) -> np.ndarray:
-        """Generate random QUBO for benchmarking."""
-        np.random.seed(seed)
-        Q = np.random.randn(n, n)
-        Q = (Q + Q.T) / 2  # Symmetric
-        return Q
-    
-    def find_optimal(self, Q: np.ndarray) -> float:
-        """Find optimal solution via brute force."""
-        solver = BruteForceSolver()
+    @property
+    def approximation_ratio(self) -> float:
+        return approximation_ratio(self.energy, self.bounds)
+
+    @property
+    def optimality_gap(self) -> float:
+        return optimality_gap(self.energy, self.bounds)
+
+
+def random_qubo(n: int, rng: np.random.Generator) -> Matrix:
+    Q = rng.standard_normal((n, n))
+    return (Q + Q.T) / 2
+
+
+def run_solver(solver: Solver, Q: Matrix, bounds: EnergyBounds, num_runs: int) -> BenchmarkResult:
+    """Best energy over `num_runs`, mean time, and the fraction of runs reaching the optimum."""
+    energies, times = [], []
+    for _ in range(num_runs):
+        start = perf_counter()
         _, energy = solver.solve(Q)
-        return energy
-    
-    def run_solver(
-        self,
-        solver: Solver,
-        Q: np.ndarray,
-        optimal_energy: float,
-        num_runs: int = 5
-    ) -> BenchmarkResult:
-        """Run solver multiple times and collect statistics."""
-        n = Q.shape[0]
-        
-        energies = []
-        times = []
-        solutions = []
-        
-        for i in range(num_runs):
-            start = time()
-            try:
-                solution, energy = solver.solve(Q)
-                solve_time = time() - start
-                
-                energies.append(energy)
-                times.append(solve_time)
-                solutions.append(solution)
-            except Exception as e:
-                logger.error(f"{solver.name} run {i+1} failed: {e}")
-        
-        if not energies:
-            return BenchmarkResult(
-                solver_name=solver.name,
-                solver_type=solver.solver_type,
-                problem_size=n,
-                solution=np.zeros(n),
-                energy=float('inf'),
-                optimal_energy=optimal_energy,
-                optimality_gap=float('inf'),
-                solve_time=0.0,
-                num_runs=0,
-                success_rate=0.0,
-                metadata={'error': 'All runs failed'}
+        times.append(perf_counter() - start)
+        energies.append(energy)
+    hits = [abs(e - bounds.min_energy) < OPTIMUM_TOL for e in energies]
+    return BenchmarkResult(
+        solver_name=solver.name,
+        solver_type=solver.solver_type,
+        problem_size=Q.shape[0],
+        energy=min(energies),
+        bounds=bounds,
+        solve_time=float(np.mean(times)),
+        num_runs=num_runs,
+        success_rate=sum(hits) / num_runs,
+        all_energies=energies,
+    )
+
+
+def run_benchmark(
+    solvers: list[Solver], sizes: list[int], num_runs: int, seed: int
+) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    rows = []
+    for size in sizes:
+        Q = random_qubo(size, rng)
+        bounds = energy_bounds(Q)
+        print(f"\nn = {size}: optimum {bounds.min_energy:.4f}, worst {bounds.max_energy:.4f}")
+        for solver in solvers:
+            r = run_solver(solver, Q, bounds, num_runs)
+            print(
+                f"  {r.solver_name:<16} ratio {r.approximation_ratio:.4f} "
+                f"gap {r.optimality_gap:7.2%} ({r.solve_time:.3f}s)"
             )
-        
-        best_idx = np.argmin(energies)
-        best_energy = energies[best_idx]
-        best_solution = solutions[best_idx]
-        
-        # Calculate metrics
-        gap = ((best_energy - optimal_energy) / abs(optimal_energy) * 100 
-               if abs(optimal_energy) > 1e-10 else 0.0)
-        success_rate = sum(1 for e in energies if abs(e - optimal_energy) < 1e-6) / len(energies)
-        
-        return BenchmarkResult(
-            solver_name=solver.name,
-            solver_type=solver.solver_type,
-            problem_size=n,
-            solution=best_solution,
-            energy=best_energy,
-            optimal_energy=optimal_energy,
-            optimality_gap=gap,
-            solve_time=np.mean(times),
-            num_runs=len(energies),
-            success_rate=success_rate,
-            metadata={
-                'all_energies': energies,
-                'all_times': times
-            }
-        )
-    
-    def run_benchmark(
-        self,
-        solvers: List[Solver],
-        num_runs: int = 5,
-        verbose: bool = True
-    ) -> pd.DataFrame:
-        """Run full benchmark across all problem sizes."""
-        
-        if verbose:
-            print("\n" + "="*70)
-            print(" Hardware/Solver Benchmark")
-            print("="*70)
-        
-        self.results = []
-        
-        for size in self.problem_sizes:
-            if verbose:
-                print(f"\n Problem size: {size} qubits")
-                print("-" * 50)
-            
-            Q = self.generate_qubo(size)
-            
-            # Find optimal
-            if verbose:
-                print(f" Finding optimal...")
-            optimal_energy = self.find_optimal(Q)
-            if verbose:
-                print(f" Optimal energy: {optimal_energy:.4f}")
-            
-            # Run each solver
-            for solver in solvers:
-                if verbose:
-                    print(f" Running {solver.name}...", end=" ")
-                
-                try:
-                    result = self.run_solver(solver, Q, optimal_energy, num_runs)
-                    self.results.append(result)
-                    
-                    if verbose:
-                        status = "✓" if result.is_optimal else f"gap={result.optimality_gap:.1f}%"
-                        print(f"{status} ({result.solve_time:.3f}s)")
-                except Exception as e:
-                    if verbose:
-                        print(f"✗ Error: {e}")
-        
-        return self.to_dataframe()
-    
-    def to_dataframe(self) -> pd.DataFrame:
-        """Convert results to DataFrame."""
-        data = []
-        for r in self.results:
-            data.append({
-                'Solver': r.solver_name,
-                'Type': r.solver_type,
-                'Size': r.problem_size,
-                'Energy': r.energy,
-                'Optimal': r.optimal_energy,
-                'Gap (%)': r.optimality_gap,
-                'Time (s)': r.solve_time,
-                'Success Rate': r.success_rate,
-                'Optimal?': r.is_optimal
-            })
-        return pd.DataFrame(data)
+            rows.append(
+                {
+                    "Solver": r.solver_name,
+                    "Type": r.solver_type,
+                    "Size": r.problem_size,
+                    "Energy": r.energy,
+                    "Optimal": bounds.min_energy,
+                    "Approx. ratio": r.approximation_ratio,
+                    "Gap (%)": 100 * r.optimality_gap,
+                    "Time (s)": r.solve_time,
+                    "Success Rate": r.success_rate,
+                }
+            )
+    return pd.DataFrame(rows)
 
 
-# =============================================================================
-# Visualization
-# =============================================================================
-
-def create_benchmark_report(
-    df: pd.DataFrame,
-    save_path: str = "benchmark_report.png"
-) -> None:
-    """Create visualization report from benchmark results."""
-    
-    try:
-        import matplotlib.pyplot as plt
-    except ImportError:
-        print("matplotlib not available")
-        return
-    
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    
-    # =========================================================================
-    # Plot 1: Optimality Gap by Solver
-    # =========================================================================
-    ax1 = axes[0, 0]
-    solvers = df['Solver'].unique()
-    sizes = sorted(df['Size'].unique())
-    
+def _grouped_bars(ax: Axes, df: pd.DataFrame, column: str, scale: float = 1.0) -> None:
+    solvers = list(df["Solver"].unique())
+    sizes = sorted(df["Size"].unique())
     x = np.arange(len(solvers))
-    width = 0.25
-    
+    width = 0.8 / len(sizes)
     for i, size in enumerate(sizes):
-        gaps = []
-        for solver in solvers:
-            subset = df[(df['Solver'] == solver) & (df['Size'] == size)]
-            gap = subset['Gap (%)'].values[0] if len(subset) > 0 else 0
-            gaps.append(max(0, gap))  # Ensure non-negative
-        
-        ax1.bar(x + i * width, gaps, width, label=f'{size} qubits')
-    
-    ax1.set_xlabel('Solver')
-    ax1.set_ylabel('Optimality Gap (%)')
-    ax1.set_title('Solution Quality by Solver')
-    ax1.set_xticks(x + width)
-    ax1.set_xticklabels(solvers, rotation=45, ha='right')
-    ax1.legend()
-    ax1.grid(True, alpha=0.3, axis='y')
-    
-    # =========================================================================
-    # Plot 2: Time to Solution
-    # =========================================================================
-    ax2 = axes[0, 1]
-    
-    for i, size in enumerate(sizes):
-        times = []
-        for solver in solvers:
-            subset = df[(df['Solver'] == solver) & (df['Size'] == size)]
-            t = subset['Time (s)'].values[0] if len(subset) > 0 else 0
-            times.append(t)
-        
-        ax2.bar(x + i * width, times, width, label=f'{size} qubits')
-    
-    ax2.set_xlabel('Solver')
-    ax2.set_ylabel('Time (seconds)')
-    ax2.set_title('Time to Solution')
-    ax2.set_xticks(x + width)
-    ax2.set_xticklabels(solvers, rotation=45, ha='right')
-    ax2.legend()
-    ax2.grid(True, alpha=0.3, axis='y')
-    ax2.set_yscale('log')
-    
-    # =========================================================================
-    # Plot 3: Success Rate
-    # =========================================================================
-    ax3 = axes[1, 0]
-    
-    for i, size in enumerate(sizes):
-        rates = []
-        for solver in solvers:
-            subset = df[(df['Solver'] == solver) & (df['Size'] == size)]
-            rate = subset['Success Rate'].values[0] * 100 if len(subset) > 0 else 0
-            rates.append(rate)
-        
-        ax3.bar(x + i * width, rates, width, label=f'{size} qubits')
-    
-    ax3.set_xlabel('Solver')
-    ax3.set_ylabel('Success Rate (%)')
-    ax3.set_title('Reliability (Finding Optimal)')
-    ax3.set_xticks(x + width)
-    ax3.set_xticklabels(solvers, rotation=45, ha='right')
-    ax3.legend()
-    ax3.set_ylim(0, 105)
-    ax3.grid(True, alpha=0.3, axis='y')
-    
-    # =========================================================================
-    # Plot 4: Summary Table
-    # =========================================================================
-    ax4 = axes[1, 1]
-    ax4.axis('off')
-    
-    # Aggregate by solver
-    summary = df.groupby('Solver').agg({
-        'Gap (%)': 'mean',
-        'Time (s)': 'mean',
-        'Success Rate': 'mean'
-    }).reset_index()
-    
-    table_data = []
-    for _, row in summary.iterrows():
-        table_data.append([
-            row['Solver'],
-            f"{row['Gap (%)']:.1f}%",
-            f"{row['Time (s)']:.4f}",
-            f"{row['Success Rate']*100:.0f}%"
-        ])
-    
-    table = ax4.table(
-        cellText=table_data,
-        colLabels=['Solver', 'Avg Gap', 'Avg Time', 'Success'],
-        loc='center',
-        cellLoc='center'
+        subset = df[df["Size"] == size].set_index("Solver")[column]
+        ax.bar(
+            x + i * width, [scale * subset.get(s, 0.0) for s in solvers], width, label=f"n={size}"
+        )
+    ax.set_xticks(x + width * (len(sizes) - 1) / 2)
+    ax.set_xticklabels(solvers, rotation=45, ha="right")
+    ax.legend()
+    ax.grid(True, alpha=0.3, axis="y")
+
+
+def plot_report(df: pd.DataFrame, path: Path) -> None:
+    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    _grouped_bars(axes[0, 0], df, "Approx. ratio")
+    axes[0, 0].set(ylabel="Approximation ratio", ylim=(0, 1.05), title="Solution Quality")
+    _grouped_bars(axes[0, 1], df, "Time (s)")
+    axes[0, 1].set(ylabel="Time (s)", yscale="log", title="Time to Solution")
+    _grouped_bars(axes[1, 0], df, "Success Rate", scale=100)
+    axes[1, 0].set(ylabel="Runs reaching the optimum (%)", ylim=(0, 105), title="Reliability")
+
+    summary = df.groupby("Solver", sort=False)[["Approx. ratio", "Time (s)", "Success Rate"]].mean()
+    cells = [
+        [str(name), f"{row.iloc[0]:.3f}", f"{row.iloc[1]:.4f}", f"{row.iloc[2]:.0%}"]
+        for name, row in summary.iterrows()
+    ]
+    axes[1, 1].axis("off")
+    table = axes[1, 1].table(
+        cellText=cells,
+        colLabels=["Solver", "Mean ratio", "Mean time (s)", "Optimum reached"],
+        loc="center",
+        cellLoc="center",
     )
     table.auto_set_font_size(False)
     table.set_fontsize(11)
     table.scale(1.2, 1.8)
-    ax4.set_title('Overall Performance Summary', pad=20)
-    
-    plt.suptitle('Quantum-Classical Solver Benchmark Report', fontsize=14, fontweight='bold')
-    plt.tight_layout()
-    
-    plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    print(f"Report saved to: {save_path}")
-    plt.show()
+    axes[1, 1].set_title("Summary", pad=20)
+
+    fig.suptitle("QUBO Solver Benchmark", fontsize=14, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
 
 
-# =============================================================================
-# Demo
-# =============================================================================
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--runs", type=int, default=3)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--sizes", type=int, nargs="+", default=[4, 6, 8])
+    parser.add_argument("--output-dir", type=Path, default=Path("results"))
+    args = parser.parse_args()
+    args.output_dir.mkdir(parents=True, exist_ok=True)
 
-def main():
-    """Run benchmark demo."""
-    
-    print("\n" + "="*70)
-    print(" Hardware/Solver Comparison Benchmark")
-    print("="*70)
-    
-    # Define solvers
-    solvers = [
-        BruteForceSolver(),
-        SABenchmarkSolver(num_sweeps=500),
-        QASMSimulatorSolver(shots=2000, p=1),
-        QASMSimulatorSolver(shots=2000, p=2),
-        QASMSimulatorSolver(shots=2000, p=2),
+    solvers: list[Solver] = [
+        ExactSolver(),
+        SABenchmarkSolver(num_sweeps=500, seed=args.seed),
+        QASMSimulatorSolver(shots=2000, p=1, seed=args.seed),
+        QASMSimulatorSolver(shots=2000, p=2, seed=args.seed),
         StatevectorSolver(p=1),
     ]
-    
-    # Check Gurobi
     if GurobiSolver.is_available():
         solvers.insert(2, GurobiSolver())
-        print(" Gurobi: Available")
-    else:
-        print(" Gurobi: Not available")
-    
-    # Run benchmark
-    benchmark = Benchmark(problem_sizes=[4, 6, 8])
-    df = benchmark.run_benchmark(solvers, num_runs=3, verbose=True)
-    
-    # Print results
-    print("\n" + "="*70)
-    print(" Results Summary")
-    print("="*70)
-    print(df.to_string(index=False))
-    
-    # Create visualization
-    print("\n Generating report...")
-    create_benchmark_report(df, "benchmark_report.png")
-    
-    return df
+    print(f"Gurobi: {'available' if GurobiSolver.is_available() else 'not installed'}")
+
+    df = run_benchmark(solvers, args.sizes, args.runs, args.seed)
+    print()
+    print(df.to_string(index=False, float_format=lambda v: f"{v:.4f}"))
+    path = args.output_dir / "benchmark_report.png"
+    plot_report(df, path)
+    print(f"\nSaved {path}")
 
 
 if __name__ == "__main__":

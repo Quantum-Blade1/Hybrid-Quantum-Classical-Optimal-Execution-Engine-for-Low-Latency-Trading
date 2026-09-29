@@ -72,7 +72,7 @@ python experiments/load_test.py           # throughput of concurrent HybridContr
 python experiments/journal_figures.py     # paper figures -> paper/figures/
 python experiments/hardware_benchmark.py  # SA + QAOA (ideal/noisy Aer; IBM hardware if credentials are set)
 ```
-The walk-forward backtest (`qexec.analysis.walk_forward`) is run by `journal_figures.py` (fig21). `hardware_benchmark.py --simulator-only` skips IBM hardware; with credentials (`IBM_QUANTUM_TOKEN`, or `IBM_CLOUD_API_KEY` + `IBM_CLOUD_CRN`) every hardware job's ID and raw counts are appended to `results/hw_jobs.jsonl` as soon as it returns.
+Every script takes `--seed`; scripts that write files take `--output-dir` (default `results/`, or `paper/figures/` for `journal_figures.py` and the `hardware_benchmark.py` figures). The walk-forward backtest (`qexec.analysis.walk_forward`, seeded) is run by `journal_figures.py` (fig21). `hardware_benchmark.py --simulator-only` skips IBM hardware; with credentials (`IBM_QUANTUM_TOKEN`, or `IBM_CLOUD_API_KEY` + `IBM_CLOUD_CRN`) every hardware job's ID and raw counts are appended to `results/hw_jobs.jsonl` as soon as it returns.
 
 ##  System Architecture
 
@@ -98,7 +98,7 @@ Hybrid-Quantum-Classical-Optimal-Execution-Engine-for-Low-Latency-Trading/
 │   ├── market/            # simulator, order_book, loader
 │   ├── execution/         # engine + strategies/ (base, twap, vwap, almgren_chriss, qubo)
 │   ├── optimization/      # qubo, hft_qubo, ising, schedule, solvers/ (exact, annealing, greedy, qaoa)
-│   ├── microstructure/    # kyle, vpin, adverse_selection, queue, analyzer, regime
+│   ├── microstructure/    # kyle, vpin, adverse_selection, analyzer, regime
 │   ├── runtime/           # policy, optimizer, engine, controller, hft_pipeline, decision, resilience, latency
 │   ├── hardware/          # ibm (IBM Quantum runtime access), mitigation
 │   └── analysis/          # shortfall, walk_forward, stress, runners

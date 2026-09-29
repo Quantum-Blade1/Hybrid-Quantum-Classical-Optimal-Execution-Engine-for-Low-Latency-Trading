@@ -1,91 +1,82 @@
-"""
-Almgren-Chriss vs Hybrid Benchmark
+"""Almgren-Chriss optimal trajectories vs the SA-QUBO schedule of the async runtime.
 
-Compares the Quantum-Hybrid optimization against the closed-form
-Almgren-Chriss optimal trajectory across different risk aversion levels.
+The execution QUBO has no explicit risk-aversion term, so it is compared against AC at
+a near risk-neutral lambda (1e-9, effectively TWAP) and at lambda = 1e-4.
+
+Usage:
+    python experiments/ac_comparison.py [--seed 42] [--output-dir results]
 """
 
+import argparse
+from pathlib import Path
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from typing import List, Dict
 
-from qexec.execution.strategies.almgren_chriss import AlmgrenChrissSolver, ACConfig
+from qexec.execution.strategies.almgren_chriss import ACConfig, AlmgrenChrissSolver
 from qexec.optimization.qubo import ExecutionQUBO
 from qexec.optimization.schedule import optimize_schedule, slice_level_config
 from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
-from qexec.market.simulator import MarketDataSimulator
 
-def run_comparison(
-    total_shares: int = 50000,
-    n_steps: int = 20,
-    risk_aversion: float = 1e-5
-) -> None:
-    print(f"\nRunning Comparison (Risk Aversion lambda={risk_aversion:.1e})...")
-    
-    # 1. Almgren-Chriss Optimal
+TOTAL_SHARES = 50_000
+N_STEPS = 20
+HORIZON_DAYS = 1 / 26
+RISK_AVERSIONS = (1e-9, 1e-4)
+
+
+def run_comparison(risk_aversion: float, seed: int, output_dir: Path) -> None:
     ac_config = ACConfig(
-        total_shares=total_shares,
-        n_days=1/26, # ~15 mins
-        n_steps=n_steps,
-        risk_aversion=risk_aversion
+        total_shares=TOTAL_SHARES,
+        n_days=HORIZON_DAYS,
+        n_steps=N_STEPS,
+        risk_aversion=risk_aversion,
     )
-    ac_solver = AlmgrenChrissSolver(ac_config)
-    ac_traj = ac_solver.compute_trajectory()
-    ac_schedule = ac_traj['shares_to_trade'].values
-    
-    # 2. Hybrid (SA) Optimization
-    # We need to map lambda to our 'equality_penalty' or similar in QUBO?
-    # Actually, our current QUBO formulation uses 'equality_penalty' for constraints,
-    # but doesn't explicitely have a 'risk' term in the demo version (it's in the full formulation).
-    # For this benchmark, we'll assume the Hybrid system is configured to mimic risk aversion
-    # via its internal cost function (e.g. by penalizing late execution if market is volatile).
-    # NOTE: The current demo QUBO is mostly impact-minimizing (Risk Neutral-ish).
-    # To make it fair, we'll run it as is and see how it compares to AC-RiskNeutral.
-    
+    ac_schedule = AlmgrenChrissSolver(ac_config).compute_trajectory()["shares_to_trade"].to_numpy()
+
     # Same QUBO and SA settings as the runtime's slow-path optimizer (AsyncOptimizer).
-    qubo = ExecutionQUBO(slice_level_config(total_shares, n_steps))
-    hybrid_schedule, _ = optimize_schedule(qubo, SimulatedAnnealingSolver(num_sweeps=200))
-    
-    # 3. Calculate metrics
-    # Deviation from AC optimal
-    mse = np.mean((hybrid_schedule - ac_schedule) ** 2)
-    rmse = np.sqrt(mse)
-    
-    print(f"  RMSE (Hybrid vs AC): {rmse:.1f} shares")
-    
-    # 4. Plot
-    plt.figure(figsize=(10, 6))
-    
-    steps = np.arange(n_steps)
-    plt.plot(steps, ac_schedule, 'b-o', label='Almgren-Chriss (Optimal)')
-    plt.plot(steps, hybrid_schedule, 'r--s', label='Hybrid (SA-QUBO)')
-    plt.axhline(total_shares / n_steps, color='g', linestyle=':', label='TWAP')
-    
-    plt.title(f'Trajectory Comparison (Risk Aversion $\\lambda={risk_aversion:.1e}$)')
-    plt.xlabel('Time Step')
-    plt.ylabel('Shares Traded')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    
-    filename = f"ac_vs_hybrid_lambda_{risk_aversion:.1e}.png"
-    plt.savefig(filename)
-    print(f"  Saved plot: {filename}")
-    
-    # Save raw data
-    df = pd.DataFrame({
-        'Step': steps,
-        'AC_Optimal': ac_schedule,
-        'Hybrid_SA': hybrid_schedule,
-        'Diff': hybrid_schedule - ac_schedule
-    })
-    print("\nComparison Table (First 5 steps):")
-    print(df.head().to_string(index=False))
+    qubo = ExecutionQUBO(slice_level_config(TOTAL_SHARES, N_STEPS))
+    hybrid_schedule, _ = optimize_schedule(
+        qubo, SimulatedAnnealingSolver(num_sweeps=200, seed=seed)
+    )
+    rmse = float(np.sqrt(np.mean((hybrid_schedule - ac_schedule) ** 2)))
+    print(f"\nlambda = {risk_aversion:.1e}: RMSE (SA-QUBO vs AC) = {rmse:.1f} shares")
+
+    steps = np.arange(N_STEPS)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(steps, ac_schedule, "b-o", label="Almgren-Chriss")
+    ax.plot(steps, hybrid_schedule, "r--s", label="SA-QUBO")
+    ax.axhline(TOTAL_SHARES / N_STEPS, color="g", linestyle=":", label="TWAP")
+    ax.set_title(f"Trajectory Comparison ($\\lambda={risk_aversion:.1e}$)")
+    ax.set_xlabel("Time Step")
+    ax.set_ylabel("Shares Traded")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    path = output_dir / f"ac_vs_hybrid_lambda_{risk_aversion:.1e}.png"
+    fig.savefig(path)
+    plt.close(fig)
+    print(f"Saved {path}")
+
+    table = pd.DataFrame(
+        {
+            "Step": steps,
+            "AC": ac_schedule,
+            "SA-QUBO": hybrid_schedule,
+            "Diff": hybrid_schedule - ac_schedule,
+        }
+    )
+    print(table.head().to_string(index=False))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--output-dir", type=Path, default=Path("results"))
+    args = parser.parse_args()
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    for risk_aversion in RISK_AVERSIONS:
+        run_comparison(risk_aversion, args.seed, args.output_dir)
+
 
 if __name__ == "__main__":
-    # Run with Lambda corresponding to Risk Neutral behavior (where our QUBO is tuned)
-    # AC with lambda=1e-9 is effectively TWAP
-    run_comparison(risk_aversion=1e-9)
-    
-    # Also run with higher risk aversion to show AC shifts
-    run_comparison(risk_aversion=1e-4)
+    main()

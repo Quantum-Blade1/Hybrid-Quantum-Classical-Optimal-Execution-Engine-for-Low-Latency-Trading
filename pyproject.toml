@@ -65,6 +65,8 @@ ignore = [
 "tests/**" = ["PLR0915", "PLC0415"]
 # qiskit-ibm-runtime is the optional `hardware` extra, so it is imported only when used.
 "src/qexec/hardware/ibm.py" = ["PLC0415"]
+# gurobipy is an optional, separately licensed solver imported only when installed.
+"experiments/solver_benchmark.py" = ["PLC0415"]
 
 [tool.mypy]
 strict = false
