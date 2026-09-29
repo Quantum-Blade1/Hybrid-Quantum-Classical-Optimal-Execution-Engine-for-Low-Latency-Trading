@@ -94,6 +94,48 @@ $$ |\psi(\gamma, \beta)\rangle = e^{-i\beta H_B} e^{-i\gamma H_C} \dots e^{-i\be
 
 ---
 
+## 🧪 Evaluation Model (what the experiments actually compute)
+
+This section documents the modelling decisions behind every number in `results/` (Phase 6). Where it disagrees with the intuition sections above, this section describes the code.
+
+### 1. Execution simulation (one fill model for every strategy)
+All strategy comparisons (`experiments/{is_comparison,strategy_comparison,stress_test,walk_forward}.py`) execute through `qexec.execution.engine.ExecutionEngine`:
+
+* **Book.** For minute $k$ with mid $m_k$, spread $s_k$ and bar volume $V_k$, a synthetic book is generated with 10 levels per side, one tick apart, level sizes $\max(10,\ \lfloor b_k\,0.7^i\,\xi_{k,i}\rfloor)$ with $b_k=\max(100,\ 1000\,V_k/10^5)$ and $\xi_{k,i}\sim\mathrm{LogNormal}(0,0.5)$. A marketable child order walks this book. This is the only impact model; it is temporary (each bar's book is fresh, there is no permanent impact and no decay kernel).
+* **No liquidity, no fill.** A bar with $V_k=0$ (e.g. the stress "market outage") has an empty book and fills nothing. Before Phase 6 the hybrid runner filled at $m_k+s_k/2$ in such bars, which with the outage's \$1000 spread produced a 6,185 bps "slippage" (audit F6).
+* **Carry forward.** Shares a child order does not fill are added to the next minute's target. Shares still unfilled after the last bar are *not* dropped: they are charged as opportunity cost (below).
+* **Common random numbers.** Level sizes for minute $k$ are drawn from a generator seeded by $(\text{seed}, k)$. Every strategy run on the same market path with the same seed faces the identical book in every minute, so paired differences between strategies measure the schedule, not the book noise.
+* **Participation.** VWAP keeps its own cap (10% of forecast volume per minute); the other schedules are limited only by the book depth. No strategy sees future bars: VWAP uses the simulator's *expected* volume curve (or a training-window profile in the walk-forward), and the hybrid's re-planning receives only bars $0..k$.
+
+### 2. Implementation shortfall (Perold 1988)
+For a buy of $N$ shares with arrival mid $P_0$ (decision price = arrival price), fills $n_i$ at $p_i$ and $U$ unfilled shares:
+
+$$\mathrm{IS} = \underbrace{\sum_i n_i (p_i - P_0)}_{\text{execution cost}} + \underbrace{U\,(P_c - P_0)}_{\text{opportunity cost}}, \qquad \mathrm{IS}_{\text{bps}} = 10^4\,\frac{\mathrm{IS}}{N P_0}.$$
+
+$P_c$ is the average price of a clean-up market order for the $U$ shares against the *final* bar's book (shares beyond the book's depth at its deepest level; the far touch $P_T+s_T/2$ if the final bar has no volume). A strategy that underfills is therefore charged the spread and the impact of completing its remainder at once and cannot look cheaper by not trading. The execution cost splits exactly into half-spread $\sum n_i(a_i-m_i)$, impact $\sum n_i(p_i-a_i)$ (walking past the touch $a_i$) and timing $\sum n_i(m_i-P_0)$. `StrategyComparison.best_strategy` ranks by $\mathrm{IS}$ (it used to rank by spread + impact on filled shares only).
+
+### 3. Schedules
+* **Repair.** QUBO solutions select discrete quantity levels ($\{0, \lfloor N/2T\rfloor, \lfloor N/T\rfloor\}$), so decoded schedules can miss the order (4,997 of 5,000) or overshoot it off the equality constraint. `repair_schedule` rescales proportionally and applies largest-remainder rounding so the integer schedule sums to $N$ exactly; an all-zero schedule becomes uniform. The pre-repair total is reported where relevant.
+* **Async re-planning.** A policy published while an order is executing plans the whole order. At tick $t$ the fast path replaces its plan from $t$ on with the policy's schedule tail rescaled (repaired) to the shares still unexecuted, so the order completes after any number of policy switches and never overfills.
+* **Hybrid.** Starts uniform; at 5 evenly spaced checkpoints the decision layer may re-solve the remaining shares with SA over the remaining minutes. Its improvement tracker is seeded with five synthetic 5% improvements (audit F5): an assumed prior, not a measurement.
+
+### 4. Statistics
+Each strategy experiment is repeated over independent seeds (default 30; 3 in `--quick` mode). A seed fixes the market path and the books, so strategies are compared *paired by seed*. Reported: mean, sample std, 95% percentile-bootstrap CI of the mean (10,000 resamples, seeded), and for each strategy vs TWAP and vs VWAP the mean paired difference with its bootstrap CI and the two-sided Wilcoxon signed-rank p-value. Walk-forward windows within one seed share a price history, so the unit of observation there is the per-seed mean over windows. No multiple-comparison correction is applied; p-values are reported as computed.
+
+### 5. Solver quality
+For a QUBO with exact bounds $E_{\min}, E_{\max}$ (exhaustive enumeration, $n\le 20$):
+* approximation ratio $r(E)=(E_{\max}-E)/(E_{\max}-E_{\min})$ (valid for signed energies; $1$ = optimal, $0$ = worst);
+* optimality gap $(E-E_{\min})/|E_{\min}|$;
+* **success probability** $P_{\text{opt}}$: probability mass of the final QAOA distribution on the optimal set $\{x: E(x)\le E_{\min}+10^{-6}\}$, estimated from the final shots (not the frequency of the best sampled bitstring);
+* $\langle H\rangle$ ratio: $r(\langle E\rangle)$ of the mean energy of the final distribution;
+* best-of-shots energy, which saturates once the shot budget is comparable to $2^n$ (audit F2);
+* **uniform-random baseline** with the same total shot budget as QAOA (all optimisation shots plus the final shots): its exact $P_{\text{opt}} = |\text{opt set}|/2^n$, its exact $\langle E\rangle$ (mean over all $2^n$ energies) and its best-of-shots energy from a seeded sample of that size.
+
+### 6. Latency
+Fast-path latency is the wall time of one `AsyncExecutionEngine` tick (policy poll, re-plan, execute; the sleep between ticks is excluded) and of one `HFTQuantumPipeline` tick (estimator updates + policy application), measured with `time.monotonic_ns` in CPython on the machine named in the manifest. These are Python-thread latencies, not kernel-bypass numbers.
+
+---
+
 ## 📐 Appendix: Key Mathematical Concepts Used
 
 ### 1. Linear Algebra (The Core)

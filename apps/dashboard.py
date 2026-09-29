@@ -87,7 +87,7 @@ def start_simulation(config: dict[str, Any]) -> None:
         seed=config["seed"],
     )
     controller.optimizer.start(config["total_shares"], config["duration"])
-    controller.engine.start(config["duration"] * TICKS_PER_MINUTE)
+    controller.engine.start(config["duration"] * TICKS_PER_MINUTE, config["total_shares"])
     st.session_state.controller = controller
     st.toast("Simulation started")
 

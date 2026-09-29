@@ -7,7 +7,7 @@ walk-forward backtest and the analysis runners.
 from typing import Protocol
 
 import numpy as np
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 
 from qexec.optimization.qubo import QUBOConfig
 from qexec.optimization.solvers.result import BinaryVector, QUBOResult, QUBOSolver
@@ -41,6 +41,29 @@ def slice_level_config(
     if impact_coefficient is not None:
         config.impact_coefficient = impact_coefficient
     return config
+
+
+def repair_schedule(quantities: ArrayLike, total_shares: int) -> NDArray[np.int_]:
+    """Integer schedule proportional to `quantities` that sums exactly to `total_shares`.
+
+    QUBO solutions select discrete quantity levels, so the decoded schedule can miss the
+    order size (e.g. 4,997 of 5,000 shares) or, off the equality constraint, overshoot it.
+    The shape is kept by rescaling, then largest-remainder rounding makes the integers sum
+    to the order. An all-zero (or empty-mass) schedule becomes a uniform split.
+    """
+    q = np.clip(np.asarray(quantities, dtype=np.float64), 0.0, None)
+    if q.ndim != 1 or q.size == 0:
+        raise ValueError("quantities must be a non-empty 1-D array")
+    if total_shares < 0:
+        raise ValueError("total_shares must be non-negative")
+    mass = q.sum()
+    scaled = q * (total_shares / mass) if mass > 0 else np.full(q.size, total_shares / q.size)
+    rounded = np.floor(scaled).astype(np.int_)
+    missing = total_shares - int(rounded.sum())
+    # Largest fractional parts first; ties go to the earliest slice.
+    order = np.argsort(-(scaled - rounded), kind="stable")
+    rounded[order[:missing]] += 1
+    return rounded
 
 
 def optimize_schedule(

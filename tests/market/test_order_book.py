@@ -11,7 +11,7 @@ from qexec.market.order_book import OrderBook, OrderBookSnapshot, PriceLevel
 @given(
     mid=st.floats(1.0, 1000.0),
     spread_ticks=st.integers(1, 20),
-    volume=st.integers(0, 1_000_000),
+    volume=st.integers(1, 1_000_000),
     seed=st.integers(0, 1000),
 )
 def test_snapshot_levels_are_ordered_outside_the_mid(mid, spread_ticks, volume, seed):
@@ -21,6 +21,25 @@ def test_snapshot_levels_are_ordered_outside_the_mid(mid, spread_ticks, volume, 
     assert bids[0] <= mid <= asks[0]
     assert np.all(np.diff(bids) < 0) and np.all(np.diff(asks) > 0)
     assert all(level.quantity >= 10 for level in snap.bids + snap.asks)
+
+
+def test_bar_without_volume_has_no_liquidity():
+    # Regression (claims audit F6): outage bars used to get a 100-share minimum book.
+    book = OrderBook(seed=0)
+    snap = book.generate_snapshot(100.0, 0.02, 0)
+    assert snap.bids == [] and snap.asks == []
+    assert book.simulate_execution(snap, 500, "buy") == (0.0, 0, 0.0)
+
+
+def test_keyed_snapshots_are_common_random_numbers():
+    # Same (seed, minute) gives the same book whatever else the book was used for.
+    a, b = OrderBook(seed=5), OrderBook(seed=5)
+    a.generate_snapshot(100.0, 0.02, 50_000)  # advances a's own stream only
+    snap_a = a.generate_snapshot(100.0, 0.02, 50_000, key=17)
+    snap_b = b.generate_snapshot(100.0, 0.02, 50_000, key=17)
+    assert [lvl.quantity for lvl in snap_a.asks] == [lvl.quantity for lvl in snap_b.asks]
+    other = b.generate_snapshot(100.0, 0.02, 50_000, key=18)
+    assert [lvl.quantity for lvl in other.asks] != [lvl.quantity for lvl in snap_b.asks]
 
 
 BOOK = OrderBookSnapshot(

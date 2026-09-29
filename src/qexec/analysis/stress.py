@@ -3,16 +3,18 @@
 Scenarios: flash crash (50% linear drop over 5 minutes from minute 20, then a slow
 recovery), liquidity crisis (spread 10x and volume -90% over minutes 20-40), volatility
 spike (N(0, $5) price jumps over minutes 15-44) and market outage (minutes 25-35 with
-zero volume, frozen price and a $1000 spread).
+zero volume, frozen price and a $1000 spread). Nothing fills in a zero-volume bar; the
+engine carries the shares forward.
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 
-from qexec.analysis.runners import ExecutionResult, run_hybrid_execution, run_vwap_execution
+from qexec.analysis.runners import STRATEGIES, run_strategy
 from qexec.market.simulator import MarketDataSimulator, MarketParams
 
 logger = logging.getLogger(__name__)
@@ -23,12 +25,15 @@ BASE_VOLATILITY = 0.0002
 
 @dataclass(frozen=True)
 class StressResult:
+    """One strategy on one scenario and seed; costs in bps of arrival notional."""
+
     scenario_name: str
-    is_hybrid: bool
-    total_cost: float
-    slippage_bps: float
-    filled_shares: int
+    strategy: str
+    seed: int
     fill_rate: float
+    shortfall_bps: float
+    execution_cost_bps: float
+    opportunity_cost_bps: float
     crashed: bool = False
     error_msg: str = ""
 
@@ -101,82 +106,68 @@ class StressGenerator:
         return data
 
 
-class StressRunner:
-    """Runs VWAP and the hybrid runner on each scenario and tabulates fills and costs."""
+SCENARIOS = ("Flash Crash", "Liquidity Crisis", "Volatility Spike", "Market Outage")
 
-    def __init__(self, total_shares: int = 50_000, seed: int = 42) -> None:
+
+def scenario_data(name: str, seed: int) -> pd.DataFrame:
+    generators: dict[str, Callable[..., pd.DataFrame]] = {
+        "Flash Crash": StressGenerator.flash_crash,
+        "Liquidity Crisis": StressGenerator.liquidity_crisis,
+        "Volatility Spike": StressGenerator.volatility_spike,
+        "Market Outage": StressGenerator.market_outage,
+    }
+    return generators[name](seed=seed)
+
+
+class StressRunner:
+    """Runs every strategy in `strategies` on each scenario through the same engine.
+
+    All strategies on a (scenario, seed) share the price path and the per-minute books.
+    """
+
+    def __init__(
+        self,
+        total_shares: int = 50_000,
+        seed: int = 42,
+        strategies: tuple[str, ...] = STRATEGIES,
+    ) -> None:
         self.total_shares = total_shares
         self.seed = seed
-
-    def scenarios(self) -> list[tuple[str, pd.DataFrame]]:
-        return [
-            ("Flash Crash", StressGenerator.flash_crash(seed=self.seed)),
-            ("Liquidity Crisis", StressGenerator.liquidity_crisis(seed=self.seed)),
-            ("Volatility Spike", StressGenerator.volatility_spike(seed=self.seed)),
-            ("Market Outage", StressGenerator.market_outage(seed=self.seed)),
-        ]
-
-    def _result(self, name: str, is_hybrid: bool, res: ExecutionResult) -> StressResult:
-        return StressResult(
-            scenario_name=name,
-            is_hybrid=is_hybrid,
-            total_cost=res.total_cost,
-            slippage_bps=res.slippage_bps,
-            filled_shares=res.executed_shares,
-            fill_rate=res.executed_shares / self.total_shares,
-        )
+        self.strategies = strategies
 
     def run_scenario(self, name: str, data: pd.DataFrame) -> list[StressResult]:
-        """One result per mode; a mode that raises is recorded as crashed."""
+        """One result per strategy; a strategy that raises is recorded as crashed."""
         results = []
-        modes = [
-            (False, lambda: run_vwap_execution(data, self.total_shares, seed=self.seed)),
-            (
-                True,
-                lambda: run_hybrid_execution(
-                    data, self.total_shares, lambda_tradeoff=0.5, seed=self.seed
-                ),
-            ),
-        ]
-        for is_hybrid, run in modes:
-            mode = "hybrid" if is_hybrid else "classical"
-            # Stress data can break any stage of either pipeline; record it as a crash.
+        for strategy in self.strategies:
+            # Stress data can break any stage of a pipeline; record it as a crash.
             try:
-                results.append(self._result(name, is_hybrid, run()))
+                res = run_strategy(strategy, data, self.total_shares, seed=self.seed)
             except Exception as e:
-                logger.exception("%s: %s run crashed", name, mode)
+                logger.exception("%s: %s crashed", name, strategy)
                 results.append(
-                    StressResult(
-                        scenario_name=name,
-                        is_hybrid=is_hybrid,
-                        total_cost=0.0,
-                        slippage_bps=0.0,
-                        filled_shares=0,
-                        fill_rate=0.0,
-                        crashed=True,
-                        error_msg=str(e),
-                    )
+                    StressResult(name, strategy, self.seed, 0.0, 0.0, 0.0, 0.0, True, str(e))
                 )
+                continue
+            m = res.metrics()
+            results.append(
+                StressResult(
+                    scenario_name=name,
+                    strategy=strategy,
+                    seed=self.seed,
+                    fill_rate=res.fill_rate,
+                    shortfall_bps=res.shortfall_bps,
+                    execution_cost_bps=res.execution_cost_bps,
+                    opportunity_cost_bps=float(m["opportunity_cost_bps"]),
+                )
+            )
         return results
 
     def run_suite(self) -> list[StressResult]:
         results = []
-        for name, data in self.scenarios():
-            results.extend(self.run_scenario(name, data))
+        for name in SCENARIOS:
+            results.extend(self.run_scenario(name, scenario_data(name, self.seed)))
         return results
 
 
 def results_table(results: list[StressResult]) -> pd.DataFrame:
-    return pd.DataFrame(
-        [
-            {
-                "Scenario": r.scenario_name,
-                "Mode": "Hybrid" if r.is_hybrid else "Classical",
-                "Crashed": "YES" if r.crashed else "No",
-                "Fill %": f"{r.fill_rate * 100:.1f}%",
-                "Slippage": f"{r.slippage_bps:.1f}",
-                "Cost": f"${r.total_cost:,.0f}",
-            }
-            for r in results
-        ]
-    )
+    return pd.DataFrame([vars(r) for r in results])

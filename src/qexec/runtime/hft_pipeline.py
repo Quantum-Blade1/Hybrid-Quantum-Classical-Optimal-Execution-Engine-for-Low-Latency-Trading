@@ -17,7 +17,7 @@ from numpy.typing import NDArray
 from qexec.microstructure.analyzer import MicrostructureAnalyzer, MicrostructureState
 from qexec.microstructure.regime import AdaptiveRiskManager, RegimeState
 from qexec.optimization.hft_qubo import HFTExecutionQUBO, HFTQUBOConfig
-from qexec.optimization.schedule import optimize_schedule
+from qexec.optimization.schedule import optimize_schedule, repair_schedule
 from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
 from qexec.runtime.latency import LatencyMonitor, LatencySpan
 from qexec.runtime.policy import ExecutionPolicy, PolicyQueue
@@ -247,11 +247,8 @@ class HFTQuantumPipeline:
             with LatencySpan(LatencyMonitor.SLOW_PATH_SOLVE, self.latency):
                 schedule, result = optimize_schedule(qubo, solver, Q)
 
-        sched_sum = schedule.sum()
-        if sched_sum > 0:
-            schedule = schedule * (config.total_shares / sched_sum)
         policy = ExecutionPolicy(
-            schedule=schedule,
+            schedule=repair_schedule(schedule, config.total_shares).astype(np.float64),
             optimizer_name="hft_qubo_sa",
             optimization_time=time.monotonic() - opt_start,
             energy=result.energy,

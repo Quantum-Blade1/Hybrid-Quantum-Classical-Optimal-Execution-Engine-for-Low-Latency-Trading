@@ -1,11 +1,15 @@
-"""Seeded walk-forward backtest of static VWAP, adaptive VWAP and SA-QUBO schedules.
+"""Seeded walk-forward backtest of TWAP, static VWAP, adaptive VWAP and SA-QUBO schedules.
 
 Each window trains on `train_days` simulated days and tests on the next `test_days`:
-    static   - VWAP on the first training day's volume profile (stale forecast)
-    adaptive - VWAP on the mean training-window volume profile
-    hybrid   - SA-solved `slice_level_config` QUBO with the training-window volatility
-Shortfall per test day is slippage vs arrival x arrival price x order size (positive = cost).
-All three strategies on a given day share one order-book seed (common random numbers).
+    TWAP     - uniform over the day
+    Static   - VWAP on the first training day's volume profile (stale forecast)
+    Adaptive - VWAP on the mean training-window volume profile
+    Hybrid   - SA-solved `slice_level_config` QUBO with the training-window volatility,
+               repaired to the order size and spread evenly within each slice
+Shortfall per test day is the implementation shortfall in bps of arrival notional,
+including the opportunity cost of unfilled shares (positive = cost); a window reports the
+mean over its test days. All strategies on a given day go through the same engine with
+the same book seed, so they face identical books minute by minute.
 """
 
 import logging
@@ -22,7 +26,12 @@ from qexec.execution.strategies.vwap import VWAPStrategy
 from qexec.market.order_book import OrderBook
 from qexec.market.simulator import TRADING_DAYS_PER_YEAR, MarketDataSimulator, MarketParams
 from qexec.optimization.qubo import ExecutionQUBO
-from qexec.optimization.schedule import optimize_schedule, slice_level_config
+from qexec.optimization.schedule import (
+    optimize_schedule,
+    repair_schedule,
+    slice_level_config,
+    spread_over_minutes,
+)
 from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
 
 logger = logging.getLogger(__name__)
@@ -33,24 +42,21 @@ _SA_SWEEPS = 300
 _MIN_DAILY_VOLATILITY = 0.001
 
 
+WALK_FORWARD_STRATEGIES = ("TWAP", "Static", "Adaptive", "Hybrid")
+
+
 @dataclass(frozen=True)
 class WindowResult:
-    """Summed implementation shortfall ($) over one window's test days."""
+    """Mean shortfall (bps, incl. opportunity cost) and fill rate over one window's test days."""
 
     window_id: int
-    shortfall_static: float
-    shortfall_adaptive: float
-    shortfall_hybrid: float
+    shortfall_bps: dict[str, float]
+    fill_rate: dict[str, float]
     train_volatility: float
 
     @property
     def winner(self) -> str:
-        scores = {
-            "Static": self.shortfall_static,
-            "Adaptive": self.shortfall_adaptive,
-            "Hybrid": self.shortfall_hybrid,
-        }
-        return min(scores, key=lambda name: scores[name])
+        return min(self.shortfall_bps, key=lambda name: self.shortfall_bps[name])
 
 
 class WalkForwardAnalyzer:
@@ -99,19 +105,17 @@ class WalkForwardAnalyzer:
                 w, all_days[start:train_end], all_days[train_end:test_end], seeds
             )
             logger.info(
-                "window %d: vol %.1f%% static $%.0f adaptive $%.0f hybrid $%.0f (%s)",
+                "window %d: vol %.1f%% shortfall %s (%s)",
                 w,
                 100 * result.train_volatility,
-                result.shortfall_static,
-                result.shortfall_adaptive,
-                result.shortfall_hybrid,
+                {k: round(v, 2) for k, v in result.shortfall_bps.items()},
                 result.winner,
             )
             results.append(result)
         return results
 
     def _hybrid_schedule(self, num_minutes: int, train_vol: float) -> NDArray[np.float64]:
-        """SA-QUBO slice quantities at each slice's first minute, scaled to the order size."""
+        """SA-QUBO slice quantities, repaired to the order size and spread over each slice."""
         num_slices = min(_MAX_QUBO_SLICES, num_minutes)
         config = slice_level_config(
             self.daily_shares,
@@ -122,21 +126,14 @@ class WalkForwardAnalyzer:
         slice_qty, _ = optimize_schedule(
             ExecutionQUBO(config), SimulatedAnnealingSolver(num_sweeps=_SA_SWEEPS, seed=self.seed)
         )
-        schedule = np.zeros(num_minutes)
-        minutes_per_slice = max(1, num_minutes // num_slices)
-        for t, quantity in enumerate(slice_qty):
-            if quantity > 0:
-                schedule[min(t * minutes_per_slice, num_minutes - 1)] += quantity
-        total = schedule.sum()
-        if total > 0:
-            return np.asarray(schedule * (self.daily_shares / total))
-        return np.full(num_minutes, self.daily_shares / num_minutes)
+        repaired = repair_schedule(slice_qty, self.daily_shares).astype(float)
+        return spread_over_minutes(repaired, num_minutes)
 
     def _shortfall(
-        self, day: pd.DataFrame, strategy: BaseStrategy, engine: ExecutionEngine
-    ) -> float:
-        report: ExecutionReport = engine.process_order(self._create_order(), day, strategy)
-        return report.slippage_vs_arrival_bps / 10_000 * report.arrival_price * self.daily_shares
+        self, day: pd.DataFrame, strategy: BaseStrategy, book_seed: int
+    ) -> ExecutionReport:
+        engine = ExecutionEngine(OrderBook(seed=book_seed))
+        return engine.process_order(self._create_order(), day, strategy)
 
     def _process_window(
         self,
@@ -150,36 +147,24 @@ class WalkForwardAnalyzer:
         returns = pd.concat(train_data)["price"].pct_change().dropna()
         train_vol = float(returns.std() * np.sqrt(MINUTES_PER_DAY * TRADING_DAYS_PER_YEAR))
 
-        total_static = total_adaptive = total_hybrid = 0.0
+        shortfalls: dict[str, list[float]] = {name: [] for name in WALK_FORWARD_STRATEGIES}
+        fills: dict[str, list[float]] = {name: [] for name in WALK_FORWARD_STRATEGIES}
         for day, book_seed in zip(test_data, book_seeds, strict=True):
-            eng_s = ExecutionEngine(OrderBook(seed=book_seed))
-            total_static += self._shortfall(
-                day,
-                VWAPStrategy(
-                    historical_profile=static_profile, order_book=eng_s.order_book, seed=book_seed
-                ),
-                eng_s,
-            )
-            eng_a = ExecutionEngine(OrderBook(seed=book_seed))
-            total_adaptive += self._shortfall(
-                day,
-                VWAPStrategy(
-                    historical_profile=avg_volume_profile,
-                    order_book=eng_a.order_book,
-                    seed=book_seed,
-                ),
-                eng_a,
-            )
-            eng_h = ExecutionEngine(OrderBook(seed=book_seed))
-            total_hybrid += self._shortfall(
-                day, FixedScheduleStrategy(self._hybrid_schedule(len(day), train_vol)), eng_h
-            )
+            strategies: dict[str, BaseStrategy] = {
+                "TWAP": FixedScheduleStrategy(np.ones(len(day))),
+                "Static": VWAPStrategy(historical_profile=static_profile, seed=book_seed),
+                "Adaptive": VWAPStrategy(historical_profile=avg_volume_profile, seed=book_seed),
+                "Hybrid": FixedScheduleStrategy(self._hybrid_schedule(len(day), train_vol)),
+            }
+            for name, strategy in strategies.items():
+                report = self._shortfall(day, strategy, book_seed)
+                shortfalls[name].append(report.implementation_shortfall_bps)
+                fills[name].append(report.fill_rate)
 
         return WindowResult(
             window_id=window_id,
-            shortfall_static=total_static,
-            shortfall_adaptive=total_adaptive,
-            shortfall_hybrid=total_hybrid,
+            shortfall_bps={k: float(np.mean(v)) for k, v in shortfalls.items()},
+            fill_rate={k: float(np.mean(v)) for k, v in fills.items()},
             train_volatility=train_vol,
         )
 

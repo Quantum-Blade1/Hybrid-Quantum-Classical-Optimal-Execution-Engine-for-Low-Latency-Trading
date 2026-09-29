@@ -1,6 +1,7 @@
 """Execution policies and the latest-value queue that carries them from slow to fast path."""
 
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from threading import Lock
@@ -13,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ExecutionPolicy:
-    """Shares to execute per time step; `policy_id` is assigned by `PolicyQueue.publish`."""
+    """Shares to execute per time step; `policy_id` and `published_ns` (monotonic clock)
+    are set by `PolicyQueue.publish`."""
 
     schedule: NDArray[np.float64]
     timestamp: datetime = field(default_factory=datetime.now)
@@ -21,6 +23,7 @@ class ExecutionPolicy:
     optimizer_name: str = "default"
     optimization_time: float = 0.0
     energy: float = float("inf")
+    published_ns: int = 0
 
     @property
     def total_shares(self) -> int:
@@ -46,6 +49,7 @@ class PolicyQueue:
         with self._lock:
             self._policy_count += 1
             policy.policy_id = self._policy_count
+            policy.published_ns = time.monotonic_ns()
             self._latest_policy = policy
         logger.debug("Published policy %d", policy.policy_id)
 

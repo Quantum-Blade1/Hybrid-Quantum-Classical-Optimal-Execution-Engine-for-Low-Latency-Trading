@@ -7,6 +7,7 @@ from typing import Any
 import pandas as pd
 
 from qexec.runtime.engine import AsyncExecutionEngine
+from qexec.runtime.latency import LatencyMonitor
 from qexec.runtime.optimizer import AsyncOptimizer
 from qexec.runtime.policy import ExecutionPolicy, PolicyQueue, uniform_schedule
 
@@ -22,16 +23,21 @@ class HybridController:
         optimizer_interval: float = 0.5,
         engine_tick_interval: float = 0.1,
         seed: int | None = None,
+        latency_monitor: LatencyMonitor | None = None,
     ) -> None:
         self.policy_queue = PolicyQueue()
+        self.latency = latency_monitor
         self.optimizer = AsyncOptimizer(
             policy_queue=self.policy_queue,
             optimizer_type=optimizer_type,
             update_interval=optimizer_interval,
             seed=seed,
+            latency_monitor=latency_monitor,
         )
         self.engine = AsyncExecutionEngine(
-            policy_queue=self.policy_queue, tick_interval=engine_tick_interval
+            policy_queue=self.policy_queue,
+            tick_interval=engine_tick_interval,
+            latency_monitor=latency_monitor,
         )
 
     def execute_order(self, total_shares: int, num_slices: int) -> dict[str, Any]:
@@ -46,7 +52,7 @@ class HybridController:
             )
         )
         self.optimizer.start(total_shares, num_slices)
-        self.engine.start(num_slices)
+        self.engine.start(num_slices, total_shares)
         self.engine.wait_complete()
         self.optimizer.stop()
 

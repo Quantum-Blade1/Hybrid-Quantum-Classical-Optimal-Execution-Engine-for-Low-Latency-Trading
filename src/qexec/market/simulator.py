@@ -166,5 +166,8 @@ class MarketDataSimulator:
 
 
 def calculate_vwap(market_data: pd.DataFrame) -> float:
-    """Volume-weighted average of the `price` column."""
-    return float((market_data["price"] * market_data["volume"]).sum() / market_data["volume"].sum())
+    """Volume-weighted average of the `price` column (plain mean if there is no volume)."""
+    total_volume = market_data["volume"].sum()
+    if total_volume <= 0:
+        return float(market_data["price"].mean())
+    return float((market_data["price"] * market_data["volume"]).sum() / total_volume)

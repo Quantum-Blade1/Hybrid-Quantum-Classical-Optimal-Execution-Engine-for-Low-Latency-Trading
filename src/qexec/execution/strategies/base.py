@@ -100,6 +100,18 @@ class BaseStrategy(ABC):
     def calculate_schedule(self, total_shares: int, market_data: pd.DataFrame) -> NDArray[np.int_]:
         """Target shares for each row of `market_data`."""
 
+    def replan(
+        self, minute: int, remaining_shares: int, observed: pd.DataFrame, num_minutes: int
+    ) -> NDArray[np.float64] | None:
+        """Optionally replace the plan from `minute` on, called by `ExecutionEngine` each bar.
+
+        `observed` holds bars 0..minute only (no look-ahead); `remaining_shares` is the
+        unfilled part of the order. Return per-minute targets for minutes
+        `minute..num_minutes-1` (they are repaired to sum to `remaining_shares`), or None
+        to keep the current plan. Static strategies keep the default.
+        """
+        return None
+
     def calculate_benchmark(self, market_data: pd.DataFrame) -> float:
         """Benchmark price; VWAP unless overridden."""
         return calculate_vwap(market_data)
@@ -131,7 +143,7 @@ class BaseStrategy(ABC):
 
         for minute_idx in range(min(len(execution_data), len(schedule))):
             target_qty = int(schedule[minute_idx])
-            if target_qty == 0:
+            if target_qty == 0 or volumes[minute_idx] <= 0:
                 continue
             mid = float(prices[minute_idx])
             spread = float(spreads[minute_idx])

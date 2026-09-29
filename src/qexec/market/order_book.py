@@ -57,7 +57,13 @@ class OrderBookSnapshot:
 
 
 class OrderBook:
-    """Generates book snapshots from mid/spread/volume and walks the book to fill orders."""
+    """Generates book snapshots from mid/spread/volume and walks the book to fill orders.
+
+    With a `seed`, `generate_snapshot(..., key=k)` draws the level sizes from a generator
+    seeded by (seed, k), so two executions that both trade at minute k see the same book
+    (common random numbers across strategies). Without `key` the book's own stream is used.
+    A bar with no volume has no liquidity: its snapshot is empty and nothing fills.
+    """
 
     def __init__(
         self,
@@ -71,22 +77,34 @@ class OrderBook:
         self.tick_size = tick_size
         self.base_level_volume = base_level_volume
         self.volume_decay = volume_decay
+        self.seed = seed
         self.rng = np.random.default_rng(seed)
 
-    def _side_levels(self, best_price: float, direction: int, base_volume: int) -> list[PriceLevel]:
+    def _side_levels(
+        self, best_price: float, direction: int, base_volume: int, rng: np.random.Generator
+    ) -> list[PriceLevel]:
         levels = []
         for i in range(self.num_levels):
             price = best_price + direction * i * self.tick_size
             base_qty = base_volume * (self.volume_decay**i)
-            qty = max(int(base_qty * self.rng.lognormal(0, 0.5)), _MIN_LEVEL_QUANTITY)
+            qty = max(int(base_qty * rng.lognormal(0, 0.5)), _MIN_LEVEL_QUANTITY)
             num_orders = max(1, int(qty / _SHARES_PER_ORDER))
             levels.append(PriceLevel(price=price, quantity=qty, num_orders=num_orders))
         return levels
 
     def generate_snapshot(
-        self, mid_price: float, spread: float, minute_volume: int
+        self, mid_price: float, spread: float, minute_volume: int, key: int | None = None
     ) -> OrderBookSnapshot:
-        """Snapshot with lognormal level sizes decaying geometrically from the touch."""
+        """Snapshot with lognormal level sizes decaying geometrically from the touch.
+
+        Empty when `minute_volume <= 0` (no trading in the bar).
+        """
+        if minute_volume <= 0:
+            return OrderBookSnapshot()
+        if key is not None and self.seed is not None:
+            rng = np.random.default_rng([self.seed, key])
+        else:
+            rng = self.rng
         volume_scale = minute_volume / _TYPICAL_MINUTE_VOLUME
         base_volume = max(int(self.base_level_volume * volume_scale), _MIN_LEVEL_BASE_VOLUME)
 
@@ -94,8 +112,8 @@ class OrderBook:
         best_bid = float(np.floor((mid_price - half_spread) / self.tick_size) * self.tick_size)
         best_ask = float(np.ceil((mid_price + half_spread) / self.tick_size) * self.tick_size)
 
-        bids = self._side_levels(best_bid, -1, base_volume)
-        asks = self._side_levels(best_ask, +1, base_volume)
+        bids = self._side_levels(best_bid, -1, base_volume, rng)
+        asks = self._side_levels(best_ask, +1, base_volume, rng)
         return OrderBookSnapshot(bids=bids, asks=asks)
 
     def simulate_execution(

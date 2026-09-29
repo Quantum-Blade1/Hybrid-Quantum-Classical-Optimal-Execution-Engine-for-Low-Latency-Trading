@@ -17,7 +17,7 @@ from qexec.execution.strategies.twap import TWAPStrategy
 from qexec.execution.strategies.vwap import VWAPStrategy
 from qexec.market.order_book import OrderBook
 from qexec.optimization.qubo import ExecutionQUBO, QUBOConfig
-from qexec.optimization.schedule import optimize_schedule, spread_over_minutes
+from qexec.optimization.schedule import optimize_schedule, repair_schedule, spread_over_minutes
 from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
 from qexec.optimization.solvers.result import QUBOResult
 
@@ -31,7 +31,12 @@ def default_quantity_levels(total_shares: int, num_time_slices: int) -> list[int
 
 
 class QUBOStrategy(BaseStrategy):
-    """Schedule from an `ExecutionQUBO` solved by simulated annealing, spread over minutes."""
+    """Schedule from an `ExecutionQUBO` solved by simulated annealing, spread over minutes.
+
+    The decoded slice quantities are repaired to sum exactly to the order
+    (`repair_schedule`); `get_optimization_stats()["total_shares"]` is the pre-repair sum
+    the QUBO solution selected.
+    """
 
     strategy_name = "QUBO"
 
@@ -81,7 +86,8 @@ class QUBOStrategy(BaseStrategy):
         )
         slice_qty, self.qubo_result = optimize_schedule(self.qubo, solver)
         self.optimization_time = perf_counter() - start
-        return spread_over_minutes(slice_qty, len(market_data)).astype(int)
+        repaired = repair_schedule(slice_qty, total_shares)
+        return spread_over_minutes(repaired.astype(float), len(market_data)).astype(int)
 
     def get_optimization_stats(self) -> dict[str, Any]:
         """Energy, solver effort, constraint check and cost breakdown of the last solve."""
@@ -100,7 +106,13 @@ class QUBOStrategy(BaseStrategy):
 
 @dataclass
 class StrategyComparison:
-    """Engine reports of VWAP, TWAP and QUBO on the same order and market data."""
+    """Engine reports of VWAP, TWAP and QUBO on the same order and market data.
+
+    `best_strategy` has the lowest implementation shortfall including the opportunity
+    cost of unfilled shares, so a strategy cannot rank first by underfilling (spread and
+    impact cost alone are only paid on the shares that were filled).
+    `cost_savings` is the mean shortfall of VWAP and TWAP minus QUBO's, in currency.
+    """
 
     vwap_report: ExecutionReport
     twap_report: ExecutionReport
@@ -112,11 +124,7 @@ class StrategyComparison:
     cost_savings: float = field(init=False)
 
     def __post_init__(self) -> None:
-        costs = {
-            "VWAP": self.vwap_report.total_cost,
-            "TWAP": self.twap_report.total_cost,
-            "QUBO": self.qubo_report.total_cost,
-        }
+        costs = {name: r.implementation_shortfall for name, r in self.reports.items()}
         self.best_strategy = min(costs, key=lambda name: costs[name])
         self.cost_savings = (costs["VWAP"] + costs["TWAP"]) / 2 - costs["QUBO"]
 
@@ -129,6 +137,7 @@ class StrategyComparison:
             ("Avg Exec Price ($)", "average_execution_price", "{:.4f}"),
             ("Benchmark Price ($)", "benchmark_vwap", "{:.4f}"),
             ("Slippage (bps)", "slippage_vs_vwap_bps", "{:+.2f}"),
+            ("Shortfall incl. opp. (bps)", "implementation_shortfall_bps", "{:+.2f}"),
             ("Total Cost ($)", "total_cost", "{:.2f}"),
             ("Spread Cost ($)", "spread_cost", "{:.2f}"),
             ("Impact Cost ($)", "impact_cost", "{:.2f}"),
@@ -154,7 +163,11 @@ def run_integrated_comparison(
     qubo_sa_sweeps: int = 1000,
     seed: int = 42,
 ) -> StrategyComparison:
-    """Execute copies of `parent_order` with VWAP, TWAP and QUBO, each in a fresh engine."""
+    """Execute copies of `parent_order` with VWAP, TWAP and QUBO, each in a fresh engine.
+
+    All three engines use the same book seed, so they face identical books minute by
+    minute. VWAP follows the realised volume of `market_data` (perfect foresight).
+    """
     qubo_strategy = QUBOStrategy(
         num_time_slices=qubo_time_slices, sa_sweeps=qubo_sa_sweeps, seed=seed
     )

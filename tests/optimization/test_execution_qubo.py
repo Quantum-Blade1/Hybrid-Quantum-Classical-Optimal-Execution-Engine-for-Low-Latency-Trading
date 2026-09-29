@@ -10,7 +10,12 @@ from hypothesis import strategies as st
 
 from qexec.optimization.hft_qubo import HFTExecutionQUBO, HFTQUBOConfig
 from qexec.optimization.qubo import ExecutionQUBO, QUBOConfig
-from qexec.optimization.schedule import optimize_schedule, slice_level_config, spread_over_minutes
+from qexec.optimization.schedule import (
+    optimize_schedule,
+    repair_schedule,
+    slice_level_config,
+    spread_over_minutes,
+)
 from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
 from qexec.optimization.solvers.exact import BruteForceSolver
 from qexec.optimization.solvers.metrics import energy_bounds
@@ -204,3 +209,37 @@ def test_toy_execution_qubo_optimum_matches_committed_benchmarks(n):
         records = json.loads((RESULTS_DIR / name).read_text())
         recorded = {round(r["optimal_energy"], 9) for r in records}
         assert recorded == {round(energy_bounds(toy_execution_qubo(n)).min_energy, 9)}
+
+
+# --- Schedule repair ----------------------------------------------------------------------
+
+
+@given(
+    quantities=st.lists(st.floats(0, 1e5, allow_nan=False), min_size=1, max_size=30),
+    total=st.integers(0, 10**7),
+)
+def test_repair_schedule_sums_exactly_to_the_order(quantities, total):
+    repaired = repair_schedule(np.array(quantities), total)
+    assert repaired.dtype.kind == "i"
+    assert repaired.sum() == total
+    assert np.all(repaired >= 0)
+    q = np.array(quantities)
+    if q.sum() > 0:
+        # Proportional up to rounding: each slice is within one share of its exact share.
+        assert np.all(np.abs(repaired - q * total / q.sum()) < 1 + 1e-9)
+        assert np.all(repaired[q == 0] == 0)
+
+
+def test_repair_schedule_fixes_the_sa_4997_of_5000_case():
+    # Levels N/(2T), N/T with integer division cannot reach 5000 exactly for T = 3.
+    qubo = ExecutionQUBO(slice_level_config(5000, 3))
+    slice_qty, _ = optimize_schedule(qubo, BruteForceSolver())
+    assert slice_qty.sum() != 5000
+    repaired = repair_schedule(slice_qty, 5000)
+    assert repaired.sum() == 5000
+
+
+def test_repair_schedule_of_an_empty_plan_is_uniform():
+    assert repair_schedule(np.zeros(4), 10).tolist() == [3, 3, 2, 2]
+    with pytest.raises(ValueError):
+        repair_schedule(np.array([]), 5)

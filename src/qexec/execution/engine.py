@@ -8,6 +8,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
+import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
@@ -19,6 +20,7 @@ from qexec.execution.strategies.base import (
 )
 from qexec.market.order_book import OrderBook
 from qexec.market.simulator import calculate_vwap
+from qexec.optimization.schedule import repair_schedule
 
 
 def _short_id() -> str:
@@ -166,9 +168,36 @@ class ExecutionState:
         return share_weighted_std(self.fill_prices, self.fill_quantities)
 
 
+def implementation_shortfall(
+    side: str,
+    *,
+    arrival_price: float,
+    filled_quantity: int,
+    average_price: float,
+    unfilled_quantity: int,
+    completion_price: float,
+) -> tuple[float, float]:
+    """(execution cost, opportunity cost) in currency, positive = cost, vs the arrival mid.
+
+    Execution cost is sum n_i (p_i - P_0) for a buy (sign flipped for a sell); opportunity
+    cost is U (P_c - P_0) for the U unfilled shares at `completion_price` P_c, the price of
+    completing them at the end of the horizon (`ExecutionEngine` uses a clean-up market
+    order against the final bar's book).
+    """
+    sign = 1.0 if side.lower() == "buy" else -1.0
+    execution = sign * (average_price - arrival_price) * filled_quantity
+    opportunity = sign * (completion_price - arrival_price) * unfilled_quantity
+    return execution, opportunity
+
+
 @dataclass
 class ExecutionReport:
-    """Post-trade analytics of one parent order; slippage is positive when adverse."""
+    """Post-trade analytics of one parent order; slippage is positive when adverse.
+
+    `implementation_shortfall` (currency) = execution cost of the fills vs the arrival mid
+    + opportunity cost of unfilled shares (see `implementation_shortfall()`);
+    `implementation_shortfall_bps` divides it by the arrival notional of the whole order.
+    """
 
     order_id: str
     symbol: str
@@ -193,6 +222,38 @@ class ExecutionReport:
     strategy_used: str
     started_at: datetime | None
     completed_at: datetime | None
+    completion_price: float = 0.0
+
+    @property
+    def unfilled_quantity(self) -> int:
+        return self.total_quantity - self.filled_quantity
+
+    @property
+    def execution_shortfall(self) -> float:
+        return self._shortfall()[0]
+
+    @property
+    def opportunity_cost(self) -> float:
+        return self._shortfall()[1]
+
+    @property
+    def implementation_shortfall(self) -> float:
+        return sum(self._shortfall())
+
+    @property
+    def implementation_shortfall_bps(self) -> float:
+        notional = self.total_quantity * self.arrival_price
+        return self.implementation_shortfall / notional * 10_000 if notional > 0 else 0.0
+
+    def _shortfall(self) -> tuple[float, float]:
+        return implementation_shortfall(
+            self.side,
+            arrival_price=self.arrival_price,
+            filled_quantity=self.filled_quantity,
+            average_price=self.average_execution_price,
+            unfilled_quantity=self.unfilled_quantity,
+            completion_price=self.completion_price,
+        )
 
     def to_dataframe(self) -> pd.DataFrame:
         rows = [
@@ -231,10 +292,27 @@ class ExecutionReport:
 
 class ExecutionEngine:
     """Turns a strategy schedule into child orders, fills them against a simulated book,
-    and reports cost and slippage against VWAP, TWAP and arrival price."""
+    and reports cost and slippage against VWAP, TWAP and arrival price.
 
-    def __init__(self, order_book: OrderBook | None = None, seed: int | None = None) -> None:
+    Fill model (the same for every strategy, docs/MATHEMATICAL_MODEL.md, "Execution
+    simulation"): each minute's child order walks a fresh synthetic book whose depth
+    scales with that bar's volume; a bar with zero volume fills nothing. With
+    `carry_forward` (default), shares a child could not fill are added to the next
+    minute's target, so a liquidity gap delays shares instead of dropping them; shares
+    still unfilled after the last bar count as opportunity cost in the report. The
+    book's level sizes are keyed by (seed, minute), so strategies run with the same
+    `seed` face identical books at every minute.
+    """
+
+    def __init__(
+        self,
+        order_book: OrderBook | None = None,
+        seed: int | None = None,
+        carry_forward: bool = True,
+    ) -> None:
         self.order_book = order_book or OrderBook(seed=seed)
+        self.carry_forward = carry_forward
+        self._minute_offset = 0
         self.state: ExecutionState | None = None
         self.execution_history: list[ExecutionReport] = []
 
@@ -257,14 +335,41 @@ class ExecutionEngine:
         self.state = ExecutionState(parent_order=parent_order, started_at=parent_order.start_time)
 
         execution_data = market_data.iloc[start_minute:end_minute].reset_index(drop=True)
+        self._minute_offset = start_minute
         arrival_price = float(execution_data.iloc[0]["price"])
-        schedule = strategy.calculate_schedule(parent_order.total_quantity, execution_data)
-
-        self.state.child_orders = self._generate_child_orders(
-            parent_order, schedule, execution_data
+        num_minutes = len(execution_data)
+        plan = self._cap_schedule(
+            strategy.calculate_schedule(parent_order.total_quantity, execution_data),
+            parent_order.total_quantity,
+            num_minutes,
         )
-        for child in self.state.child_orders:
-            self._execute_slice(child, parent_order.side.value, execution_data)
+
+        carry = 0
+        for minute_idx in range(num_minutes):
+            remaining = parent_order.remaining_quantity
+            if remaining <= 0:
+                break
+            new_plan = strategy.replan(
+                minute_idx, remaining, execution_data.iloc[: minute_idx + 1], num_minutes
+            )
+            if new_plan is not None:
+                plan[minute_idx:] = repair_schedule(
+                    np.asarray(new_plan, dtype=float)[: num_minutes - minute_idx], remaining
+                )
+                carry = 0
+            target = min(int(plan[minute_idx]) + carry, remaining)
+            if target <= 0:
+                continue
+            child = ChildOrder(
+                parent_id=parent_order.order_id,
+                target_quantity=target,
+                target_time=execution_data.iloc[minute_idx]["timestamp"],
+                sequence=len(self.state.child_orders) + 1,
+                minute_index=minute_idx,
+            )
+            self.state.child_orders.append(child)
+            self._execute_slice(child, parent_order.side.value, execution_data, start_minute)
+            carry = target - child.filled_quantity if self.carry_forward else 0
 
         parent_order.status = (
             OrderStatus.FILLED if parent_order.is_complete else OrderStatus.PARTIALLY_FILLED
@@ -276,28 +381,19 @@ class ExecutionEngine:
         return report
 
     @staticmethod
-    def _generate_child_orders(
-        parent: ParentOrder, schedule: NDArray[Any], market_data: pd.DataFrame
-    ) -> list[ChildOrder]:
-        """One child per scheduled minute, truncated so the children never exceed the parent."""
-        children: list[ChildOrder] = []
-        unassigned = parent.total_quantity
-        for minute_idx, scheduled in enumerate(schedule):
-            target_qty = min(int(scheduled), unassigned)
-            if target_qty > 0:
-                unassigned -= target_qty
-                children.append(
-                    ChildOrder(
-                        parent_id=parent.order_id,
-                        target_quantity=target_qty,
-                        target_time=market_data.iloc[minute_idx]["timestamp"],
-                        sequence=len(children) + 1,
-                        minute_index=minute_idx,
-                    )
-                )
-        return children
+    def _cap_schedule(schedule: NDArray[Any], total: int, num_minutes: int) -> NDArray[np.int_]:
+        """Integer per-minute plan truncated so cumulative targets never exceed the order."""
+        plan = np.zeros(num_minutes, dtype=np.int_)
+        unassigned = total
+        for minute_idx, scheduled in enumerate(np.asarray(schedule)[:num_minutes]):
+            qty = min(max(int(scheduled), 0), unassigned)
+            plan[minute_idx] = qty
+            unassigned -= qty
+        return plan
 
-    def _execute_slice(self, child: ChildOrder, side: str, market_data: pd.DataFrame) -> None:
+    def _execute_slice(
+        self, child: ChildOrder, side: str, market_data: pd.DataFrame, minute_offset: int = 0
+    ) -> None:
         """Fill one child order at its scheduled minute and update parent and state totals."""
         if self.state is None:
             raise RuntimeError("No active execution state")
@@ -313,9 +409,14 @@ class ExecutionEngine:
         child.status = OrderStatus.ACTIVE
         child.market_price_at_execution = mid
         child.spread_at_execution = float(row["spread"])
+        child.executed_at = row["timestamp"]
+        self.state.current_minute = minute_idx + 1
 
         snapshot = self.order_book.generate_snapshot(
-            mid_price=mid, spread=row["spread"], minute_volume=row["volume"]
+            mid_price=mid,
+            spread=row["spread"],
+            minute_volume=int(row["volume"]),
+            key=minute_offset + minute_idx,
         )
         avg_price, filled, impact = self.order_book.simulate_execution(
             snapshot=snapshot, order_size=child.target_quantity, side=side
@@ -324,22 +425,21 @@ class ExecutionEngine:
         child.filled_quantity = filled
         child.execution_price = avg_price
         child.market_impact = impact
-        child.executed_at = row["timestamp"]
+        if filled == 0:
+            child.status = OrderStatus.REJECTED
+            return
         child.status = (
             OrderStatus.FILLED if filled >= child.target_quantity else OrderStatus.PARTIALLY_FILLED
         )
 
         parent.filled_quantity += filled
-        if filled > 0:
-            previous_value = parent.average_price * (parent.filled_quantity - filled)
-            parent.average_price = (previous_value + avg_price * filled) / parent.filled_quantity
-            self.state.total_value_executed += avg_price * filled
-            self.state.fill_prices.append(avg_price)
-            self.state.fill_quantities.append(filled)
-            self.state.total_spread_cost += half_spread_cost(snapshot, mid, side, filled)
-            self.state.total_impact_cost += abs(impact) * filled
-
-        self.state.current_minute = minute_idx + 1
+        previous_value = parent.average_price * (parent.filled_quantity - filled)
+        parent.average_price = (previous_value + avg_price * filled) / parent.filled_quantity
+        self.state.total_value_executed += avg_price * filled
+        self.state.fill_prices.append(avg_price)
+        self.state.fill_quantities.append(filled)
+        self.state.total_spread_cost += half_spread_cost(snapshot, mid, side, filled)
+        self.state.total_impact_cost += abs(impact) * filled
 
     def _calculate_metrics(
         self, market_data: pd.DataFrame, arrival_price: float, strategy_name: str
@@ -381,7 +481,34 @@ class ExecutionEngine:
             strategy_used=strategy_name,
             started_at=self.state.started_at,
             completed_at=self.state.completed_at,
+            completion_price=self._completion_price(market_data, parent.remaining_quantity, side),
         )
+
+    def _completion_price(self, market_data: pd.DataFrame, unfilled: int, side: str) -> float:
+        """Average price of a clean-up market order for `unfilled` shares at the last bar.
+
+        It walks the final bar's (keyed) book; shares beyond the book's depth are priced at
+        its deepest level. With no liquidity in the final bar, the far touch P_T +- s_T/2.
+        A buy's remainder is therefore charged at least the half spread and the impact of
+        trading it at once, so underfilling cannot make a strategy look cheaper.
+        """
+        row = market_data.iloc[-1]
+        mid, spread = float(row["price"]), float(row["spread"])
+        far_touch = mid + spread / 2 if side == "buy" else mid - spread / 2
+        if unfilled <= 0:
+            return far_touch
+        snapshot = self.order_book.generate_snapshot(
+            mid_price=mid,
+            spread=spread,
+            minute_volume=int(row["volume"]),
+            key=len(market_data) - 1 + self._minute_offset,
+        )
+        levels = snapshot.asks if side == "buy" else snapshot.bids
+        if not levels:
+            return far_touch
+        avg_price, filled, _ = self.order_book.simulate_execution(snapshot, unfilled, side)
+        beyond = unfilled - filled
+        return (avg_price * filled + levels[-1].price * beyond) / unfilled
 
     def get_execution_report(self) -> ExecutionReport | None:
         """Most recent report, if any."""

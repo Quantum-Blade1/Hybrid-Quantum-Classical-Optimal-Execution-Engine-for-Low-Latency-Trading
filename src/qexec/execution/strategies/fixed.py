@@ -5,14 +5,15 @@ import pandas as pd
 from numpy.typing import ArrayLike, NDArray
 
 from qexec.execution.strategies.base import BaseStrategy
+from qexec.optimization.schedule import repair_schedule
 
 
 class FixedScheduleStrategy(BaseStrategy):
     """Execute a schedule computed elsewhere (e.g. by a QUBO solve).
 
-    The schedule is truncated to the market-data length and rescaled to sum exactly to
-    the order quantity (largest-remainder rounding); an all-zero schedule falls back to
-    a uniform one.
+    The schedule is truncated (or zero-padded) to the market-data length and rescaled to
+    sum exactly to the order quantity (`repair_schedule`: largest-remainder rounding); an
+    all-zero schedule falls back to a uniform one.
     """
 
     strategy_name = "FixedSchedule"
@@ -23,14 +24,7 @@ class FixedScheduleStrategy(BaseStrategy):
 
     def calculate_schedule(self, total_shares: int, market_data: pd.DataFrame) -> NDArray[np.int_]:
         n = len(market_data)
-        sched = self._schedule[:n].copy()
-        sched_sum = sched.sum()
-        if sched_sum > 0:
-            sched = sched * (total_shares / sched_sum)
-        else:
-            sched = np.full(n, total_shares / n)
-        # Largest-remainder rounding: integer shares that still sum to the order size.
-        rounded = np.floor(sched).astype(int)
-        shortfall = total_shares - int(rounded.sum())
-        rounded[np.argsort(rounded - sched, kind="stable")[:shortfall]] += 1
-        return rounded
+        sched = np.zeros(n)
+        head = self._schedule[:n]
+        sched[: len(head)] = head
+        return repair_schedule(sched, total_shares)

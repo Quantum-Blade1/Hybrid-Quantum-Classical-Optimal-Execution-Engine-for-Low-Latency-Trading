@@ -1,6 +1,7 @@
 """Slow path: background thread that re-solves the execution QUBO and publishes policies."""
 
 import logging
+import time
 from threading import Event, Lock, Thread
 from time import perf_counter
 
@@ -8,8 +9,9 @@ import numpy as np
 from numpy.typing import NDArray
 
 from qexec.optimization.qubo import ExecutionQUBO
-from qexec.optimization.schedule import optimize_schedule, slice_level_config
+from qexec.optimization.schedule import optimize_schedule, repair_schedule, slice_level_config
 from qexec.optimization.solvers.annealing import SimulatedAnnealingSolver
+from qexec.runtime.latency import LatencyMonitor
 from qexec.runtime.policy import ExecutionPolicy, PolicyQueue, uniform_schedule
 from qexec.runtime.resilience import OptimizerResilience, ResilienceConfig, validate_schedule
 
@@ -22,6 +24,9 @@ _SA_SWEEPS = 200
 class AsyncOptimizer:
     """Every `update_interval` seconds, solves for the current order and publishes a policy.
 
+    Each policy plans the whole order; the fast path rescales its tail to the shares still
+    unexecuted. With a `latency_monitor`, each solve is recorded as `slow_path_optimize`.
+
     `optimizer_type` is "sa" (SA on `slice_level_config`) or "uniform" (TWAP). QAOA is
     offline-only (`qexec.optimization.solvers.qaoa`). Failures fall back to TWAP.
     """
@@ -32,6 +37,7 @@ class AsyncOptimizer:
         optimizer_type: str = "sa",
         update_interval: float = 1.0,
         seed: int | None = None,
+        latency_monitor: LatencyMonitor | None = None,
     ) -> None:
         if optimizer_type not in SUPPORTED_OPTIMIZERS:
             raise ValueError(
@@ -43,6 +49,7 @@ class AsyncOptimizer:
         self.optimizer_type = optimizer_type
         self.update_interval = update_interval
         self.seed = seed
+        self.latency = latency_monitor
 
         self._thread: Thread | None = None
         self._stop_event = Event()
@@ -78,12 +85,15 @@ class AsyncOptimizer:
     def _optimization_loop(self) -> None:
         while not self._stop_event.is_set():
             start = perf_counter()
+            start_ns = time.monotonic_ns()
             # Keep the background thread alive whatever the solver or fallback raises.
             try:
                 policy = self._run_optimization()
             except Exception:
                 logger.exception("Optimization failed; keeping the previous policy")
                 policy = None
+            if policy is not None and self.latency is not None:
+                self.latency.end_span(LatencyMonitor.SLOW_PATH_OPTIMIZE, start_ns)
             if policy is not None:
                 self.policy_queue.publish(policy)
                 self.num_optimizations += 1
@@ -123,4 +133,5 @@ class AsyncOptimizer:
         qubo = ExecutionQUBO(slice_level_config(order_size, num_slices))
         solver = SimulatedAnnealingSolver(num_sweeps=_SA_SWEEPS, seed=self.seed)
         schedule, _ = optimize_schedule(qubo, solver)
-        return schedule
+        # Discrete quantity levels rarely sum to the order exactly; repair to the order size.
+        return repair_schedule(schedule, order_size).astype(np.float64)
