@@ -173,13 +173,14 @@ def test_latency_monitor_records_fast_path_slow_path_and_propagation():
     controller = HybridController(
         optimizer_type="sa",
         optimizer_interval=0.005,
-        engine_tick_interval=0.01,
+        engine_tick_interval=0.05,
         seed=0,
         latency_monitor=monitor,
     )
     controller.execute_order(total_shares=2000, num_slices=40)
     stats = monitor.get_all_stats()
     assert stats[LatencyMonitor.FAST_PATH].count == 40
+    # A 2 s order leaves room for several SA solves even on a slow CI runner.
     assert stats[LatencyMonitor.SLOW_PATH_OPTIMIZE].count >= 2
     # The fast path's recorded work excludes the tick sleep.
     assert stats[LatencyMonitor.FAST_PATH].median_us < 10_000

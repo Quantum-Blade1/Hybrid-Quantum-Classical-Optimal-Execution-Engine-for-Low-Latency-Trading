@@ -42,7 +42,8 @@ def test_optimal_fractions_satisfy_kkt_and_beat_perturbations(lam, seed):
     total = 20_000.0
     f = m.optimal_fractions(total)
     assert f.sum() == pytest.approx(1.0) and np.all(f >= 0)
-    assert m.kkt_residual(f, total) < 1e-5
+    # In bps vs 20-40 bps gradients; SLSQP stops slightly differently across SciPy versions.
+    assert m.kkt_residual(f, total) < 1e-4
     best = m.objective(f * total, total)
     rng = np.random.default_rng(seed)
     for _ in range(50):
