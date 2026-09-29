@@ -37,9 +37,9 @@ def compare_solvers(
 
 def format_comparison(results: Sequence[QUBOResult]) -> str:
     """Plain-text table of energy, evaluations and time, with the best solver last."""
-    lines = [f"{'Solver':<25} {'Energy':>12} {'Evaluations':>12} {'Time (s)':>12}"]
+    lines = [f"{'Solver':<25} {'Energy':>18} {'Evaluations':>12} {'Time (s)':>12}"]
     lines += [
-        f"{r.solver_name:<25} {r.energy:>12.4f} {r.num_evaluations:>12,} {r.solve_time:>12.4f}"
+        f"{r.solver_name:<25} {r.energy:>18.4f} {r.num_evaluations:>12,} {r.solve_time:>12.4f}"
         for r in results
     ]
     best = min(results, key=lambda r: r.energy)

@@ -34,10 +34,21 @@ def enumerate_energies(Q: NDArray[np.float64]) -> NDArray[np.float64]:
     return energies
 
 
+def _bits(index: int, n: int) -> NDArray[np.int8]:
+    return np.array([(index >> b) & 1 for b in range(n)], dtype=np.int8)
+
+
 def energy_bounds(Q: NDArray[np.float64]) -> EnergyBounds:
-    """Exact energy range by exhaustive enumeration."""
+    """Exact energy range by exhaustive enumeration.
+
+    The extremal assignments are re-evaluated as x @ Q @ x, the same expression the
+    solvers use, so an optimal solver result compares equal to `min_energy`.
+    """
+    n = Q.shape[0]
     energies = enumerate_energies(Q)
-    return EnergyBounds(min_energy=float(energies.min()), max_energy=float(energies.max()))
+    x_min = _bits(int(np.argmin(energies)), n)
+    x_max = _bits(int(np.argmax(energies)), n)
+    return EnergyBounds(min_energy=float(x_min @ Q @ x_min), max_energy=float(x_max @ Q @ x_max))
 
 
 def approximation_ratio(energy: float, bounds: EnergyBounds) -> float:

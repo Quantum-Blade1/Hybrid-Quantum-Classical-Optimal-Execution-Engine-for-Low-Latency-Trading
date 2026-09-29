@@ -69,12 +69,18 @@ def best_bitstring(counts: Counts, Q: NDArray[np.float64]) -> tuple[str | None, 
     return best_bs, best_energy
 
 
-def aer_sampler(backend: BackendV2) -> Sampler:
-    """Sampler that transpiles for and runs on an Aer backend."""
+def aer_sampler(backend: BackendV2, seed: int | None = None) -> Sampler:
+    """Sampler that transpiles for and runs on an Aer backend.
+
+    With `seed`, each call passes the next seed of a generator seeded with it as
+    `seed_simulator`, so shot noise is reproducible.
+    """
+    rng = np.random.default_rng(seed)
 
     def sample(circuit: QuantumCircuit, shots: int) -> Counts:
         compiled = transpile(circuit, backend)
-        counts: Counts = backend.run(compiled, shots=shots).result().get_counts()
+        options = {} if seed is None else {"seed_simulator": int(rng.integers(2**31))}
+        counts: Counts = backend.run(compiled, shots=shots, **options).result().get_counts()
         return counts
 
     return sample
@@ -168,7 +174,7 @@ class QAOASolver:
         result = run_qaoa(
             Q,
             p=self.p,
-            sample=aer_sampler(AerSimulator()),
+            sample=aer_sampler(AerSimulator(), seed=self.seed),
             shots=self.shots,
             maxiter=self.maxiter,
             final_shots=self.shots * 10,
