@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from matplotlib.figure import Figure
 
-from figures import diagrams, execution, formulation, market, realdata, solvers
+from figures import diagrams, execution, formulation, market, paper, realdata, solvers
 from figures.common import Results
 
 
@@ -245,7 +245,55 @@ FIGURES: tuple[FigureSpec, ...] = (
     ),
 )
 
-# Referenced by paper/main.tex, deleted in Phase 1 as fabricated; no producer by design.
+# Figures drawn for paper/ieee/main.tex at IEEE column width, grayscale-safe.
+PAPER_FIGURES: tuple[FigureSpec, ...] = (
+    _spec(
+        "fig_paper_architecture.pdf",
+        paper.fig_paper_architecture,
+        kind="illustrative",
+        note="Block diagram of the latency-decoupled runtime; no numbers.",
+    ),
+    _spec(
+        "fig_paper_primary.pdf",
+        paper.fig_paper_primary,
+        "real_data_test/comparisons.csv",
+        optional=True,
+        note="Held-out test days; the 12 pre-registered primary comparisons.",
+    ),
+    _spec(
+        "fig_paper_qubo_ac_gap.pdf",
+        paper.fig_paper_qubo_ac_gap,
+        "real_data_test/gaps.csv",
+        optional=True,
+    ),
+    _spec(
+        "fig_paper_signal_vs_noise.pdf",
+        paper.fig_paper_signal_vs_noise,
+        "real_data_test/strategy_summary.csv",
+        "real_data_test/comparisons.csv",
+        "real_data_test/gaps.csv",
+        optional=True,
+    ),
+    _spec(
+        "fig_paper_synthetic.pdf",
+        paper.fig_paper_synthetic,
+        "is_comparison/paired.csv",
+        "strategy_comparison/paired.csv",
+        "stress_test/paired.csv",
+        "walk_forward/paired.csv",
+    ),
+    _spec(
+        "fig_paper_solver_success.pdf",
+        paper.fig_paper_solver_success,
+        "solver_benchmark/summary.csv",
+    ),
+    _spec("fig_paper_qaoa.pdf", paper.fig_paper_qaoa, QB),
+    _spec("fig_paper_latency.pdf", paper.fig_paper_latency, "latency/samples.csv"),
+)
+FIGURES = FIGURES + PAPER_FIGURES
+
+# Referenced by the archived paper/springer_qip_old/main.tex, deleted in Phase 1 as
+# fabricated; no producer by design.
 REMOVED = {
     "fig13_adverse_selection_venue.pdf": "R8: hand-typed venue scores",
     "fig14_order_flow_imbalance.pdf": "R9: random walk; OFI not implemented",
