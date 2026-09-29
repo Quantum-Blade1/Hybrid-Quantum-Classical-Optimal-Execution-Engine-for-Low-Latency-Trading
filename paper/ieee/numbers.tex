@@ -28,6 +28,13 @@
 \newcommand{\TestCommit}{d2f227c}
 \newcommand{\TestCommitClean}{clean}
 \newcommand{\TestWallTime}{250}
+\newcommand{\EvalSizes}{0.1\% or 0.5\%}
+\newcommand{\EvalHorizons}{60 or 240}
+\newcommand{\ParticipationCapPct}{25}
+\newcommand{\NumStartTimes}{6}
+\newcommand{\NumCells}{4}
+\newcommand{\HybridClipLow}{0.5}
+\newcommand{\HybridClipHigh}{2}
 \newcommand{\NumTestWindows}{72}
 \newcommand{\NumPrimaryComparisons}{12}
 \newcommand{\PrimaryMinHolm}{1.00}
@@ -192,6 +199,8 @@
 \newcommand{\TuneCheckpoints}{1}
 \newcommand{\TuneHybridMinusTwapMin}{0.23}
 \newcommand{\TuneHybridMinusTwapMax}{0.69}
+\newcommand{\DevCommit}{164b4c5}
+\newcommand{\DevCommitClean}{dirty}
 \newcommand{\NumDevWindows}{96}
 \newcommand{\DevMinHolm}{1.00}
 \newcommand{\DevMinMean}{$-$0.99}
@@ -203,6 +212,7 @@
 \newcommand{\SynHourQuboTwapCi}{[$-$5.7, 3.9]}
 \newcommand{\SynHourQuboTwapP}{0.92}
 \newcommand{\SynSeeds}{30}
+\newcommand{\SynHourShares}{100{,}000}
 \newcommand{\SynDaySizes}{0.1\%, 1\%, 5\%}
 \newcommand{\SynDayImpactHybridTwapMean}{+0.15}
 \newcommand{\SynDayImpactHybridTwapCi}{[0.14, 0.16]}
@@ -220,11 +230,13 @@
 \newcommand{\SynWfHybridTwapP}{0.86}
 \newcommand{\SaSliceAllOptimalUpTo}{16}
 \newcommand{\SaSliceNumSizesAllOptimal}{8}
+\newcommand{\SaSliceAboveSizes}{18--20}
 \newcommand{\SaSliceAboveMin}{50}
 \newcommand{\SaSliceAboveMax}{70}
 \newcommand{\GreedySliceMax}{10}
 \newcommand{\SaToyAllOptimalUpTo}{16}
 \newcommand{\SaToyNumSizesAllOptimal}{7}
+\newcommand{\SaToyAboveSizes}{18--20}
 \newcommand{\SaToyAboveMin}{50}
 \newcommand{\SaToyAboveMax}{80}
 \newcommand{\GreedyToyMax}{20}
@@ -243,6 +255,7 @@
 \newcommand{\QaoaShotBudgetMin}{29{,}000}
 \newcommand{\QaoaShotBudgetMax}{55{,}000}
 \newcommand{\QaoaMaxN}{12}
+\newcommand{\UniformMissProbMaxN}{$8.4\times 10^{-4}$}
 \newcommand{\QaoaToyIdealRuns}{75}
 \newcommand{\QaoaToyIdealPoptMean}{+0.036}
 \newcommand{\QaoaToyIdealPoptCi}{[0.015, 0.064]}
@@ -299,13 +312,15 @@
 \newcommand{\QaoaInstanceIdealEnergyCi}{[0.027, 0.054]}
 \newcommand{\QaoaInstanceIdealBestOpt}{100}
 \newcommand{\QaoaInstanceIdealUniformBestOpt}{100}
-\newcommand{\QaoaTableRows}{Toy (hardware QUBO) & ideal & 75 & +0.036 [0.015, 0.064] & 0.010 & +0.053 & 95 / 100 \\
-Toy (hardware QUBO) & noisy & 60 & +0.017 [0.005, 0.034] & 0.09 & +0.020 & 100 / 100 \\
-Random Gaussian & ideal & 75 & +0.026 [0.011, 0.044] & 0.006 & +0.046 & 88 / 100 \\
-Random Gaussian & noisy & 60 & +0.006 [0.003, 0.011] & 0.01 & +0.013 & 100 / 100 \\
-Binary execution & ideal & 90 & +0.007 [0.000, 0.016] & 0.27 & +0.051 & 87 / 100 \\
-Binary execution & noisy & 75 & +0.002 [$-$0.001, 0.005] & 0.23 & +0.009 & 100 / 100 \\
-Execution instance, $n{=}12$ & ideal & 15 & +0.023 [0.006, 0.044] & 0.17 & +0.040 & 100 / 100 \\}
+\newcommand{\QaoaTableRows}{Toy & ideal & 75 & +0.036 [0.015, 0.064] & 0.010 & +0.053 & 95/100 \\
+Toy & noisy & 60 & +0.017 [0.005, 0.034] & 0.09 & +0.020 & 100/100 \\
+Random & ideal & 75 & +0.026 [0.011, 0.044] & 0.006 & +0.046 & 88/100 \\
+Random & noisy & 60 & +0.006 [0.003, 0.011] & 0.01 & +0.013 & 100/100 \\
+Binary & ideal & 90 & +0.007 [0.000, 0.016] & 0.27 & +0.051 & 87/100 \\
+Binary & noisy & 75 & +0.002 [$-$0.001, 0.005] & 0.23 & +0.009 & 100/100 \\
+Instance & ideal & 15 & +0.023 [0.006, 0.044] & 0.17 & +0.040 & 100/100 \\}
+\newcommand{\QaoaEnergyMin}{+0.009}
+\newcommand{\QaoaEnergyMax}{+0.053}
 \newcommand{\QaoaSliceNFourPopt}{0.0960}
 \newcommand{\QaoaSliceNFourUniform}{0.0625}
 \newcommand{\QaoaSliceNSixPopt}{0.0239}

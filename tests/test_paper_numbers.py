@@ -56,3 +56,27 @@ def test_macros_reject_bad_names():
         macros["Bad1"] = "1"
     with pytest.raises(ValueError):
         macros["Good"] = "2"
+
+
+def test_manuscript_source_checks_pass():
+    from experiments import check_paper
+
+    assert check_paper.check(ROOT / "paper" / "ieee" / "main.tex") == []
+
+
+def test_source_checks_catch_problems(tmp_path):
+    from experiments import check_paper
+
+    tex = tmp_path / "main.tex"
+    (tmp_path / "numbers.tex").write_text("\\newcommand{\\Known}{1}\n")
+    tex.write_text(
+        "\\begin{document}\\begin{figure}\n"
+        "\\includegraphics{fig25_policy_staleness.pdf}\\end{document}\n"
+        "\\Known \\Unknown \\ref{nowhere} \\cite{ghost} production-ready\n"
+    )
+    problems = "\n".join(check_paper.check(tex))
+    assert "does not close" in problems
+    assert "removed as fabricated" in problems
+    assert "\\Unknown" in problems and "\\Known" not in problems.replace("\\Unknown", "")
+    assert "nowhere" in problems and "ghost" in problems
+    assert "production-ready" in problems

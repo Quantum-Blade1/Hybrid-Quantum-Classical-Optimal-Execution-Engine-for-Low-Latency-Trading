@@ -149,6 +149,14 @@ def real_data(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of
     m["TestCommit"] = test_manifest["git"]["commit"][:7]
     m["TestCommitClean"] = "clean" if not test_manifest["git"]["dirty"] else "dirty"
     m["TestWallTime"] = fmt_int(test_manifest["wall_time_s"])
+    cfg = test_manifest["config"]
+    m["EvalSizes"] = " or ".join(f"{x:g}\\%" for x in cfg["sizes_pct_adv"])
+    m["EvalHorizons"] = " or ".join(str(h) for h in cfg["horizons"])
+    m["ParticipationCapPct"] = fmt(100 * cfg["participation_cap"], 0)
+    m["NumStartTimes"] = str(len(cfg["start_hours"]))
+    m["NumCells"] = str(len(cfg["sizes_pct_adv"]) * len(cfg["horizons"]))
+    m["HybridClipLow"] = f"{cfg['hybrid_clip'][0]:g}"
+    m["HybridClipHigh"] = f"{cfg['hybrid_clip'][1]:g}"
 
     comp = t.csv("real_data_test", "comparisons")
     primary = comp[comp["variant"] == "primary"].set_index(["symbol", "strategy", "baseline"])
@@ -291,6 +299,9 @@ def real_data(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of
     m["TuneHybridMinusTwapMin"] = fmt(hyb["mean_minus_twap_bps"].min())
     m["TuneHybridMinusTwapMax"] = fmt(hyb["mean_minus_twap_bps"].max())
 
+    dev_manifest = t.json("real_data_dev", "manifest")
+    m["DevCommit"] = dev_manifest["git"]["commit"][:7]
+    m["DevCommitClean"] = "clean" if not dev_manifest["git"]["dirty"] else "dirty"
     dev = t.csv("real_data_dev", "comparisons")
     dev = dev[dev["variant"] == "primary"]
     m["NumDevWindows"] = str(int(dev["n_windows"].iloc[0]))
@@ -323,6 +334,7 @@ def synthetic(t: Tables, m: Macros) -> None:
     put("SynHourHybridTwap", _paired_row(is_paired, strategy="Hybrid", baseline="TWAP"))
     put("SynHourQuboTwap", _paired_row(is_paired, strategy="SA-QUBO", baseline="TWAP"))
     m["SynSeeds"] = str(int(_paired_row(is_paired, strategy="Hybrid", baseline="TWAP")["count"]))
+    m["SynHourShares"] = fmt_int(t.json("is_comparison", "manifest")["config"]["total_shares"])
 
     day = t.csv("strategy_comparison", "paired")
     fracs = sorted(day["order_fraction_of_adv"].unique())
@@ -371,6 +383,9 @@ def solvers(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of n
         m[f"Sa{name}AllOptimalUpTo"] = str(int(n_all))
         m[f"Sa{name}NumSizesAllOptimal"] = str(len(full))
         above = sa[sa.index > n_all]
+        m[f"Sa{name}AboveSizes"] = (
+            f"{int(above.index.min())}--{int(above.index.max())}" if len(above) else "--"
+        )
         m[f"Sa{name}AboveMin"] = fmt(100 * above.min(), 0) if len(above) else "100"
         m[f"Sa{name}AboveMax"] = fmt(100 * above.max(), 0) if len(above) else "100"
         greedy = opt[(opt["family"] == family) & (opt["solver"] == "Greedy")]["mean"]
@@ -397,13 +412,18 @@ def solvers(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of n
     m["QaoaShotBudgetMin"] = fmt_int(q["total_shots"].min())
     m["QaoaShotBudgetMax"] = fmt_int(q["total_shots"].max())
     m["QaoaMaxN"] = str(int(q["n"].max()))
+    # Chance that uniform sampling with the smallest budget misses a unique optimum at max n.
+    n_max = int(q["n"].max())
+    miss = (1.0 - 2.0**-n_max) ** float(q["total_shots"].min())
+    m["UniformMissProbMaxN"] = _sci(miss)
 
     rows = []
+    energy: list[float] = []
     labels = {
-        "toy": "Toy (hardware QUBO)",
-        "random": "Random Gaussian",
-        "slice": "Binary execution",
-        "fig07": "Execution instance, $n{=}12$",
+        "toy": "Toy",
+        "random": "Random",
+        "slice": "Binary",
+        "fig07": "Instance",
     }
     for family, fname in QAOA_FAMILIES.items():
         for solver, sname in QAOA_SOLVERS.items():
@@ -413,6 +433,7 @@ def solvers(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of n
             pc = paired_comparison(d["success_probability"], d["random_success_probability"])
             pe = paired_comparison(d["approx_ratio_mean"], d["random_approx_ratio_mean"])
             key = f"Qaoa{fname}{sname}"
+            energy.append(pe.mean_diff)
             m[f"{key}Runs"] = str(len(d))
             m[f"{key}PoptMean"] = fmt(pc.mean_diff, 3, sign=True)
             m[f"{key}PoptCi"] = fmt_ci(pc.ci_low, pc.ci_high, 3)
@@ -425,10 +446,12 @@ def solvers(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of n
                 f"{labels[family]} & {sname.lower()} & {len(d)} & "
                 f"{fmt(pc.mean_diff, 3, sign=True)} {fmt_ci(pc.ci_low, pc.ci_high, 3)} & "
                 f"{fmt_p(pc.wilcoxon_p)} & {fmt(pe.mean_diff, 3, sign=True)} & "
-                f"{fmt(100 * d['optimal_found'].mean(), 0)} / "
+                f"{fmt(100 * d['optimal_found'].mean(), 0)}/"
                 f"{fmt(100 * d['random_optimal_found'].mean(), 0)} \\\\"
             )
     m["QaoaTableRows"] = "\n".join(rows)
+    m["QaoaEnergyMin"] = fmt(min(energy), 3, sign=True)
+    m["QaoaEnergyMax"] = fmt(max(energy), 3, sign=True)
 
     # Per-size success probability on the binary execution encoding (ideal, all depths).
     ideal = q[(q["family"] == "slice") & (q["solver"] == "QAOA_Ideal")]
