@@ -9,7 +9,7 @@ A research-grade hybrid architecture for optimal trade execution, combining low-
 
 ##  Key Features
 
-*   **Hybrid Architecture**: Decoupled "Fast Path" (Execution Engine, <10ms delay) and "Slow Path" (Quantum/Classical Optimizer, 1-5s update).
+*   **Hybrid Architecture**: Decoupled "Fast Path" (tick loop) and "Slow Path" (optimizer thread) exchanging policies through a latest-value queue; measured Python latencies are in `docs/RESULTS.md`.
 *   **Asynchronous Optimization**: Trading never blocks; execution policy is updated in real-time via a thread-safe queue.
 *   **Quantum Solvers**: Supports Simulated Annealing (SA) and QAOA (via Qiskit).
 *   **Real Data Ready**: Includes `qexec.market.loader.DataLoader` for NSE/Binance/NYSE tick data ingestion and backtesting.
@@ -60,19 +60,27 @@ python examples/qubo_vs_baselines.py     # QUBO-optimised schedule vs VWAP/TWAP
 python examples/hybrid_runtime.py        # fast/slow-path runtime and the HFT pipeline
 ```
 
-### 3. Experiments
-Each script in `experiments/` regenerates one set of results:
+### 3. Reproducing the paper's numbers and figures
+Every number and figure comes from an experiment script that writes machine-readable results with provenance; figures are drawn only from those results.
+
 ```bash
-python experiments/solver_benchmark.py    # BF / SA / QAOA-simulator comparison on random QUBOs
-python experiments/qaoa_vs_sa.py          # QAOA vs simulated annealing on a 12-variable execution QUBO
-python experiments/ac_comparison.py       # SA-QUBO schedule vs Almgren-Chriss trajectory
-python experiments/is_comparison.py       # implementation-shortfall decomposition, VWAP vs TWAP
-python experiments/stress_test.py         # stress scenarios, VWAP vs hybrid
-python experiments/load_test.py           # throughput of concurrent HybridController orders
-python experiments/journal_figures.py     # paper figures -> paper/figures/
-python experiments/hardware_benchmark.py  # SA + QAOA (ideal/noisy Aer; IBM hardware if credentials are set)
+make all                  # every experiment (results/), then every figure (paper/figures/)
+make quick                # tiny sizes -> build/quick/{results,figures}; what CI runs (~20 s)
+make experiments          # python -m experiments.run_all
+make figures              # python -m figures.make_figures
+make check-figures        # every PDF in paper/figures/ must have a registered producer
+python -m experiments.walk_forward --quick   # one experiment; --results-dir, --seed
 ```
-Every script takes `--seed`; scripts that write files take `--output-dir` (default `results/`, or `paper/figures/` for `journal_figures.py` and the `hardware_benchmark.py` figures). The walk-forward backtest (`qexec.analysis.walk_forward`, seeded) is run by `journal_figures.py` (fig21). `hardware_benchmark.py --simulator-only` skips IBM hardware; with credentials (`IBM_QUANTUM_TOKEN`, or `IBM_CLOUD_API_KEY` + `IBM_CLOUD_CRN`) every hardware job's ID and raw counts are appended to `results/hw_jobs.jsonl` as soon as it returns.
+Use `make PYTHON=.venv/bin/python ...` if `python` is not your environment's interpreter. The full suite takes about 15 minutes on an Apple M5 (10 cores); per-experiment wall times are in each `manifest.json`.
+
+| Layer | Location | Contents |
+|---|---|---|
+| Experiments | `experiments/<name>.py` | One per result group; a `Config` dataclass with `FULL` and `QUICK` sizes; writes `results/<name>/` through `qexec.experiment.ExperimentRecorder` |
+| Results | `results/<name>/` | CSV tables, JSON summaries and `manifest.json` (config, seeds, git commit + dirty flag, package versions, platform, UTC time, wall time, SHA-256 of every file) |
+| Figures | `figures/` | Plot functions that read `results/` only (enforced by `tests/test_figures_registry.py`); `figures/registry.py` maps each PDF to its function, inputs and experiment |
+| Summary | `docs/RESULTS.md` | Headline numbers with 95% CIs, including where the QUBO/hybrid approach does not beat the baselines |
+
+Strategy comparisons (`is_comparison`, `strategy_comparison`, `stress_test`, `walk_forward`) run 30 seeds, execute every strategy through the same engine and book (no fills in zero-volume bars, carry-forward, opportunity cost of unfilled shares) and report bootstrap CIs and paired Wilcoxon tests against TWAP/VWAP; see `docs/MATHEMATICAL_MODEL.md`, "Evaluation Model". `experiments/hardware_benchmark.py` runs QAOA on IBM hardware when credentials are set (`IBM_QUANTUM_TOKEN`, or `IBM_CLOUD_API_KEY` + `IBM_CLOUD_CRN`); it is not part of `run_all`, and it appends every job's ID and raw counts to `results/hw_jobs.jsonl`. `results/bench_*.json` are historical records (claims audit F10) and are not read by any figure.
 
 ##  System Architecture
 
@@ -82,13 +90,7 @@ The system operates on two timescales:
 
 ##  Benchmarks & Results
 
-| Metric | VWAP | TWAP | Hybrid (Quantum) |
-| :--- | :--- | :--- | :--- |
-| **Market Impact** | High | Medium | **Low** |
-| **Timing Risk** | Low | Low | **Low** |
-| **Robustness** | Low | High | **High** |
-
-*Qualitative comparison only. See `docs/CLAIMS_AUDIT.md` for the status of every quantitative claim.*
+See `docs/RESULTS.md`. In short: on the synthetic market used here, the SA-QUBO and hybrid schedules do **not** reduce implementation shortfall relative to TWAP or VWAP (paired differences within a few bps, confidence intervals include zero), and QAOA on simulators does not beat uniform random sampling at finding the optimum of the benchmark QUBOs. `docs/CLAIMS_AUDIT.md` gives the status of every quantitative claim in the paper.
 
 ##  Project Structure
 
@@ -102,12 +104,14 @@ Hybrid-Quantum-Classical-Optimal-Execution-Engine-for-Low-Latency-Trading/
 │   ├── runtime/           # policy, optimizer, engine, controller, hft_pipeline, decision, resilience, latency
 │   ├── hardware/          # ibm (IBM Quantum runtime access), mitigation
 │   └── analysis/          # shortfall, walk_forward, stress, runners
-├── experiments/           # Runnable scripts that produce results and figures
+├── experiments/           # One script per result group -> results/<name>/ (run_all runs them all)
+├── figures/               # Plot functions reading results/ only; registry.py maps PDFs to producers
 ├── examples/              # Short scripts demonstrating the library
 ├── apps/dashboard.py      # Streamlit dashboard
-├── results/               # Benchmark data (JSON), incl. IBM hardware runs
+├── results/               # Experiment outputs with manifest.json provenance (+ historical bench_*.json)
 ├── paper/                 # Manuscript (main.tex) and figures/
-├── docs/                  # MATHEMATICAL_MODEL.md, CLAIMS_AUDIT.md
+├── docs/                  # MATHEMATICAL_MODEL.md, CLAIMS_AUDIT.md, RESULTS.md
+├── Makefile               # make all | experiments | figures | quick
 ├── assets/                # README images
 ├── tests/                 # Property and regression tests, mirroring src/qexec/
 └── pyproject.toml     # Project metadata and dependencies

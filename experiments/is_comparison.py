@@ -1,63 +1,99 @@
-"""Implementation shortfall of VWAP and TWAP on one simulated hour, with a stacked-bar chart.
+"""Implementation-shortfall decomposition of TWAP, VWAP, SA-QUBO and Hybrid on one simulated
+hour, repeated over seeds (paper fig22).
+
+Every strategy runs through the same engine and faces the same books (docs/
+MATHEMATICAL_MODEL.md, "Evaluation Model"). Shortfall is in bps of arrival notional and
+includes the opportunity cost of unfilled shares.
 
 Usage:
-    python experiments/is_comparison.py [--seed 42] [--output-dir results]
+    python -m experiments.is_comparison [--quick] [--results-dir results] [--seed 0]
 """
 
-import argparse
-from pathlib import Path
+from dataclasses import dataclass
+from datetime import datetime
 
 import pandas as pd
-from plotting import plot_is_breakdown
 
-from qexec.analysis.shortfall import ISAnalyzer, ISComponents
-from qexec.execution.strategies.base import BaseStrategy
-from qexec.execution.strategies.twap import TWAPStrategy
-from qexec.execution.strategies.vwap import VWAPStrategy
-from qexec.market.order_book import OrderBook
+from experiments.common import Experiment, paired_vs_baselines, seed_range, summarize_groups
+from qexec.analysis.runners import STRATEGIES, run_strategy
+from qexec.experiment import ExperimentRecorder
 from qexec.market.simulator import MarketDataSimulator, MarketParams
 
-TOTAL_SHARES = 100_000
-MINUTES = 60
+COST_METRICS = (
+    "shortfall_bps",
+    "execution_cost_bps",
+    "spread_cost_bps",
+    "impact_cost_bps",
+    "timing_cost_bps",
+    "opportunity_cost_bps",
+    "fill_rate",
+    "optimization_invocations",
+    "optimization_time_s",
+)
 
 
-def shortfall(strategy: BaseStrategy, data: pd.DataFrame, analyzer: ISAnalyzer) -> ISComponents:
-    strategy.execute(TOTAL_SHARES, "buy", data)
-    log = pd.DataFrame(
+@dataclass(frozen=True)
+class Config:
+    total_shares: int = 100_000
+    minutes: int = 60
+    initial_price: float = 100.0
+    annual_volatility: float = 0.30
+    daily_volume: int = 50_000_000
+    strategies: tuple[str, ...] = STRATEGIES
+    baselines: tuple[str, ...] = ("TWAP", "VWAP")
+    seed: int = 0
+    num_seeds: int = 30
+
+
+FULL = Config()
+QUICK = Config(num_seeds=3)
+
+
+def market(config: Config, seed: int) -> pd.DataFrame:
+    params = MarketParams(
+        initial_price=config.initial_price, annual_volatility=config.annual_volatility
+    )
+    sim = MarketDataSimulator(params, total_daily_volume=config.daily_volume, seed=seed)
+    return sim.generate(datetime(2024, 1, 2), num_minutes=config.minutes)
+
+
+def strategy_runs(
+    config: Config, data: pd.DataFrame, seed: int, **labels: object
+) -> list[dict[str, object]]:
+    rows = []
+    for name in config.strategies:
+        result = run_strategy(
+            name, data, config.total_shares, seed=seed, daily_volume=config.daily_volume
+        )
+        rows.append({**labels, "seed": seed, **result.metrics()})
+    return rows
+
+
+def run(config: Config, rec: ExperimentRecorder) -> None:
+    rows = []
+    for seed in seed_range(config):
+        rows.extend(strategy_runs(config, market(config, seed), seed))
+    runs = pd.DataFrame(rows)
+    rec.write_table("runs", runs)
+    rec.write_table("summary", summarize_groups(runs, ["strategy"], COST_METRICS))
+    paired = pd.concat(
         [
-            {"timestamp": s.timestamp, "shares": s.filled_quantity, "price": s.execution_price}
-            for s in strategy.slices
+            paired_vs_baselines(
+                runs,
+                unit_col="seed",
+                strategy_col="strategy",
+                value_col=metric,
+                baselines=config.baselines,
+            )
+            for metric in ("shortfall_bps", "impact_cost_bps", "timing_cost_bps")
         ]
     )
-    return analyzer.analyze(log, data)
+    rec.write_table("paired", paired)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--output-dir", type=Path, default=Path("results"))
-    args = parser.parse_args()
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-
-    params = MarketParams(initial_price=100.0, annual_volatility=0.30)
-    data = MarketDataSimulator(params=params, seed=args.seed).generate(num_minutes=MINUTES)
-    decision_price = float(data.iloc[0]["price"])
-    analyzer = ISAnalyzer(decision_price, TOTAL_SHARES)
-    print(f"Decision price: ${decision_price:.2f}")
-
-    strategies: dict[str, BaseStrategy] = {
-        "VWAP": VWAPStrategy(
-            participation_rate=0.1, order_book=OrderBook(seed=args.seed), seed=args.seed
-        ),
-        "TWAP": TWAPStrategy(interval_minutes=1, order_book=OrderBook(seed=args.seed)),
-    }
-    results = {name: shortfall(s, data, analyzer) for name, s in strategies.items()}
-
-    table = pd.DataFrame({name: r.to_dict() for name, r in results.items()}).T
-    print(table.to_string(float_format=lambda x: f"{x:,.0f}"))
-    path = plot_is_breakdown(results, args.output_dir / "is_comparison.png")
-    print(f"Saved {path}")
-
+EXPERIMENT = Experiment(
+    "is_comparison", FULL, QUICK, run, seed_range, description=__doc__.splitlines()[0]
+)
 
 if __name__ == "__main__":
-    main()
+    EXPERIMENT.main()

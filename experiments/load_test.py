@@ -1,143 +1,115 @@
-"""Concurrent HybridController orders on a thread pool: wall time, per-order latency, memory.
+"""Concurrent HybridController orders on a thread pool: wall time, per-order duration, fill
+rate and memory.
 
 Order sizes and slice counts are drawn from a seeded generator. Timings depend on the
 machine and Python's GIL; they measure this implementation, not a production system.
 
 Usage:
-    python experiments/load_test.py [--orders 100] [--concurrency 20] [--seed 42]
+    python -m experiments.load_test [--quick] [--results-dir results] [--seed 0]
 """
 
-import argparse
 import logging
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 import psutil
 
+from experiments.common import Experiment, single_seed
+from qexec.experiment import ExperimentRecorder
 from qexec.runtime.controller import HybridController
 
 
 @dataclass(frozen=True)
-class LoadTestConfig:
+class Config:
     num_orders: int = 100
     concurrency: int = 20
     min_shares: int = 100
     max_shares: int = 10_000
     min_slices: int = 10
     max_slices: int = 50
+    tick_interval_s: float = 0.05
+    optimizer_interval_s: float = 1.0
+    seed: int = 0
 
 
-@dataclass(frozen=True)
-class OrderSpec:
-    order_id: int
-    total_shares: int
-    num_slices: int
-    seed: int
+FULL = Config()
+QUICK = Config(num_orders=6, concurrency=3, max_slices=15)
 
 
-@dataclass(frozen=True)
-class OrderResult:
-    order_id: int
-    total_shares: int
-    executed_shares: int
-    num_slices: int
-    duration: float
-    throughput: float
-    optimizations: int
-    success: bool
-    error: str = ""
-
-
-def draw_orders(config: LoadTestConfig, rng: np.random.Generator) -> list[OrderSpec]:
-    return [
-        OrderSpec(
-            order_id=i,
-            total_shares=int(rng.integers(config.min_shares, config.max_shares + 1)),
-            num_slices=int(rng.integers(config.min_slices, config.max_slices + 1)),
-            seed=int(rng.integers(2**31)),
-        )
-        for i in range(config.num_orders)
-    ]
-
-
-def run_single_order(spec: OrderSpec) -> OrderResult:
+def run_order(order_id: int, shares: int, slices: int, seed: int, config: Config) -> dict:
     controller = HybridController(
-        optimizer_type="sa", optimizer_interval=1.0, engine_tick_interval=0.05, seed=spec.seed
+        optimizer_type="sa",
+        optimizer_interval=config.optimizer_interval_s,
+        engine_tick_interval=config.tick_interval_s,
+        seed=seed,
     )
     start = time.perf_counter()
     # A failed order is recorded and counted, not allowed to stop the load test.
     try:
-        res = controller.execute_order(total_shares=spec.total_shares, num_slices=spec.num_slices)
+        res = controller.execute_order(total_shares=shares, num_slices=slices)
     except Exception as e:
-        return OrderResult(
-            spec.order_id, spec.total_shares, 0, spec.num_slices, 0, 0, 0, False, str(e)
-        )
+        return {"order_id": order_id, "shares": shares, "slices": slices, "error": str(e)}
     duration = time.perf_counter() - start
-    return OrderResult(
-        order_id=spec.order_id,
-        total_shares=spec.total_shares,
-        executed_shares=res["executed_shares"],
-        num_slices=spec.num_slices,
-        duration=duration,
-        throughput=res["executed_shares"] / max(0.001, duration),
-        optimizations=res["num_optimizations"],
-        success=True,
-    )
+    return {
+        "order_id": order_id,
+        "shares": shares,
+        "slices": slices,
+        "executed_shares": res["executed_shares"],
+        "fill_rate": res["fill_rate"],
+        "optimizations": res["num_optimizations"],
+        "duration_s": duration,
+        "min_duration_s": slices * config.tick_interval_s,
+        "error": "",
+    }
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--orders", type=int, default=100)
-    parser.add_argument("--concurrency", type=int, default=20)
-    parser.add_argument("--seed", type=int, default=42)
-    args = parser.parse_args()
-    logging.basicConfig(level=logging.WARNING)
-
-    config = LoadTestConfig(num_orders=args.orders, concurrency=args.concurrency)
-    orders = draw_orders(config, np.random.default_rng(args.seed))
-    process = psutil.Process(os.getpid())
-    initial_mem = process.memory_info().rss / 1024**2
-    print(f"{config.num_orders} orders, concurrency {config.concurrency}")
-
-    start = time.perf_counter()
-    results: list[OrderResult] = []
-    with ThreadPoolExecutor(max_workers=config.concurrency) as executor:
-        futures = [executor.submit(run_single_order, spec) for spec in orders]
-        for done, future in enumerate(as_completed(futures), start=1):
-            results.append(future.result())
-            if done % 10 == 0:
-                print(f"  {done}/{config.num_orders} orders completed")
-    total_duration = time.perf_counter() - start
-    final_mem = process.memory_info().rss / 1024**2
-
-    df = pd.DataFrame([vars(r) for r in results])
-    print(f"\nWall time:      {total_duration:.2f}s")
-    print(f"Success rate:   {df['success'].mean() * 100:.1f}%")
-    print(f"Total volume:   {df['executed_shares'].sum():,.0f} shares")
-    print(f"Orders/sec:     {config.num_orders / total_duration:.2f}")
-    print(f"Memory (RSS):   {initial_mem:.1f} MB -> {final_mem:.1f} MB")
-    print(
-        "Per-order duration (s): "
-        + ", ".join(
-            f"{name} {value:.2f}"
-            for name, value in [
-                ("mean", df["duration"].mean()),
-                ("p50", df["duration"].median()),
-                ("p95", df["duration"].quantile(0.95)),
-                ("p99", df["duration"].quantile(0.99)),
-            ]
+def run(config: Config, rec: ExperimentRecorder) -> None:
+    logging.getLogger("qexec").setLevel(logging.WARNING)
+    rng = np.random.default_rng(config.seed)
+    orders = [
+        (
+            i,
+            int(rng.integers(config.min_shares, config.max_shares + 1)),
+            int(rng.integers(config.min_slices, config.max_slices + 1)),
+            int(rng.integers(2**31)),
         )
+        for i in range(config.num_orders)
+    ]
+    process = psutil.Process(os.getpid())
+    rss_before = process.memory_info().rss / 1024**2
+    start = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=config.concurrency) as pool:
+        rows = list(pool.map(lambda o: run_order(*o, config), orders))
+    wall = time.perf_counter() - start
+    df = pd.DataFrame(rows).sort_values("order_id")
+    rec.write_table("orders", df)
+    ok = df[df["error"] == ""]
+    rec.write_json(
+        "summary",
+        {
+            "orders": config.num_orders,
+            "concurrency": config.concurrency,
+            "wall_time_s": wall,
+            "orders_per_s": config.num_orders / wall,
+            "success_rate": len(ok) / config.num_orders,
+            "orders_fully_filled": int((ok["fill_rate"] == 1.0).sum()),
+            "duration_s": ok["duration_s"].describe(percentiles=[0.5, 0.95, 0.99]).to_dict(),
+            "overhead_vs_tick_schedule_s": (ok["duration_s"] - ok["min_duration_s"])
+            .describe(percentiles=[0.5, 0.95])
+            .to_dict(),
+            "rss_mb_before": rss_before,
+            "rss_mb_after": process.memory_info().rss / 1024**2,
+        },
     )
-    print(f"Mean throughput: {df['throughput'].mean():.1f} shares/s per order")
-    failed = df[~df["success"]]
-    if not failed.empty:
-        print("\nErrors:")
-        print(failed[["order_id", "error"]].to_string(index=False))
 
+
+EXPERIMENT = Experiment(
+    "load_test", FULL, QUICK, run, single_seed, description=__doc__.splitlines()[0]
+)
 
 if __name__ == "__main__":
-    main()
+    EXPERIMENT.main()

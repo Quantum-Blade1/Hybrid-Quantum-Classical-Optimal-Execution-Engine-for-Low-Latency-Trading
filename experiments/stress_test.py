@@ -1,31 +1,73 @@
-"""VWAP vs hybrid (decision layer + SA-QUBO) under four synthetic stress scenarios.
+"""TWAP, VWAP, SA-QUBO and Hybrid under four synthetic stress scenarios, over seeds
+(paper fig23).
 
-Scenario definitions: qexec.analysis.stress.
+Scenarios (qexec.analysis.stress): flash crash (50% linear drop over 5 minutes, then a
+slow recovery), liquidity crisis (spread 10x, volume -90% for 20 minutes), volatility
+spike (N(0, $5) price jumps for 30 minutes) and market outage (10 minutes with zero
+volume). They differ from the scenarios described in the paper (claims audit P14).
+Nothing fills in a zero-volume bar; shares carry forward; unfilled shares count as
+opportunity cost.
 
 Usage:
-    python experiments/stress_test.py [--seed 42] [--shares 50000]
+    python -m experiments.stress_test [--quick] [--results-dir results] [--seed 0]
 """
 
-import argparse
-import logging
+from dataclasses import dataclass
 
-from qexec.analysis.stress import StressRunner, results_table
+import pandas as pd
+
+from experiments.common import Experiment, paired_vs_baselines, seed_range, summarize_groups
+from qexec.analysis.runners import STRATEGIES
+from qexec.analysis.stress import SCENARIOS, StressRunner, scenario_data
+from qexec.experiment import ExperimentRecorder
+
+METRICS = ("shortfall_bps", "execution_cost_bps", "opportunity_cost_bps", "fill_rate")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--shares", type=int, default=50_000)
-    args = parser.parse_args()
-    logging.basicConfig(level=logging.WARNING)
+@dataclass(frozen=True)
+class Config:
+    total_shares: int = 50_000
+    scenarios: tuple[str, ...] = SCENARIOS
+    strategies: tuple[str, ...] = STRATEGIES
+    baselines: tuple[str, ...] = ("TWAP", "VWAP")
+    seed: int = 2000
+    num_seeds: int = 30
 
-    results = StressRunner(total_shares=args.shares, seed=args.seed).run_suite()
-    print(results_table(results).to_string(index=False))
-    for r in results:
-        if r.crashed:
-            mode = "hybrid" if r.is_hybrid else "classical"
-            print(f"Crashed: {r.scenario_name} ({mode}): {r.error_msg}")
 
+FULL = Config()
+QUICK = Config(num_seeds=3)
+
+
+def run(config: Config, rec: ExperimentRecorder) -> None:
+    rows = []
+    for seed in seed_range(config):
+        runner = StressRunner(config.total_shares, seed=seed, strategies=config.strategies)
+        for name in config.scenarios:
+            rows.extend(vars(r) for r in runner.run_scenario(name, scenario_data(name, seed)))
+    runs = pd.DataFrame(rows).rename(columns={"scenario_name": "scenario"})
+    crashed = runs[runs["crashed"]]
+    rec.write_table("runs", runs)
+    rec.write_table("summary", summarize_groups(runs, ["scenario", "strategy"], METRICS))
+    paired = pd.concat(
+        [
+            paired_vs_baselines(
+                runs,
+                unit_col="seed",
+                strategy_col="strategy",
+                value_col=metric,
+                baselines=config.baselines,
+                group_cols=["scenario"],
+            )
+            for metric in ("shortfall_bps", "fill_rate")
+        ]
+    )
+    rec.write_table("paired", paired)
+    rec.note("crashed_runs", len(crashed))
+
+
+EXPERIMENT = Experiment(
+    "stress_test", FULL, QUICK, run, seed_range, description=__doc__.splitlines()[0]
+)
 
 if __name__ == "__main__":
-    main()
+    EXPERIMENT.main()

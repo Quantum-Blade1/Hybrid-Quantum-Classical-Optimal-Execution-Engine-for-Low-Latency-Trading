@@ -1,49 +1,83 @@
-"""VWAP, TWAP and QUBOStrategy on one simulated day through the ExecutionEngine, with a plot.
+"""TWAP, VWAP, SA-QUBO and Hybrid on a simulated full day at three order sizes (0.1%, 1%
+and 5% of daily volume), repeated over seeds.
+
+Same engine, same books and the same shortfall definition (incl. opportunity cost) as
+`is_comparison`; this experiment varies the order size, so the impact term matters.
 
 Usage:
-    python experiments/strategy_comparison.py [--shares 20000] [--seed 42] [--output-dir results]
+    python -m experiments.strategy_comparison [--quick] [--results-dir results] [--seed 0]
 """
 
-import argparse
+from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 
-from plotting import plot_strategy_comparison
+import pandas as pd
 
-from qexec.execution.engine import OrderSide, ParentOrder
-from qexec.execution.strategies.qubo import run_integrated_comparison
+from experiments.common import Experiment, paired_vs_baselines, seed_range, summarize_groups
+from experiments.is_comparison import COST_METRICS
+from qexec.analysis.runners import STRATEGIES, run_strategy
+from qexec.experiment import ExperimentRecorder
 from qexec.market.simulator import TRADING_MINUTES_PER_DAY, MarketDataSimulator, MarketParams
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--shares", type=int, default=20_000)
-    parser.add_argument("--slices", type=int, default=20)
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--output-dir", type=Path, default=Path("results"))
-    args = parser.parse_args()
-    args.output_dir.mkdir(parents=True, exist_ok=True)
+@dataclass(frozen=True)
+class Config:
+    order_fractions_of_adv: tuple[float, ...] = (0.001, 0.01, 0.05)
+    minutes: int = TRADING_MINUTES_PER_DAY
+    initial_price: float = 175.0
+    annual_volatility: float = 0.22
+    daily_volume: int = 60_000_000
+    strategies: tuple[str, ...] = STRATEGIES
+    baselines: tuple[str, ...] = ("TWAP", "VWAP")
+    seed: int = 1000
+    num_seeds: int = 30
 
-    params = MarketParams(symbol="AAPL", initial_price=175.0, annual_volatility=0.22)
-    market_data = MarketDataSimulator(
-        params, total_daily_volume=60_000_000, seed=args.seed
-    ).generate(datetime(2024, 1, 15), num_minutes=TRADING_MINUTES_PER_DAY)
-    order = ParentOrder(
+
+FULL = Config()
+QUICK = Config(num_seeds=3, minutes=60, order_fractions_of_adv=(0.001, 0.05))
+
+
+def run(config: Config, rec: ExperimentRecorder) -> None:
+    params = MarketParams(
         symbol="AAPL",
-        side=OrderSide.BUY,
-        total_quantity=args.shares,
-        time_horizon_minutes=TRADING_MINUTES_PER_DAY,
+        initial_price=config.initial_price,
+        annual_volatility=config.annual_volatility,
     )
-    comparison = run_integrated_comparison(
-        order, market_data, qubo_time_slices=args.slices, qubo_sa_sweeps=1000, seed=args.seed
+    rows = []
+    for seed in seed_range(config):
+        sim = MarketDataSimulator(params, total_daily_volume=config.daily_volume, seed=seed)
+        data = sim.generate(datetime(2024, 1, 15), num_minutes=config.minutes)
+        for fraction in config.order_fractions_of_adv:
+            shares = int(fraction * config.daily_volume)
+            for name in config.strategies:
+                result = run_strategy(
+                    name, data, shares, seed=seed, daily_volume=config.daily_volume
+                )
+                rows.append({"order_fraction_of_adv": fraction, "seed": seed, **result.metrics()})
+    runs = pd.DataFrame(rows)
+    rec.write_table("runs", runs)
+    rec.write_table(
+        "summary", summarize_groups(runs, ["order_fraction_of_adv", "strategy"], COST_METRICS)
     )
-    print(comparison.to_dataframe().to_string(index=False))
-    print(f"\nLowest total cost: {comparison.best_strategy}")
-    path = plot_strategy_comparison(
-        comparison, market_data["price"].tolist(), args.output_dir / "strategy_comparison.png"
+    paired = pd.concat(
+        [
+            paired_vs_baselines(
+                runs,
+                unit_col="seed",
+                strategy_col="strategy",
+                value_col=metric,
+                baselines=config.baselines,
+                group_cols=["order_fraction_of_adv"],
+            )
+            for metric in ("shortfall_bps", "impact_cost_bps")
+        ]
     )
-    print(f"Saved {path}")
+    rec.write_table("paired", paired)
 
+
+EXPERIMENT = Experiment(
+    "strategy_comparison", FULL, QUICK, run, seed_range, description=__doc__.splitlines()[0]
+)
 
 if __name__ == "__main__":
-    main()
+    EXPERIMENT.main()

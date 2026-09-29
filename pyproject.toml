@@ -51,7 +51,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 # importlib mode: test files in different directories may share a basename, no __init__.py.
 addopts = "-q --import-mode=importlib -m 'not slow'"
 markers = ["slow: takes more than a few seconds (QAOA on Aer); run with `pytest -m slow`"]
