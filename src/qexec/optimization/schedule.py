@@ -56,8 +56,10 @@ def repair_schedule(quantities: ArrayLike, total_shares: int) -> NDArray[np.int_
         raise ValueError("quantities must be a non-empty 1-D array")
     if total_shares < 0:
         raise ValueError("total_shares must be non-negative")
-    mass = q.sum()
-    scaled = q * (total_shares / mass) if mass > 0 else np.full(q.size, total_shares / q.size)
+    peak = q.max()
+    # Normalise by the peak first so tiny (e.g. subnormal) masses cannot overflow the scale.
+    shape = q / peak if peak > 0 else np.ones(q.size)
+    scaled = shape * (total_shares / shape.sum())
     rounded = np.floor(scaled).astype(np.int_)
     missing = total_shares - int(rounded.sum())
     # Largest fractional parts first; ties go to the earliest slice.

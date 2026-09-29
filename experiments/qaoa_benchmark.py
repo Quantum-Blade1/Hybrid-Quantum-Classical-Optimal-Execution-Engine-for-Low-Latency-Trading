@@ -2,10 +2,11 @@
 depths and seeds (paper fig07, fig_hw_*, tables tab:sim_results / tab:config).
 
 This is the simulator part of the hardware benchmark. Families (experiments.problems):
-toy (the IBM-hardware problem), random Gaussian QUBOs and the 12-variable execution QUBO
-of fig07. For each QAOA run we record the best-of-shots energy (which saturates when the
-shot budget is comparable to 2^n, claims audit F2), the probability mass on the optimal
-set, the <H>-based approximation ratio, and a uniform-random baseline given the same total
+toy (the IBM-hardware problem), random Gaussian QUBOs, the 12-variable execution QUBO
+of fig07, and the Phase 7 exact binary encoding of the execution cost model ("slice").
+For each QAOA run we record the best-of-shots energy (which saturates when the shot
+budget is comparable to 2^n, claims audit F2), the probability mass on the optimal set,
+the <H>-based approximation ratio, and a uniform-random baseline given the same total
 shot budget (optimisation shots + final shots). Noisy runs use qexec.hardware.noise
 (not calibrated to a device).
 
@@ -54,6 +55,7 @@ METRICS = (
 class Config:
     toy_sizes: tuple[int, ...] = (4, 6, 8, 10, 12)
     random_sizes: tuple[int, ...] = (4, 6, 8, 10, 12)
+    slice_sizes: tuple[int, ...] = (4, 6, 8, 9, 10, 12)
     fig07: bool = True
     depths: tuple[int, ...] = (1, 2, 3)
     noisy_max_n: int = 10
@@ -62,6 +64,7 @@ class Config:
     final_shots: int = 5000
     maxiter: int = 50
     sa_sweeps: int = 1000
+    sa_restarts: int = 16
     count_table_n: int = 4
     seed: int = 0
     num_seeds: int = 5
@@ -69,7 +72,13 @@ class Config:
 
 FULL = Config()
 QUICK = Config(
-    toy_sizes=(4, 6), random_sizes=(4,), fig07=False, depths=(1,), noisy_max_n=4, num_seeds=2
+    toy_sizes=(4, 6),
+    random_sizes=(4,),
+    slice_sizes=(4,),
+    fig07=False,
+    depths=(1,),
+    noisy_max_n=4,
+    num_seeds=2,
 )
 
 
@@ -119,7 +128,11 @@ def qaoa_row(
 
 
 def run(config: Config, rec: ExperimentRecorder) -> None:
-    jobs = [("toy", n) for n in config.toy_sizes] + [("random", n) for n in config.random_sizes]
+    jobs = (
+        [("toy", n) for n in config.toy_sizes]
+        + [("random", n) for n in config.random_sizes]
+        + [("slice", n) for n in config.slice_sizes]
+    )
     if config.fig07:
         jobs.append(("fig07", 12))
     rows, count_rows = [], []
@@ -129,7 +142,9 @@ def run(config: Config, rec: ExperimentRecorder) -> None:
             bounds = energy_bounds(Q)
             common = {"family": family, "n": n, "seed": seed}
             start = time.perf_counter()
-            sa = SimulatedAnnealingSolver(num_sweeps=config.sa_sweeps, seed=seed).solve(Q)
+            sa = SimulatedAnnealingSolver(
+                num_sweeps=config.sa_sweeps, num_restarts=config.sa_restarts, seed=seed
+            ).solve(Q)
             rows.append(
                 {
                     **common,

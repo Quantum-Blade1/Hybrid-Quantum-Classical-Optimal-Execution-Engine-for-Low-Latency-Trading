@@ -34,8 +34,8 @@ def fig05_sa_convergence(res: Results) -> Figure:
     ax2.set_ylim(-0.05, 1.05)
     ax2.set_xlabel("Requested sweeps")
     ax2.set_ylabel("Fraction of seeds at optimum")
-    sweeps_run = int(final["sweeps_run"].max())
-    ax2.set_title(f"Cooling stops at {sweeps_run} sweeps")
+    honoured = bool((final["sweeps_run"] == final["num_sweeps"]).all())
+    ax2.set_title("All requested sweeps run" if honoured else "Sweeps cut short")
     fig.tight_layout()
     return fig
 
@@ -78,18 +78,32 @@ def fig06_solver_comparison(res: Results) -> Figure:
 def fig09_solution_quality_scaling(res: Results) -> Figure:
     s = res.table("solver_benchmark", "summary")
     fig, (ax1, ax2) = new_figure(1, 2, figsize=(7, 2.8))
-    for family, color in (("toy", "#4CAF50"), ("execution", "#D32F2F"), ("random", "#1976D2")):
-        d = _by_n(s, "optimal", family=family, solver="SA")
-        ax1.errorbar(
-            d["n"], d["mean"], yerr=ci_errorbars(d), fmt="o-", color=color, capsize=2, label=family
-        )
+    families = (
+        ("toy", "#4CAF50"),
+        ("execution", "#D32F2F"),
+        ("slice", "#FF9800"),
+        ("random", "#1976D2"),
+    )
+    for family, color in families:
+        for solver, style in (("SA", "o-"), ("SA_1", "x:")):
+            d = _by_n(s, "optimal", family=family, solver=solver)
+            if d.empty:
+                continue
+            label = family if solver == "SA" else None
+            ax1.plot(d["n"], d["mean"], style, color=color, label=label)
     ax1.set_ylim(-0.05, 1.05)
     ax1.set_xlabel("QUBO variables")
     ax1.set_ylabel("Fraction of seeds at optimum")
-    ax1.set_title("SA success rate (exact reference)")
-    ax1.legend(fontsize=7)
-    d = _by_n(s, "fill_rate", family="execution", solver="SA")
-    ax2.errorbar(d["n"], d["mean"], yerr=ci_errorbars(d), fmt="s-", color="#1976D2", capsize=2)
+    ax1.set_title("SA success (solid: restarts, dotted: 1 replica)")
+    ax1.legend(fontsize=6)
+    for family, color in (("execution", "#D32F2F"), ("slice", "#FF9800")):
+        d = _by_n(s, "fill_rate", family=family, solver="SA")
+        if d.empty:
+            continue
+        ax2.errorbar(
+            d["n"], d["mean"], yerr=ci_errorbars(d), fmt="s-", color=color, capsize=2, label=family
+        )
+    ax2.legend(fontsize=7)
     ax2.axhline(1.0, color="green", linestyle=":", alpha=0.6)
     ax2.set_xlabel("QUBO variables")
     ax2.set_ylabel("Selected / ordered shares")

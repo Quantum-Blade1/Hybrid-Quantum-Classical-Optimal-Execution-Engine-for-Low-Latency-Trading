@@ -79,9 +79,6 @@ class QUBOStrategy(BaseStrategy):
         self.qubo = ExecutionQUBO(config)
         solver = SimulatedAnnealingSolver(
             num_sweeps=self.sa_sweeps,
-            initial_temp=10.0,
-            final_temp=0.01,
-            cooling_rate=0.95,
             seed=self.seed,
         )
         slice_qty, self.qubo_result = optimize_schedule(self.qubo, solver)
