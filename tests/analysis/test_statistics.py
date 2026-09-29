@@ -5,7 +5,13 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from qexec.analysis.statistics import bootstrap_ci, paired_comparison, summarize
+from qexec.analysis.statistics import (
+    bootstrap_ci,
+    cluster_bootstrap_ci,
+    holm_adjust,
+    paired_comparison,
+    summarize,
+)
 
 finite = st.floats(-1e6, 1e6, allow_nan=False, allow_infinity=False)
 
@@ -66,3 +72,26 @@ def test_invalid_inputs_are_rejected():
         summarize([1.0, float("nan")])
     with pytest.raises(ValueError):
         paired_comparison([1.0, 2.0], [1.0])
+
+
+def test_holm_adjust_matches_hand_computation():
+
+    adjusted = holm_adjust([0.01, 0.04, 0.03, 0.005])
+    # sorted: 0.005*4=0.02, 0.01*3=0.03, 0.03*2=0.06, 0.04*1=0.04 -> running max 0.06
+    assert np.allclose(adjusted, [0.03, 0.06, 0.06, 0.02])
+    assert np.allclose(holm_adjust([0.5, 0.9]), [1.0, 1.0])
+    assert holm_adjust([]).size == 0
+    with pytest.raises(ValueError):
+        holm_adjust([1.5])
+
+
+def test_cluster_bootstrap_ci_brackets_the_mean_and_collapses_for_one_cluster():
+
+    rng = np.random.default_rng(0)
+    values = rng.normal(1.0, 1.0, 120)
+    clusters = np.repeat(np.arange(12), 10)
+    low, high = cluster_bootstrap_ci(values, clusters, n_resamples=2000)
+    assert low < values.mean() < high
+    assert cluster_bootstrap_ci([1.0, 3.0], [0, 0]) == (2.0, 2.0)
+    with pytest.raises(ValueError):
+        cluster_bootstrap_ci([1.0, 2.0], [0])

@@ -152,3 +152,50 @@ def paired_comparison(
         wilcoxon_p=p_value,
         frac_a_lower=float(np.mean(diff < 0)),
     )
+
+
+def holm_adjust(p_values: ArrayLike) -> NDArray[np.float64]:
+    """Holm (1979) step-down adjusted p-values (family-wise error control).
+
+    Sort p ascending, multiply the i-th smallest (0-based) by m - i, take the running
+    maximum and cap at 1; reject H_i at level alpha iff its adjusted p <= alpha.
+    """
+    p = np.asarray(p_values, dtype=np.float64).ravel()
+    if p.size == 0:
+        return p
+    if np.any((p < 0) | (p > 1)) or not np.all(np.isfinite(p)):
+        raise ValueError("p-values must be in [0, 1]")
+    m = p.size
+    order = np.argsort(p, kind="stable")
+    stepped = np.maximum.accumulate((m - np.arange(m)) * p[order])
+    adjusted = np.empty(m)
+    adjusted[order] = np.minimum(stepped, 1.0)
+    return adjusted
+
+
+def cluster_bootstrap_ci(
+    values: ArrayLike,
+    clusters: ArrayLike,
+    *,
+    n_resamples: int = DEFAULT_RESAMPLES,
+    confidence: float = DEFAULT_CONFIDENCE,
+    seed: int = 0,
+) -> tuple[float, float]:
+    """Percentile CI of the mean resampling whole clusters (e.g. days) with replacement."""
+    arr = _as_array(values)
+    labels = np.asarray(clusters).ravel()
+    if labels.shape != arr.shape:
+        raise ValueError("values and clusters must have the same length")
+    uniques, codes = np.unique(labels, return_inverse=True)
+    k = uniques.size
+    sums = np.bincount(codes, weights=arr, minlength=k)
+    counts = np.bincount(codes, minlength=k).astype(np.float64)
+    if k == 1:
+        value = float(arr.mean())
+        return value, value
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, k, size=(n_resamples, k))
+    boot = sums[idx].sum(axis=1) / counts[idx].sum(axis=1)
+    alpha = (1 - confidence) / 2
+    low, high = np.quantile(boot, [alpha, 1 - alpha])
+    return float(low), float(high)
