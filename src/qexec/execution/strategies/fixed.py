@@ -1,5 +1,3 @@
-"""Strategy that executes a precomputed schedule, rescaled to the order size."""
-
 import numpy as np
 import pandas as pd
 from numpy.typing import ArrayLike, NDArray
@@ -9,12 +7,7 @@ from qexec.optimization.schedule import repair_schedule
 
 
 class FixedScheduleStrategy(BaseStrategy):
-    """Execute a schedule computed elsewhere (e.g. by a QUBO solve).
-
-    The schedule is truncated (or zero-padded) to the market-data length and rescaled to
-    sum exactly to the order quantity (`repair_schedule`: largest-remainder rounding); an
-    all-zero schedule falls back to a uniform one.
-    """
+    """Precomputed schedule, padded or truncated, then repaired to sum exactly to the order."""
 
     strategy_name = "FixedSchedule"
 

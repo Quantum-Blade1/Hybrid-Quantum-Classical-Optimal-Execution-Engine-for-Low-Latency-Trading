@@ -1,12 +1,3 @@
-"""Schedules that minimise the execution `CostModel`: discretized Almgren-Chriss, the
-binary-encoded QUBO solved by simulated annealing, and an adaptive (hybrid) QUBO strategy
-that re-plans the remainder of the order from what it has observed.
-
-Settings (`QUBOSettings`) were tuned on development data only (docs/PROTOCOL.md): 5
-slices x 3 bits (n = 15 variables), 20 units, SA with 1,000 sweeps x 16 restarts, which
-reached the exact integer optimum (dynamic programming) on every development window.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -27,6 +18,8 @@ _MIN_RETURNS_FOR_SIGMA = 5
 
 @dataclass(frozen=True)
 class QUBOSettings:
+    """Tuned on development windows only (docs/PROTOCOL.md), where SA matched the DP optimum."""
+
     num_slices: int = 5
     bits: int = 3
     units: int = 20
@@ -36,8 +29,7 @@ class QUBOSettings:
 
 @dataclass(frozen=True)
 class QUBOPlan:
-    """A decoded QUBO solution. `objective_bps` is J of the decoded integer schedule and
-    `optimal_objective_bps` J of the exact integer-program optimum (DP), rounded the same way."""
+    """Decoded QUBO solution; objectives are J (bps) of the decoded and the exact DP schedule."""
 
     schedule: NDArray[np.int_]
     counts: NDArray[np.int_]
@@ -102,15 +94,7 @@ def _clipped_ratio(num: float, den: float, clip: tuple[float, float]) -> float:
 
 
 class AdaptiveQUBOStrategy(BaseStrategy):
-    """Hybrid: start from the QUBO plan; at `num_checkpoints` evenly spaced minutes re-solve
-    the remaining units over the remaining minutes with the QUBO/SA, after rescaling the
-    development profiles by what this order has observed so far.
-
-    Observed bars are those strictly before the current minute (the current bar's volume
-    and spread are not known before trading in it). Required columns: `volume`,
-    `expected_volume`, `half_spread_obs` (NaN when not estimated), `close`. Ratios
-    observed / expected of volume, half spread and volatility are clipped to `clip`.
-    """
+    """Re-solves the remainder's QUBO at checkpoints after rescaling profiles to observed ratios."""
 
     strategy_name = "Hybrid"
 
@@ -149,7 +133,7 @@ class AdaptiveQUBOStrategy(BaseStrategy):
         return plan
 
     def updated_model(self, minute: int, observed: pd.DataFrame) -> CostModel:
-        """Development model of minutes `minute..` rescaled by the observed ratios."""
+        # The current bar's volume and spread are unknown before trading in it.
         past = observed.iloc[:minute]
         volume_ratio = _clipped_ratio(
             float(past["volume"].sum()), float(past["expected_volume"].sum()), self.clip

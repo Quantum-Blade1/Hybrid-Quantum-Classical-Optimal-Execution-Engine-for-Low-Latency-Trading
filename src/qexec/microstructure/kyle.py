@@ -1,5 +1,3 @@
-"""Kyle's lambda estimated by rolling OLS of price changes on signed volume."""
-
 from collections import deque
 
 import numpy as np
@@ -9,10 +7,7 @@ _MIN_VOLUME_VARIANCE = 1e-12
 
 
 class KyleLambdaEstimator:
-    """Slope of dp = lambda * signed_volume + noise (Kyle, 1985) over a rolling window.
-
-    Equal-weight OLS; the estimate is held until 20 observations are available.
-    """
+    """Rolling equal-weight OLS slope of dp = lambda * signed_volume + noise (Kyle, 1985)."""
 
     def __init__(self, window_size: int = 100) -> None:
         self._price_changes: deque[float] = deque(maxlen=window_size)
@@ -20,7 +15,7 @@ class KyleLambdaEstimator:
         self._lambda = 0.0
 
     def update(self, price_change: float, signed_volume: float) -> float:
-        """Add one observation and return the (unclamped) OLS slope."""
+        """Add one observation and return the unclamped OLS slope."""
         self._price_changes.append(price_change)
         self._signed_volumes.append(signed_volume)
         if len(self._price_changes) < _MIN_OBSERVATIONS:

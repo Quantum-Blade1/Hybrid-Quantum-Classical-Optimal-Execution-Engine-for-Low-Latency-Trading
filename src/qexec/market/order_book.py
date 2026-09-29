@@ -1,5 +1,3 @@
-"""Synthetic limit order book with exponentially decaying depth."""
-
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -13,8 +11,6 @@ _SHARES_PER_ORDER = 100
 
 @dataclass
 class PriceLevel:
-    """One price level of the book."""
-
     price: float
     quantity: int
     num_orders: int = 1
@@ -57,13 +53,7 @@ class OrderBookSnapshot:
 
 
 class OrderBook:
-    """Generates book snapshots from mid/spread/volume and walks the book to fill orders.
-
-    With a `seed`, `generate_snapshot(..., key=k)` draws the level sizes from a generator
-    seeded by (seed, k), so two executions that both trade at minute k see the same book
-    (common random numbers across strategies). Without `key` the book's own stream is used.
-    A bar with no volume has no liquidity: its snapshot is empty and nothing fills.
-    """
+    """Synthetic limit order book with exponentially decaying depth."""
 
     def __init__(
         self,
@@ -95,12 +85,10 @@ class OrderBook:
     def generate_snapshot(
         self, mid_price: float, spread: float, minute_volume: int, key: int | None = None
     ) -> OrderBookSnapshot:
-        """Snapshot with lognormal level sizes decaying geometrically from the touch.
-
-        Empty when `minute_volume <= 0` (no trading in the bar).
-        """
+        """Lognormal sizes decaying geometrically from the touch; empty in a bar with no volume."""
         if minute_volume <= 0:
             return OrderBookSnapshot()
+        # Seeded by (seed, key) so strategies trading at the same minute see the same book.
         if key is not None and self.seed is not None:
             rng = np.random.default_rng([self.seed, key])
         else:
@@ -119,10 +107,7 @@ class OrderBook:
     def simulate_execution(
         self, snapshot: OrderBookSnapshot, order_size: int, side: str
     ) -> tuple[float, int, float]:
-        """Walk the book with a marketable order.
-
-        Returns (average price, filled quantity, impact = last fill price minus touch).
-        """
+        """Walk the book; returns (avg price, filled, impact = last fill price minus the touch)."""
         is_buy = side.lower() == "buy"
         levels = snapshot.asks if is_buy else snapshot.bids
         if not levels:

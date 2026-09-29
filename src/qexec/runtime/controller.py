@@ -1,5 +1,3 @@
-"""Wires the slow-path optimizer and the fast-path engine through one `PolicyQueue`."""
-
 import logging
 from time import perf_counter
 from typing import Any
@@ -41,7 +39,7 @@ class HybridController:
         )
 
     def execute_order(self, total_shares: int, num_slices: int) -> dict[str, Any]:
-        """Block until the tick loop finishes; return fill and optimizer statistics."""
+        """Blocks until the tick loop finishes; returns fill and optimizer statistics."""
         logger.info("Starting hybrid execution: %d shares, %d slices", total_shares, num_slices)
         start = perf_counter()
 
@@ -71,5 +69,4 @@ class HybridController:
         }
 
     def get_execution_report(self) -> pd.DataFrame:
-        """Execution log as a DataFrame (one row per tick with a fill)."""
         return pd.DataFrame(self.engine.execution_log)

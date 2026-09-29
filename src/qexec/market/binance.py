@@ -1,17 +1,3 @@
-"""Binance public spot data (https://data.binance.vision): aggregated trades -> 1-minute bars.
-
-Daily `aggTrades` files are header-less CSVs with the columns
-
-    agg_trade_id, price, quantity, first_trade_id, last_trade_id, transact_time,
-    is_buyer_maker, is_best_match
-
-`transact_time` is in milliseconds before 2025 and in microseconds from 2025 on; both are
-accepted. `is_buyer_maker` true means the buyer posted the resting order, so the *taker* sold.
-
-Everything here is a pure function of its inputs (no network access; downloading is
-`experiments/fetch_binance.py`).
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -70,11 +56,7 @@ def sha256_file(path: Path) -> str:
 
 
 def read_agg_trades(source: str | Path | io.BytesIO) -> pd.DataFrame:
-    """Aggregated trades as a DataFrame sorted by time.
-
-    `source` is a CSV path, a `.zip` path containing one CSV, or a file object. A header
-    row, if present, is skipped. The `time` column is a timezone-naive UTC timestamp.
-    """
+    """Trades sorted by time from a CSV, a one-CSV `.zip` or a file object; `time` is naive UTC."""
     if isinstance(source, (str, Path)) and str(source).endswith(".zip"):
         with zipfile.ZipFile(source) as archive:
             names = [n for n in archive.namelist() if n.endswith(".csv")]
@@ -96,18 +78,14 @@ def read_agg_trades(source: str | Path | io.BytesIO) -> pd.DataFrame:
         }
     )
     raw_time = df["transact_time"].astype(np.int64).to_numpy()
+    # transact_time is in milliseconds before 2025 and in microseconds from 2025 on.
     per_second = 10**6 if raw_time.size and raw_time.max() > _MICROSECOND_THRESHOLD else 10**3
     out["time"] = (raw_time * (10**9 // per_second)).astype("datetime64[ns]")
     return out.sort_values(["time", "agg_trade_id"], kind="stable").reset_index(drop=True)
 
 
 def opposite_side_gaps(trades: pd.DataFrame, max_gap_ms: float = SPREAD_MAX_GAP_MS) -> pd.DataFrame:
-    """Consecutive trade pairs of opposite taker side at most `max_gap_ms` apart.
-
-    Returns the later trade's time and the absolute price difference in bps of the mean
-    price of the pair: a trade-sign proxy for the quoted spread (a buyer-initiated trade
-    prints at the ask, a seller-initiated one at the bid).
-    """
+    """Opposite-taker-side trade pairs within `max_gap_ms`; gap_bps proxies the quoted spread."""
     if len(trades) < 2:
         return pd.DataFrame({"time": pd.Series([], dtype="datetime64[ns]"), "gap_bps": []})
     price = trades["price"].to_numpy()
@@ -127,16 +105,7 @@ def minute_bars(
     max_gap_ms: float = SPREAD_MAX_GAP_MS,
     min_pairs: int = SPREAD_MIN_PAIRS,
 ) -> pd.DataFrame:
-    """1-minute bars on the full grid [start, end) (default: the trades' own minutes).
-
-    Columns (`BAR_COLUMNS`): OHLC of trade prices; base `volume` and `quote_volume`;
-    `vwap` = quote / base volume; `trade_count` (underlying trades, summed over aggregated
-    trades); `buy_volume` (taker buys); `signed_volume` = taker buy - taker sell;
-    `half_spread_bps` = half the median opposite-side price gap of the bar
-    (`opposite_side_gaps`), NaN with fewer than `min_pairs` pairs; `spread_pairs`.
-    A minute without trades has zero volume and carries the previous close in OHLC and
-    VWAP (NaN before the first trade).
-    """
+    """1-minute bars on the grid [start, end); empty minutes carry the previous close."""
     minute = trades["time"].dt.floor("min")
     if start is None:
         start = minute.min() if len(trades) else pd.Timestamp(0)
@@ -145,6 +114,7 @@ def minute_bars(
     grid = pd.date_range(start, end, freq="min", inclusive="left")
 
     qty = trades["quantity"]
+    # is_buyer_maker means the buyer's order was resting, so the taker sold.
     taker_buy = ~trades["is_buyer_maker"]
     frame = pd.DataFrame(
         {

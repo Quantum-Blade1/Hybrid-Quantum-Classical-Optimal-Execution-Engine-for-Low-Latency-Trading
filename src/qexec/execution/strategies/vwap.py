@@ -1,5 +1,3 @@
-"""VWAP: slices proportional to a volume profile, capped by participation and slice size."""
-
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
@@ -9,12 +7,7 @@ from qexec.market.order_book import OrderBook
 
 
 class VWAPStrategy(BaseStrategy):
-    """Volume-weighted execution.
-
-    With `historical_profile` the schedule follows that profile (resampled to the
-    execution length); otherwise it uses the realised volume of `market_data`,
-    i.e. a perfect-foresight VWAP.
-    """
+    """Follows `historical_profile` if given, else realised volume (perfect-foresight VWAP)."""
 
     strategy_name = "VWAP"
     benchmark_name = "VWAP"
@@ -43,8 +36,6 @@ class VWAPStrategy(BaseStrategy):
         return profile
 
     def calculate_schedule(self, total_shares: int, market_data: pd.DataFrame) -> NDArray[np.int_]:
-        """Round the capped volume-weighted schedule, then allocate leftover shares at random
-        (weighted by volume) among slices still below both the participation and slice caps."""
         volume_profile = self._volume_profile(market_data)
         vol_weights = volume_profile / volume_profile.sum()
         participation_cap = volume_profile * self.participation_rate

@@ -1,5 +1,3 @@
-"""TWAP: equal slices at fixed intervals, capped at a fraction of the order per slice."""
-
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
@@ -27,7 +25,6 @@ class TWAPStrategy(BaseStrategy):
         self.max_slice_pct = max_slice_pct
 
     def calculate_schedule(self, total_shares: int, market_data: pd.DataFrame) -> NDArray[np.int_]:
-        """Equal slices every `interval_minutes`; shares cut by the cap are topped up afterwards."""
         num_minutes = len(market_data)
         schedule = np.zeros(num_minutes, dtype=int)
         execution_points = list(range(0, num_minutes, self.interval_minutes))
@@ -60,7 +57,6 @@ class TWAPStrategy(BaseStrategy):
         return schedule
 
     def calculate_benchmark(self, market_data: pd.DataFrame) -> float:
-        """Mean price at the execution points."""
         execution_points = list(range(0, len(market_data), self.interval_minutes))
         return float(market_data.iloc[execution_points]["price"].mean())
 
@@ -72,7 +68,6 @@ def compare_strategies(
     side: str,
     market_data: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Execute both strategies on the same data and tabulate their metrics."""
     vwap_metrics = vwap_strategy.execute(total_shares, side, market_data)
     twap_metrics = twap_strategy.execute(total_shares, side, market_data)
     vwap_price = calculate_vwap(market_data)

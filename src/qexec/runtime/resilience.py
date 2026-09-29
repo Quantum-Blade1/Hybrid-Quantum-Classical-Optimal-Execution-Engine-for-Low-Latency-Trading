@@ -1,5 +1,3 @@
-"""Timeout, retry with exponential backoff, validation and fallback around an optimizer call."""
-
 import logging
 import queue
 import time
@@ -82,7 +80,6 @@ class OptimizerResilience:
         errors: queue.Queue[Exception] = queue.Queue()
 
         def wrapper() -> None:
-            # Forward any failure to the calling thread, where it is re-raised.
             try:
                 results.put(func())
             except Exception as e:
@@ -101,7 +98,6 @@ class OptimizerResilience:
 
 
 def validate_schedule(schedule: NDArray[np.float64], total_shares: int) -> bool:
-    """Non-negative numpy schedule summing to `total_shares` within max(1, 1%)."""
     if not isinstance(schedule, np.ndarray):
         logger.debug("Invalid schedule: not a numpy array")
         return False

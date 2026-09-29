@@ -1,5 +1,3 @@
-"""Slow path: background thread that re-solves the execution QUBO and publishes policies."""
-
 import logging
 import time
 from threading import Event, Lock, Thread
@@ -22,14 +20,7 @@ _SA_SWEEPS = 200
 
 
 class AsyncOptimizer:
-    """Every `update_interval` seconds, solves for the current order and publishes a policy.
-
-    Each policy plans the whole order; the fast path rescales its tail to the shares still
-    unexecuted. With a `latency_monitor`, each solve is recorded as `slow_path_optimize`.
-
-    `optimizer_type` is "sa" (SA on `slice_level_config`) or "uniform" (TWAP). QAOA is
-    offline-only (`qexec.optimization.solvers.qaoa`). Failures fall back to TWAP.
-    """
+    """Slow path: re-solves the whole order every `update_interval` s, falling back to TWAP."""
 
     def __init__(
         self,

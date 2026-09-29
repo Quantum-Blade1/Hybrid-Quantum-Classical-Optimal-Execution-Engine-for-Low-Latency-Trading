@@ -1,16 +1,3 @@
-"""Calibration of the execution cost model on development-day 1-minute bars.
-
-Input: bars from `qexec.market.binance.minute_bars` for whole UTC days (1,440 rows each).
-Outputs (docs/PROTOCOL.md, section 2):
-
-* ADV: mean daily base volume;
-* intraday profiles on `bucket_minutes` buckets of the UTC day: expected volume per minute
-  (mean), half spread (median of the bars' trade-sign estimates), per-minute volatility
-  (RMS of 1-minute close-to-close log returns, bps);
-* the impact coefficient beta (bps per unit participation): OLS through the origin of
-  r_k = beta SV_k / Vbar_k + e_k, with a day-block bootstrap standard error.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -158,7 +145,7 @@ def _ols_origin(x: NDArray[np.float64], y: NDArray[np.float64]) -> float:
 def fit_impact(
     bars: pd.DataFrame, profile: IntradayProfile, *, n_boot: int = 1000, seed: int = 0
 ) -> ImpactFit:
-    """Kyle-style regression of returns on signed volume / expected bar volume."""
+    """OLS through the origin of r_k = beta SV_k / Vbar_k + e_k (bps), day-block bootstrap SE."""
     r = log_returns_bps(bars)
     expected = profile.volume[_minute_of_day(bars)]
     x = bars["signed_volume"].to_numpy(dtype=np.float64) / expected
@@ -203,7 +190,7 @@ def calibrate(
     min_lots: int,
     bucket_minutes: int = 15,
 ) -> Calibration:
-    """Full calibration from whole-day development bars."""
+    """Calibrate on whole UTC days of development bars (ADV = mean daily base volume)."""
     days = tuple(sorted({str(d.date()) for d in pd.DatetimeIndex(bars["timestamp"]).normalize()}))
     adv = float(bars["volume"].sum() / len(days))
     profile = intraday_profile(bars, bucket_minutes)

@@ -1,5 +1,3 @@
-"""Synthetic intraday market data: GBM prices, U-shaped volume, volume-dependent spreads."""
-
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -16,8 +14,6 @@ SeedLike = int | np.random.SeedSequence | None
 
 @dataclass
 class MarketParams:
-    """Parameters of the synthetic market."""
-
     symbol: str = "AAPL"
     initial_price: float = 150.0
     annual_volatility: float = 0.25
@@ -53,7 +49,6 @@ class IntraDayPriceGenerator:
         num_minutes: int = TRADING_MINUTES_PER_DAY,
         initial_price: float | None = None,
     ) -> pd.DataFrame:
-        """Columns: timestamp, price (rounded to tick). `initial_price` overrides the params."""
         if initial_price is None:
             initial_price = self.params.initial_price
         start_time = datetime.strptime(self.params.trading_start, "%H:%M")
@@ -88,7 +83,6 @@ class VolumeProfileGenerator:
         return np.asarray(weights / weights.sum())
 
     def generate(self, num_minutes: int = TRADING_MINUTES_PER_DAY) -> NDArray[np.int_]:
-        """Per-minute volume, floored at 100 shares."""
         weights = self._volume_profile_weights(num_minutes)
         noisy_weights = weights * self.rng.lognormal(0, 0.3, num_minutes)
         noisy_weights /= noisy_weights.sum()
@@ -97,10 +91,7 @@ class VolumeProfileGenerator:
 
 
 class MarketDataSimulator:
-    """Combines price, volume and spread generation into one minute-bar DataFrame.
-
-    Prices, volumes and spreads draw from independent child streams of `seed`.
-    """
+    """Minute bars whose prices, volumes and spreads use independent child streams of `seed`."""
 
     def __init__(
         self,
@@ -117,7 +108,6 @@ class MarketDataSimulator:
     def _generate_spread(
         self, prices: NDArray[np.float64], volumes: NDArray[np.int_]
     ) -> NDArray[np.float64]:
-        """Spread in dollars, widening as volume falls, with +/-20% uniform noise."""
         vol_factor = volumes.max() / (volumes + 1)
         vol_factor = vol_factor / vol_factor.max()
         p = self.params
@@ -135,10 +125,7 @@ class MarketDataSimulator:
         num_minutes: int = TRADING_MINUTES_PER_DAY,
         initial_price: float | None = None,
     ) -> pd.DataFrame:
-        """Columns: timestamp, symbol, price (mid), bid, ask, spread, volume.
-
-        Successive calls continue the random streams, so days generated in sequence differ.
-        """
+        """Successive calls continue the random streams, so days generated in sequence differ."""
         if date is None:
             date = datetime.now()
 
@@ -166,7 +153,6 @@ class MarketDataSimulator:
 
 
 def calculate_vwap(market_data: pd.DataFrame) -> float:
-    """Volume-weighted average of the `price` column (plain mean if there is no volume)."""
     total_volume = market_data["volume"].sum()
     if total_volume <= 0:
         return float(market_data["price"].mean())

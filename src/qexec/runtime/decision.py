@@ -1,9 +1,3 @@
-"""Cost-benefit rule for invoking the (expensive) slow-path optimizer.
-
-invoke iff order_size >= min_order_size, the optimizer is available, the expected latency
-is within max_latency_ms, and E[improvement] / latency_cost > lambda_tradeoff.
-"""
-
 import logging
 from collections import deque
 from dataclasses import dataclass, field
@@ -23,8 +17,6 @@ _LATENCY_VOL_SCALE = 0.001
 
 @dataclass(frozen=True)
 class DecisionConfig:
-    """Thresholds and cost coefficients of the decision rule."""
-
     lambda_tradeoff: float = 1.0
     min_order_size: int = 1000
     max_latency_ms: float = 1000.0
@@ -35,8 +27,6 @@ class DecisionConfig:
 
 @dataclass(frozen=True)
 class MarketState:
-    """Market conditions the decision is conditioned on."""
-
     current_price: float
     bid_ask_spread: float
     market_depth: int
@@ -50,8 +40,6 @@ class MarketState:
 
     @classmethod
     def from_market_data(cls, market_data: pd.DataFrame) -> "MarketState":
-        """Latest bar's price, spread and volume; volatility is the std of simple returns
-        (0.01 for a single bar)."""
         latest = market_data.iloc[-1]
         if len(market_data) > 1:
             volatility = float(market_data["price"].pct_change().dropna().std())
@@ -91,7 +79,6 @@ class ImprovementTracker:
     def expected_improvement(
         self, order_size: int, volatility: float, base_cost_estimate: float
     ) -> float:
-        """base_cost x weighted mean improvement; weight = similarity(size, vol) x recency."""
         if not self._improvement_pcts:
             return base_cost_estimate * DEFAULT_IMPROVEMENT_PCT
 
@@ -159,11 +146,6 @@ class OptimizationDecisionEngine:
     def decide(
         self, order_size: int, market_state: MarketState, optimization_latency_ms: float = 500.0
     ) -> DecisionResult:
-        """Hard thresholds first, then the cost-benefit ratio against `lambda_tradeoff`.
-
-        Base cost = N spread/2 + 0.1 N P sigma; E[improvement] = tracker estimate +
-        sigma w_vol base cost; latency cost = t c_ms + (t/1000) sigma P N 0.001.
-        """
         self.decisions_made += 1
         cfg = self.config
         if order_size < cfg.min_order_size:

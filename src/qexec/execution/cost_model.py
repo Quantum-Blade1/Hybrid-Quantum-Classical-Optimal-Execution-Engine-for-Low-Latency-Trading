@@ -1,20 +1,3 @@
-"""Expected cost and risk of a per-minute schedule, and its exact continuous optimum.
-
-This is the model the Phase 7 optimisers minimise (AC, the binary-encoded QUBO, the hybrid)
-and the expected value of what `ImpactFillModel` charges on real bars. For an order of N
-units split as q_k over minutes k = 0..K-1, with fractions f_k = q_k / N and remaining
-fraction r_k = 1 - sum_{j<k} f_j before minute k (docs/MATHEMATICAL_MODEL.md):
-
-    E[IS]   = sum_k f_k (h_k + beta N f_k / V_k)                    bps of arrival notional
-    Var[IS] = sum_k sigma_k^2 r_k^2                                 bps^2
-    J(f)    = E[IS] + lambda Var[IS]
-
-h_k is the half spread (bps), V_k the expected volume (units), sigma_k the per-minute
-return volatility (bps) and beta the impact in bps per unit participation. J is a convex
-quadratic f^T A f + b^T f + c; `optimal_fractions` returns its exact minimiser over the
-simplex (discretized Almgren-Chriss with time-varying inputs).
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
@@ -36,12 +19,12 @@ def _vector(values: ArrayLike, name: str) -> NDArray[np.float64]:
 
 @dataclass(frozen=True)
 class CostModel:
-    """Per-minute market inputs of the execution cost model."""
+    """Per-minute inputs of the discretized Almgren-Chriss model (docs/MATHEMATICAL_MODEL.md)."""
 
     expected_volume: NDArray[np.float64]
     half_spread_bps: NDArray[np.float64]
     sigma_bps: NDArray[np.float64]
-    impact_bps: float
+    impact_bps: float  # beta, bps per unit participation
     risk_aversion: float = 0.0
 
     def __post_init__(self) -> None:
@@ -67,7 +50,6 @@ class CostModel:
         return int(self.expected_volume.size)
 
     def window(self, start: int, stop: int | None = None) -> CostModel:
-        """The model restricted to minutes start..stop-1."""
         sl = slice(start, stop)
         return replace(
             self,
@@ -82,8 +64,6 @@ class CostModel:
     def with_impact(self, impact_bps: float) -> CostModel:
         return replace(self, impact_bps=impact_bps)
 
-    # -- cost of a schedule ---------------------------------------------------------------
-
     def _fractions(self, schedule: ArrayLike, total: float) -> NDArray[np.float64]:
         q = np.asarray(schedule, dtype=np.float64)
         if q.shape != (self.num_minutes,):
@@ -93,14 +73,13 @@ class CostModel:
         return q / total
 
     def expected_cost_bps(self, schedule: ArrayLike, total: float) -> float:
-        """Expected spread + impact cost of `schedule` (units per minute) for an order of
-        `total` units, in bps of arrival notional."""
+        """E[IS] = sum f_k (h_k + beta N f_k / V_k), in bps of arrival notional, f = q / N."""
         f = self._fractions(schedule, total)
         impact = self.impact_bps * total * f**2 / self.expected_volume
         return float(f @ self.half_spread_bps + impact.sum())
 
     def variance_bps2(self, schedule: ArrayLike, total: float) -> float:
-        """Variance of the timing cost, bps^2."""
+        """Var[IS] = sum sigma_k^2 r_k^2 (bps^2), r_k the fraction remaining before minute k."""
         f = self._fractions(schedule, total)
         remaining = 1.0 - np.concatenate(([0.0], np.cumsum(f)[:-1]))
         return float(np.sum(self.sigma_bps**2 * remaining**2))
@@ -122,8 +101,6 @@ class CostModel:
         b = self.half_spread_bps - 2 * lam * lower.T @ s2
         return (A + A.T) / 2, b, float(lam * s2.sum())
 
-    # -- exact optimum ----------------------------------------------------------------
-
     def _water_filling(self, total: float) -> NDArray[np.float64]:
         """Exact minimiser for lambda = 0: f_k = max(0, (nu - h_k) V_k / (2 beta N))."""
         h = self.half_spread_bps
@@ -142,8 +119,7 @@ class CostModel:
         return np.asarray(f / f.sum(), dtype=np.float64)
 
     def optimal_fractions(self, total: float) -> NDArray[np.float64]:
-        """Minimiser of J over {f >= 0, sum f = 1}: water-filling when lambda = 0, else a
-        convex QP solved by SLSQP from the water-filling start."""
+        """Minimiser of J on the simplex: water-filling if lambda = 0, else SLSQP from it."""
         start = self._water_filling(total)
         if self.risk_aversion == 0:
             return start
@@ -161,11 +137,7 @@ class CostModel:
         return np.asarray(f / f.sum(), dtype=np.float64)
 
     def kkt_residual(self, fractions: ArrayLike, total: float) -> float:
-        """Largest violation of the KKT conditions of min J on the simplex (0 = optimal).
-
-        At the optimum the gradient equals a common multiplier nu on the support and is
-        >= nu off it.
-        """
+        """Largest violation of the KKT conditions of min J on the simplex (0 = optimal)."""
         f = np.asarray(fractions, dtype=np.float64)
         A, b, _ = self.quadratic_form(total)
         grad = 2 * A @ f + b

@@ -1,10 +1,3 @@
-"""Tick-level pipeline: microstructure and regime estimates re-parameterise the HFT QUBO that
-a background SA loop keeps re-solving, while the tick loop executes the newest policy.
-
-    ticks -> MicrostructureAnalyzer, AdaptiveRiskManager -> HFTQUBOConfig
-          -> [slow path: SA solve] -> PolicyQueue -> [fast path: tick loop] -> fills
-"""
-
 import logging
 import time
 from dataclasses import dataclass, field
@@ -57,12 +50,7 @@ class HFTExecutionResult:
 
 
 class HFTQuantumPipeline:
-    """Runs `execute` over a tick array with the optimizer in a background thread.
-
-    Each tick updates the estimators, copies Kyle's lambda, VPIN, adverse selection and
-    impact weight max(0.1, 0.25 lambda_risk) into the shared QUBO config, then executes
-    the current policy's slice (the schedule repeats with period `num_tick_slices`).
-    """
+    """Tick loop on the newest policy while a background SA thread re-solves the HFT QUBO."""
 
     def __init__(self, config: HFTPipelineConfig) -> None:
         self.config = config
@@ -91,7 +79,6 @@ class HFTQuantumPipeline:
         asks: NDArray[np.float64],
         volumes: NDArray[np.float64],
     ) -> HFTExecutionResult:
-        """Run the tick loop until the order is filled or the ticks run out."""
         if len(prices) == 0:
             raise ValueError("execute needs at least one tick")
         result = HFTExecutionResult(target_shares=self.config.total_shares)

@@ -1,16 +1,10 @@
-"""Adverse selection as effective minus realised spread over a fixed horizon."""
-
 from collections import deque
 
 import numpy as np
 
 
 class AdverseSelectionModel:
-    """Effective spread 2d(p - m_t) and realised spread 2d(p - m_{t+h}), d = +1 buy, -1 sell.
-
-    `estimate` averages both over the window and reports max(0, effective - realised),
-    i.e. the adverse mid-price move 2d(m_{t+h} - m_t).
-    """
+    """Effective 2d(p - m_t) minus realised 2d(p - m_{t+h}) spread, d = +1 buy, -1 sell."""
 
     def __init__(self, lookback_ticks: int = 100, realized_horizon: int = 10) -> None:
         self._lookback = lookback_ticks

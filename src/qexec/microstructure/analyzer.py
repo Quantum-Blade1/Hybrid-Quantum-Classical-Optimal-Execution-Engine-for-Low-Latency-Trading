@@ -1,5 +1,3 @@
-"""Per-tick microstructure state (Kyle's lambda, VPIN, adverse selection) for the HFT QUBO."""
-
 from dataclasses import dataclass
 
 from qexec.microstructure.adverse_selection import AdverseSelectionModel
@@ -11,8 +9,6 @@ _WIDE_SPREAD_BPS = 10.0
 
 @dataclass(frozen=True)
 class MicrostructureState:
-    """Microstructure estimates after one tick."""
-
     kyle_lambda: float = 0.0
     vpin: float = 0.0
     adverse_selection_cost: float = 0.0
@@ -24,11 +20,7 @@ class MicrostructureState:
 
 
 class MicrostructureAnalyzer:
-    """Feeds each tick to the Kyle, VPIN and adverse-selection estimators.
-
-    Signed volume for Kyle's lambda uses the tick rule; the spread regime is
-    "toxic" when VPIN > 0.7, "wide" when the quoted spread exceeds 10 bps, else "normal".
-    """
+    """Kyle's lambda (tick-rule signed volume), VPIN and adverse selection per tick."""
 
     def __init__(
         self,

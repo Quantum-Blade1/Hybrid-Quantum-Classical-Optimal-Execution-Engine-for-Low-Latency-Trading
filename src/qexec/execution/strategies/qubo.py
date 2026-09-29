@@ -1,5 +1,3 @@
-"""QUBO-scheduled execution strategy and a VWAP/TWAP/QUBO comparison through the engine."""
-
 from __future__ import annotations
 
 import logging
@@ -25,18 +23,12 @@ logger = logging.getLogger(__name__)
 
 
 def default_quantity_levels(total_shares: int, num_time_slices: int) -> list[int]:
-    """Levels {0, 1, 2, 3, 4} x N/(2T)."""
     base_qty = total_shares // (num_time_slices * 2)
     return [0, base_qty, base_qty * 2, base_qty * 3, base_qty * 4]
 
 
 class QUBOStrategy(BaseStrategy):
-    """Schedule from an `ExecutionQUBO` solved by simulated annealing, spread over minutes.
-
-    The decoded slice quantities are repaired to sum exactly to the order
-    (`repair_schedule`); `get_optimization_stats()["total_shares"]` is the pre-repair sum
-    the QUBO solution selected.
-    """
+    """SA-solved `ExecutionQUBO` schedule; stats' "total_shares" is the pre-repair sum."""
 
     strategy_name = "QUBO"
 
@@ -87,7 +79,6 @@ class QUBOStrategy(BaseStrategy):
         return spread_over_minutes(repaired.astype(float), len(market_data)).astype(int)
 
     def get_optimization_stats(self) -> dict[str, Any]:
-        """Energy, solver effort, constraint check and cost breakdown of the last solve."""
         if self.qubo is None or self.qubo_result is None:
             return {}
         solution = self.qubo_result.solution
@@ -103,13 +94,7 @@ class QUBOStrategy(BaseStrategy):
 
 @dataclass
 class StrategyComparison:
-    """Engine reports of VWAP, TWAP and QUBO on the same order and market data.
-
-    `best_strategy` has the lowest implementation shortfall including the opportunity
-    cost of unfilled shares, so a strategy cannot rank first by underfilling (spread and
-    impact cost alone are only paid on the shares that were filled).
-    `cost_savings` is the mean shortfall of VWAP and TWAP minus QUBO's, in currency.
-    """
+    """`best_strategy` minimises shortfall incl. opportunity cost, so underfilling cannot win."""
 
     vwap_report: ExecutionReport
     twap_report: ExecutionReport
@@ -160,11 +145,7 @@ def run_integrated_comparison(
     qubo_sa_sweeps: int = 1000,
     seed: int = 42,
 ) -> StrategyComparison:
-    """Execute copies of `parent_order` with VWAP, TWAP and QUBO, each in a fresh engine.
-
-    All three engines use the same book seed, so they face identical books minute by
-    minute. VWAP follows the realised volume of `market_data` (perfect foresight).
-    """
+    """Same book seed for all three engines; VWAP uses realised volume (perfect foresight)."""
     qubo_strategy = QUBOStrategy(
         num_time_slices=qubo_time_slices, sa_sweeps=qubo_sa_sweeps, seed=seed
     )

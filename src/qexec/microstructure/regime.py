@@ -1,9 +1,3 @@
-"""Volatility/spread regime detection and the regime-dependent risk aversion lambda.
-
-lambda = clip(base * m_vol * m_spread * m_volume, lambda_min, lambda_max), smoothed by an EWMA.
-In Almgren-Chriss terms a higher lambda front-loads execution; a lower one approaches TWAP.
-"""
-
 from collections import Counter, deque
 from dataclasses import dataclass
 from enum import Enum
@@ -33,8 +27,6 @@ class SpreadRegime(Enum):
 
 @dataclass(frozen=True)
 class RegimeState:
-    """Regime classification and lambda after one tick."""
-
     vol_regime: VolatilityRegime = VolatilityRegime.NORMAL
     spread_regime: SpreadRegime = SpreadRegime.NORMAL
     lambda_value: float = 1.0
@@ -49,11 +41,7 @@ class RegimeState:
 
 
 class VolatilityEstimator:
-    """Fast (alpha=0.06) and slow (alpha=0.01) EWMA of squared log returns.
-
-    Both are initialised to the sample variance of the first 20 returns; the regime is
-    read from the ratio sqrt(fast/slow): <0.7 low, <1.3 normal, <2 high, else extreme.
-    """
+    """Fast and slow EWMA of squared log returns, seeded with the variance of the first 20."""
 
     def __init__(self, fast_alpha: float = 0.06, slow_alpha: float = 0.01, vol_window: int = 100):
         self._fast_alpha = fast_alpha
@@ -123,10 +111,7 @@ class VolatilityEstimator:
 
 
 class SpreadEstimator:
-    """Spread regime from the mean of the last 10 spreads relative to the median of the first 20.
-
-    Ratio <0.7 tight, <1.5 normal, <3 wide, else gapped.
-    """
+    """Regime from the mean of the last 10 spreads over the median of the first 20."""
 
     def __init__(self, window: int = 100) -> None:
         self._spreads_bps: deque[float] = deque(maxlen=window)
@@ -162,11 +147,7 @@ class SpreadEstimator:
 
 
 class AdaptiveRiskManager:
-    """Regime-dependent risk aversion lambda for the HFT QUBO.
-
-    Multipliers: volatility low/normal/high/extreme = 0.5/1/2/4; spread tight/normal/wide/gapped
-    = 1.2/1/0.6/0.3; volume 0.8 when volume > 2x average, 1.3 when < 0.3x.
-    """
+    """lambda = clip(base * m_vol * m_spread * m_volume), EWMA-smoothed; higher front-loads."""
 
     VOL_MULTIPLIERS: ClassVar[dict[VolatilityRegime, float]] = {
         VolatilityRegime.LOW: 0.5,
@@ -255,7 +236,6 @@ class AdaptiveRiskManager:
         return self._state
 
     def get_qubo_params(self) -> dict[str, float | str]:
-        """Risk aversion, impact scale (1 / 1.5 / 2.5) and timing weight (0.3 / 0.5) by regime."""
         s = self._state
         impact_scale = {VolatilityRegime.HIGH: 1.5, VolatilityRegime.EXTREME: 2.5}.get(
             s.vol_regime, 1.0
@@ -272,7 +252,6 @@ class AdaptiveRiskManager:
         }
 
     def get_regime_summary(self) -> dict[str, Any]:
-        """Lambda statistics and volatility-regime counts over the stored history."""
         if not self._state_history:
             return {}
         lambdas = [s.lambda_value for s in self._state_history]

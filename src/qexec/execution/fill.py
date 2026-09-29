@@ -1,16 +1,3 @@
-"""Fill models: how one marketable child order fills against one minute bar.
-
-`ExecutionEngine` owns the rules shared by every evaluation (one child per minute, carry
-unfilled shares forward, charge the remainder after the last bar as opportunity cost);
-a fill model only prices a single child order and the final clean-up order.
-
-* `BookFillModel` walks a synthetic order book (`qexec.market.order_book`): the Phase 6
-  model for simulated markets.
-* `ImpactFillModel` is for real bars without order-book data: half spread + linear
-  temporary impact in the participation rate, with a participation cap
-  (docs/MATHEMATICAL_MODEL.md, "Real-data fill model").
-"""
-
 from __future__ import annotations
 
 import math
@@ -25,17 +12,13 @@ from qexec.market.order_book import OrderBook
 
 @dataclass(frozen=True)
 class Fill:
-    """Outcome of one child order; costs are in currency and positive when adverse.
-
-    `market_impact` is the per-share impact reported on the child order (for the book
-    model: last fill price minus the touch).
-    """
+    """Outcome of one child order; costs are in currency and positive when adverse."""
 
     quantity: int
     average_price: float
     half_spread_cost: float
     impact_cost: float
-    market_impact: float
+    market_impact: float  # per share; book model: last fill price minus the touch
 
 
 NO_FILL = Fill(0, 0.0, 0.0, 0.0, 0.0)
@@ -46,13 +29,9 @@ def _side_sign(side: str) -> float:
 
 
 class FillModel(Protocol):
-    def fill(self, bar: pd.Series, quantity: int, side: str, key: int) -> Fill:
-        """Fill up to `quantity` in `bar` (a row with price, spread, volume)."""
-        ...
+    def fill(self, bar: pd.Series, quantity: int, side: str, key: int) -> Fill: ...
 
-    def completion_price(self, bar: pd.Series, quantity: int, side: str, key: int) -> float:
-        """Average price of a clean-up order for `quantity` at the final bar."""
-        ...
+    def completion_price(self, bar: pd.Series, quantity: int, side: str, key: int) -> float: ...
 
 
 class BookFillModel:
@@ -85,10 +64,7 @@ class BookFillModel:
         )
 
     def completion_price(self, bar: pd.Series, quantity: int, side: str, key: int) -> float:
-        """Walk the final bar's book; shares beyond its depth pay its deepest level.
-
-        With no liquidity in the final bar, the far touch P_T +- s_T/2.
-        """
+        """Shares past the book's depth pay its deepest level; with no liquidity, the far touch."""
         mid, spread = float(bar["price"]), float(bar["spread"])
         far_touch = mid + spread / 2 if side == "buy" else mid - spread / 2
         if quantity <= 0:
@@ -103,24 +79,14 @@ class BookFillModel:
 
 
 class ImpactFillModel:
-    """Half spread plus linear temporary impact, capped at a fraction of bar volume.
-
-    For a child of `q` units in a bar with mid proxy `m` (column `price`), half spread `h`
-    bps (column `half_spread_bps`, or `spread / 2 / m` if absent) and volume `V`:
-
-        filled   = min(q, floor(participation_cap * V))       (0 when V = 0)
-        price    = m * (1 + s * (h + impact_bps * filled / V) / 1e4),   s = +1 buy, -1 sell
-
-    `impact_bps` is the price move in bps per unit participation (filled / V). The clean-up
-    order at the last bar has no cap; if that bar has no volume, `V` is replaced by the
-    bar's `expected_volume` column (or 1 unit if absent).
-    """
+    """Half spread + linear impact in participation, capped (docs/MATHEMATICAL_MODEL.md)."""
 
     def __init__(self, impact_bps: float, participation_cap: float = 0.25) -> None:
         if impact_bps < 0:
             raise ValueError("impact_bps must be non-negative")
         if not 0 < participation_cap <= 1:
             raise ValueError("participation_cap must be in (0, 1]")
+        # Price move in bps per unit participation (filled / V).
         self.impact_bps = impact_bps
         self.participation_cap = participation_cap
 
@@ -153,6 +119,7 @@ class ImpactFillModel:
         return self._price(bar, filled, volume, side)
 
     def completion_price(self, bar: pd.Series, quantity: int, side: str, key: int) -> float:
+        # The clean-up order is uncapped; an empty final bar falls back to expected volume.
         volume = float(bar["volume"])
         if volume <= 0:
             volume = float(bar["expected_volume"]) if "expected_volume" in bar else 1.0

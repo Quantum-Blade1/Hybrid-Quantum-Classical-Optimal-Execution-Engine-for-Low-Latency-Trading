@@ -1,5 +1,3 @@
-"""Fast path: tick loop that applies the newest policy without waiting for the optimizer."""
-
 import logging
 import time
 from collections.abc import Callable
@@ -19,17 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class AsyncExecutionEngine:
-    """Each tick polls the `PolicyQueue` (non-blocking) and executes the current plan's slice.
-
-    The plan starts as the fallback policy's schedule. A policy that arrives at tick t
-    plans the whole order, so its schedule from t on is rescaled to the shares still
-    unexecuted (`repair_schedule`; uniform if its tail is empty) and replaces the plan
-    from t on. The order therefore completes by the last tick after any number of policy
-    switches, and never overfills. With a `latency_monitor`, each tick's work (poll,
-    re-plan, execute; not the sleep) is recorded as `fast_path`, the delay between a
-    policy's publication and its application as `policy_propagation`, and how late each
-    tick started relative to its schedule as `tick_lateness`.
-    """
+    """Fast path: each tick polls the `PolicyQueue` without blocking and executes a slice."""
 
     def __init__(
         self,
@@ -62,11 +50,9 @@ class AsyncExecutionEngine:
             self._current_policy = policy
 
     def set_on_execute(self, callback: Callable[[dict[str, Any]], None]) -> None:
-        """Register a callback that receives each execution log entry."""
         self._on_execute = callback
 
     def start(self, total_ticks: int, total_shares: int | None = None) -> None:
-        """Run `total_ticks` ticks for an order of `total_shares` (default: the fallback's)."""
         if self._running:
             return
         if total_shares is None:
@@ -107,7 +93,7 @@ class AsyncExecutionEngine:
         return repair_schedule(schedule, self._total_shares)
 
     def _replan(self, tick: int, policy: ExecutionPolicy) -> None:
-        """Rescale the policy's schedule from `tick` on to the unexecuted shares."""
+        """Rescale the policy's tail to the unexecuted shares: finishes on time, never overfills."""
         assert self._plan is not None
         tail = np.zeros(len(self._plan) - tick)
         schedule = np.asarray(policy.schedule, dtype=float)[tick : len(self._plan)]

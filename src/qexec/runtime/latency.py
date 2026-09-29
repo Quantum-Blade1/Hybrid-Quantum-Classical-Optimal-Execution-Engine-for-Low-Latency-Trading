@@ -1,5 +1,3 @@
-"""Thread-safe monotonic-clock latency records, per-component statistics and policy staleness."""
-
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -84,7 +82,7 @@ class StalenessAnalysis:
 
 
 class LatencyMonitor:
-    """Stores the last `max_records` latency records per component."""
+    """Thread-safe store of the last `max_records` latency records per component."""
 
     FAST_PATH = "fast_path"
     TICK_TO_DECISION = "tick_to_decision"
@@ -126,7 +124,6 @@ class LatencyMonitor:
         )
 
     def get_stats(self, component: str) -> LatencyStats | None:
-        """Statistics for `component`, or None with fewer than two records."""
         with self._lock:
             records = self._records.get(component)
             if not records or len(records) < 2:
@@ -155,10 +152,7 @@ class LatencyMonitor:
     def analyze_staleness(
         self, market_volatility: float = 0.02, tick_interval_ms: float = 100.0
     ) -> StalenessAnalysis | None:
-        """Staleness statistics once at least five policies have been replaced.
-
-        `market_volatility` is annualised; the regret scale is a heuristic, not a proven bound.
-        """
+        """`market_volatility` is annualised; the regret scale is a heuristic, not a bound."""
         with self._lock:
             staleness_records = list(self._records.get(self.POLICY_STALENESS, ()))
             optimize_records = list(self._records.get(self.SLOW_PATH_OPTIMIZE, ()))
@@ -185,8 +179,6 @@ class LatencyMonitor:
 
 
 class LatencySpan:
-    """Context manager that records the duration of its block in `monitor`."""
-
     def __init__(
         self, component: str, monitor: LatencyMonitor, metadata: dict[str, Any] | None = None
     ) -> None:

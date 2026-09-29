@@ -1,5 +1,3 @@
-"""Execution policies and the latest-value queue that carries them from slow to fast path."""
-
 import logging
 import time
 from dataclasses import dataclass, field
@@ -14,8 +12,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ExecutionPolicy:
-    """Shares to execute per time step; `policy_id` and `published_ns` (monotonic clock)
-    are set by `PolicyQueue.publish`."""
+    """Shares per time step; `policy_id` and `published_ns` (monotonic) are set on publish."""
 
     schedule: NDArray[np.float64]
     timestamp: datetime = field(default_factory=datetime.now)
@@ -30,7 +27,6 @@ class ExecutionPolicy:
         return int(np.sum(self.schedule))
 
     def get_slice(self, time_idx: int) -> int:
-        """Shares for step `time_idx`; 0 outside the schedule."""
         if 0 <= time_idx < len(self.schedule):
             return int(self.schedule[time_idx])
         return 0
@@ -72,7 +68,6 @@ class PolicyQueue:
 
 
 def uniform_schedule(total_shares: int, num_slices: int) -> NDArray[np.int_]:
-    """TWAP split: N // T per slice, with the remainder on the first slices."""
     schedule = np.full(num_slices, total_shares // num_slices)
     schedule[: total_shares % num_slices] += 1
     return schedule

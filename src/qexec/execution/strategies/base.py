@@ -1,5 +1,3 @@
-"""Abstract execution strategy and the fill simulation shared by all strategies."""
-
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -46,8 +44,6 @@ class ExecutionMetrics:
 
 @dataclass
 class ExecutionSlice:
-    """Record of one executed slice."""
-
     minute: int
     timestamp: pd.Timestamp
     target_quantity: int
@@ -59,7 +55,6 @@ class ExecutionSlice:
 
 
 def share_weighted_std(prices: Sequence[float], quantities: Sequence[int]) -> float:
-    """Standard deviation of fill prices, one observation per share filled."""
     q = np.asarray(quantities, dtype=np.float64)
     if q.sum() <= 1:
         return 0.0
@@ -86,8 +81,6 @@ def slippage_bps(avg_price: float, benchmark: float, side: str) -> float:
 
 
 class BaseStrategy(ABC):
-    """Strategy interface: subclasses provide `calculate_schedule` (shares per minute)."""
-
     strategy_name: str = "Base"
     benchmark_name: str = "VWAP"
 
@@ -103,17 +96,10 @@ class BaseStrategy(ABC):
     def replan(
         self, minute: int, remaining_shares: int, observed: pd.DataFrame, num_minutes: int
     ) -> NDArray[np.float64] | None:
-        """Optionally replace the plan from `minute` on, called by `ExecutionEngine` each bar.
-
-        `observed` holds bars 0..minute only (no look-ahead); `remaining_shares` is the
-        unfilled part of the order. Return per-minute targets for minutes
-        `minute..num_minutes-1` (they are repaired to sum to `remaining_shares`), or None
-        to keep the current plan. Static strategies keep the default.
-        """
+        """Targets for minutes minute..num_minutes-1 from bars 0..minute only, or None to keep."""
         return None
 
     def calculate_benchmark(self, market_data: pd.DataFrame) -> float:
-        """Benchmark price; VWAP unless overridden."""
         return calculate_vwap(market_data)
 
     def execute(
@@ -124,7 +110,6 @@ class BaseStrategy(ABC):
         start_minute: int = 0,
         end_minute: int | None = None,
     ) -> ExecutionMetrics:
-        """Execute the schedule against simulated order books built from `market_data`."""
         self.slices = []
         if end_minute is None:
             end_minute = len(market_data)
@@ -199,7 +184,6 @@ class BaseStrategy(ABC):
         )
 
     def get_execution_summary(self) -> pd.DataFrame:
-        """One row per executed slice of the last `execute` call."""
         if not self.slices:
             return pd.DataFrame()
         return pd.DataFrame(

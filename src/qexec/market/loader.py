@@ -1,5 +1,3 @@
-"""Tick-data loading from CSV files with `timestamp, price[, volume]` columns."""
-
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,8 +18,6 @@ _DEFAULT_TICK_VOLUME = 100
 
 @dataclass(frozen=True)
 class TickData:
-    """Time-sorted tick series for one symbol."""
-
     symbol: str
     data: pd.DataFrame
     start_time: pd.Timestamp
@@ -29,11 +25,8 @@ class TickData:
 
 
 class DataLoader:
-    """Loads exchange tick files into a normalised `TickData`."""
-
     @staticmethod
     def load_csv(filepath: str | Path, symbol: str = "UNKNOWN") -> TickData:
-        """Load a tick CSV; common column aliases (e.g. `close`, `qty`) are normalised."""
         path = Path(filepath)
         if not path.exists():
             raise FileNotFoundError(f"File not found: {path}")

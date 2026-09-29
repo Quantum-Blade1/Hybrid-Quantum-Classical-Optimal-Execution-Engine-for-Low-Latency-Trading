@@ -1,5 +1,3 @@
-"""Parent/child order execution engine with fill simulation and post-trade metrics."""
-
 from __future__ import annotations
 
 import uuid
@@ -43,8 +41,6 @@ class OrderStatus(Enum):
 
 @dataclass
 class ParentOrder:
-    """Full trading intention, split into child orders by a strategy."""
-
     symbol: str
     side: OrderSide
     total_quantity: int
@@ -88,8 +84,6 @@ class ParentOrder:
 
 @dataclass
 class ChildOrder:
-    """One scheduled slice of a parent order, executed as a marketable order."""
-
     parent_id: str
     target_quantity: int
     target_time: datetime
@@ -106,7 +100,7 @@ class ChildOrder:
 
     @property
     def slippage(self) -> float:
-        """Execution price minus mid at execution."""
+        """Execution price minus mid at execution (not signed by side)."""
         if self.execution_price > 0 and self.market_price_at_execution > 0:
             return self.execution_price - self.market_price_at_execution
         return 0.0
@@ -135,8 +129,6 @@ class ChildOrder:
 
 @dataclass
 class ExecutionState:
-    """Running totals while a parent order executes."""
-
     parent_order: ParentOrder
     child_orders: list[ChildOrder] = field(default_factory=list)
     current_minute: int = 0
@@ -177,13 +169,7 @@ def implementation_shortfall(
     unfilled_quantity: int,
     completion_price: float,
 ) -> tuple[float, float]:
-    """(execution cost, opportunity cost) in currency, positive = cost, vs the arrival mid.
-
-    Execution cost is sum n_i (p_i - P_0) for a buy (sign flipped for a sell); opportunity
-    cost is U (P_c - P_0) for the U unfilled shares at `completion_price` P_c, the price of
-    completing them at the end of the horizon (`ExecutionEngine` uses a clean-up market
-    order against the final bar's book).
-    """
+    """(execution cost, opportunity cost) in currency vs the arrival mid, positive = cost."""
     sign = 1.0 if side.lower() == "buy" else -1.0
     execution = sign * (average_price - arrival_price) * filled_quantity
     opportunity = sign * (completion_price - arrival_price) * unfilled_quantity
@@ -192,12 +178,7 @@ def implementation_shortfall(
 
 @dataclass
 class ExecutionReport:
-    """Post-trade analytics of one parent order; slippage is positive when adverse.
-
-    `implementation_shortfall` (currency) = execution cost of the fills vs the arrival mid
-    + opportunity cost of unfilled shares (see `implementation_shortfall()`);
-    `implementation_shortfall_bps` divides it by the arrival notional of the whole order.
-    """
+    """Post-trade analytics of one parent order; slippage and shortfall positive when adverse."""
 
     order_id: str
     symbol: str
@@ -291,20 +272,7 @@ class ExecutionReport:
 
 
 class ExecutionEngine:
-    """Turns a strategy schedule into child orders, fills them against a simulated book,
-    and reports cost and slippage against VWAP, TWAP and arrival price.
-
-    Fill model (the same for every strategy, docs/MATHEMATICAL_MODEL.md, "Execution
-    simulation"): by default each minute's child order walks a fresh synthetic book whose
-    depth scales with that bar's volume (`BookFillModel`); a bar with zero volume fills
-    nothing. Another `fill_model` (e.g. `ImpactFillModel` for real bars) changes only how
-    a child order and the final clean-up order are priced. With
-    `carry_forward` (default), shares a child could not fill are added to the next
-    minute's target, so a liquidity gap delays shares instead of dropping them; shares
-    still unfilled after the last bar count as opportunity cost in the report. The
-    book's level sizes are keyed by (seed, minute), so strategies run with the same
-    `seed` face identical books at every minute.
-    """
+    """One child order per minute under a shared fill model (docs/MATHEMATICAL_MODEL.md)."""
 
     def __init__(
         self,
@@ -330,10 +298,6 @@ class ExecutionEngine:
         *,
         arrival_price: float | None = None,
     ) -> ExecutionReport:
-        """Execute `parent_order` over `market_data[start_minute:end_minute]`.
-
-        The arrival price defaults to the first bar's `price`.
-        """
         if parent_order.total_quantity <= 0:
             raise ValueError("Order quantity must be positive")
         if end_minute is None:
@@ -379,6 +343,7 @@ class ExecutionEngine:
             )
             self.state.child_orders.append(child)
             self._execute_slice(child, parent_order.side.value, execution_data, start_minute)
+            # A liquidity gap delays unfilled shares to the next minute instead of dropping them.
             carry = target - child.filled_quantity if self.carry_forward else 0
 
         parent_order.status = (
@@ -392,7 +357,6 @@ class ExecutionEngine:
 
     @staticmethod
     def _cap_schedule(schedule: NDArray[Any], total: int, num_minutes: int) -> NDArray[np.int_]:
-        """Integer per-minute plan truncated so cumulative targets never exceed the order."""
         plan = np.zeros(num_minutes, dtype=np.int_)
         unassigned = total
         for minute_idx, scheduled in enumerate(np.asarray(schedule)[:num_minutes]):
@@ -404,7 +368,6 @@ class ExecutionEngine:
     def _execute_slice(
         self, child: ChildOrder, side: str, market_data: pd.DataFrame, minute_offset: int = 0
     ) -> None:
-        """Fill one child order at its scheduled minute and update parent and state totals."""
         if self.state is None:
             raise RuntimeError("No active execution state")
         parent = self.state.parent_order
@@ -422,6 +385,7 @@ class ExecutionEngine:
         child.executed_at = row["timestamp"]
         self.state.current_minute = minute_idx + 1
 
+        # Keyed by absolute minute so strategies sharing a seed face identical books.
         fill = self.fill_model.fill(
             row, child.target_quantity, side, key=minute_offset + minute_idx
         )
@@ -490,19 +454,12 @@ class ExecutionEngine:
         )
 
     def _completion_price(self, market_data: pd.DataFrame, unfilled: int, side: str) -> float:
-        """Average price of a clean-up order for `unfilled` shares at the last bar.
-
-        Priced by the fill model (for the book model: walk the final bar's keyed book,
-        shares beyond its depth at its deepest level, the far touch without liquidity).
-        A buy's remainder is therefore charged at least the half spread and the impact of
-        trading it at once, so underfilling cannot make a strategy look cheaper.
-        """
+        """Clean-up price for the remainder, so underfilling cannot make a strategy look cheaper."""
         return self.fill_model.completion_price(
             market_data.iloc[-1], unfilled, side, key=len(market_data) - 1 + self._minute_offset
         )
 
     def get_execution_report(self) -> ExecutionReport | None:
-        """Most recent report, if any."""
         return self.execution_history[-1] if self.execution_history else None
 
     def get_child_orders_df(self) -> pd.DataFrame:
@@ -511,7 +468,6 @@ class ExecutionEngine:
         return pd.DataFrame([c.to_dict() for c in self.state.child_orders])
 
     def get_execution_history(self) -> pd.DataFrame:
-        """One summary row per processed order."""
         return pd.DataFrame(
             [
                 {

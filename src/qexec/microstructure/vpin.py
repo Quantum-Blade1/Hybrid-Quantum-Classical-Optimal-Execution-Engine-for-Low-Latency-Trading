@@ -1,5 +1,3 @@
-"""VPIN, volume-synchronised informed-trading probability (Easley, Lopez de Prado, O'Hara 2012)."""
-
 from collections import deque
 
 TOXICITY_THRESHOLD = 0.7
@@ -7,11 +5,7 @@ _MIN_BUCKETS = 10
 
 
 class VPINEstimator:
-    """Mean |buy - sell| / volume over the last `num_buckets` volume buckets.
-
-    Trades are classified with the tick rule (up-tick buy, down-tick sell, unchanged
-    split evenly); the estimate is reported once 10 buckets are complete.
-    """
+    """VPIN (Easley, Lopez de Prado & O'Hara, 2012) with tick-rule trade classification."""
 
     def __init__(self, bucket_size: int = 1000, num_buckets: int = 50) -> None:
         self._bucket_size = bucket_size
