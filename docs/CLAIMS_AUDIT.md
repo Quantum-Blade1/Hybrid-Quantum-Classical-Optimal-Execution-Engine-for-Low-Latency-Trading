@@ -206,3 +206,63 @@ Each fix has a test under `tests/` that failed before it. Outputs computed with 
 | T6 | `qexec.execution.strategies.twap` | The remainder share could push a slice one share above `max_slice_pct`. | Negligible. |
 | T7 | `qexec.execution.strategies.vwap` | Leftover-share allocation ignored `max_slice_pct`. | VWAP schedules on short horizons. |
 | T8 | `qexec.execution.strategies.fixed` | `astype(int)` truncation made schedules sum to less than the order. Now largest-remainder rounding. | Walk-forward hybrid leg (`fig21_walk_forward_shortfall`, `experiments/walk_forward.py`). |
+
+---
+
+## 6. Phase 6 status of every paper claim
+
+Phase 6 re-ran everything from `experiments/` with fixed code (section 5, plus the fair execution model, schedule repair and async re-planning described in `docs/MATHEMATICAL_MODEL.md`, "Evaluation Model"). Numbers below are from the committed `results/`; `docs/RESULTS.md` has the CIs and p-values. `paper/main.tex` is still unedited (Phase 8).
+
+Status key: **supported** (a committed result backs the claim as stated) · **partly supported** · **contradicted** (a committed result disagrees) · **still unsupported** (no experiment produces it) · **rewording** (not a measurement; the text must change to match the code).
+
+| # | Claim (short) | Phase 6 evidence | Status |
+|---|---|---|---|
+| P1 | First hardware validation of execution-QUBO | No verifiable hardware data; priority claim | still unsupported |
+| P2 | All IBM runs ratio 1.000 | No verifiable hardware data (F10). On simulators the best-of-shots metric does not discriminate: uniform sampling with the same budget finds the optimum in 100% of runs (`qaoa_benchmark`) | still unsupported |
+| P3 | Instances T=5, V=1, K=4-10 | The benchmark problem is `toy_execution_qubo` (`experiments/problems.py`) | rewording |
+| P4 | 68 configurations, all 1.000 | Ideal QAOA best sample optimal in 95% (toy) / 88% (random) of runs; SA as configured optimal in 10% of seeds at n = 8-12 (toy) | contradicted |
+| P5 | tab:sim_results values | Not reproducible; replace with `results/qaoa_benchmark/summary.csv` | contradicted |
+| P6 | Config: 10k shots, maxiter 40, SA 1000 sweeps / 0.995 / T0 = max Qii, readout 5% | Actual: 1,000 shots x <= 50 COBYLA evaluations + 5,000 final shots; SA T0 = 10, rate 0.95 (stops at 135 sweeps); readout 2% / 1.6% (`qaoa_benchmark/manifest.json`) | contradicted |
+| P7 | Hardware time breakdown | Not recorded | still unsupported |
+| P8 | 24 planned, 8 completed | Not verifiable | still unsupported |
+| P9 | Noise reduces success 30-50% | Noisy/ideal P_opt ranges 0.37-1.6 across (n, p) | contradicted |
+| P10 | Noisy/ideal ratios > 0.5 | P_opt ratio 0.37 at n = 4, p = 2 (fig_hw_noise_degradation) | contradicted |
+| P11 | 15-40% IS reduction | Hybrid - TWAP: +0.2 [-3.2, 3.5] bps (1 h), +0.7 [-0.2, 1.7] (1% ADV day), +0.3 [-2.1, 2.8] (walk-forward); no CI excludes zero in the hybrid's favour | contradicted |
+| P12 | fig21: 20 windows, 32% reduction | 10 windows x 30 seeds: hybrid mean shortfall not lower than TWAP, static or adaptive VWAP | contradicted |
+| P13 | fig22: impact -25%, net -20% | QUBO schedules pay *more* impact than TWAP (+0.15 [0.14, 0.17] bps at 1% ADV); total shortfall indistinguishable (fig22) | contradicted |
+| P14 | fig23: slippage -20-30%, fill +10-25% vs TWAP | No scenario shows a significant hybrid improvement vs TWAP; every strategy fills 100%; hybrid worse than VWAP in the outage (+9.5 [1.2, 17.8] bps). Scenario definitions still differ from the text | contradicted |
+| P15 | Fast path median 33 us, p99 80 us; sub-ms; SA ~5 ms | Measured tick work 16 / 28 us (runtime) and 64 / 103 us (pipeline): sub-millisecond work holds; but ticks start a median 35 ms late under GIL contention, and the runtime SA solve takes 64 ms (3-4 ms only for n <= 20) | partly supported |
+| P16 | Kernel bypass, lock-free queue, zero allocation | Python threads and a `threading.Lock` | rewording |
+| P17 | Staleness regret <= 4.5 bps | No experiment measures the cost of a delayed policy; propagation delay measured at 7.5 ms median | still unsupported |
+| P18 | fig26 pipeline trace | Removed (R14) | still unsupported |
+| P19 | Dark pools have higher AS | Removed (R8); no multi-venue fill model | still unsupported |
+| P20 | OFI signal | Not implemented | still unsupported |
+| P21 | MEM 8-15%, ZNE 5-10% | Removed (R15); no gate folding | still unsupported |
+| P22 | Quantum-advantage projection | Removed (R16) | still unsupported |
+| P23 | Two-qubit error < 1e-4 by 2026-27 | External roadmap claim | rewording |
+| P24 | C4/C6 shift volume / cut leakage | No ablation | still unsupported |
+| P25 | fig03: impact 43%, timing 28%, AS 11%, leakage 6% | Leakage 70% [52, 83], impact 26% [15, 41], AS 2.1%, timing 0.1% | contradicted |
+| P26 | fig17: NORMAL 60%, HIGH 20%, EXTREME 5% | NORMAL 70.4%, LOW 20.5%, HIGH 9.0%, EXTREME 0.16% | contradicted |
+| P27 | lambda up to 4x | Max 1.28x [1.24, 1.32] of base | contradicted |
+| P28 | EXTREME liquidates 80-90% in two slices | Not computed | still unsupported |
+| P29 | Kyle lambda rises 2-3x | 5.3x [5.1, 5.6], partly by construction of the data | contradicted |
+| P30 | EW-OLS + Lee-Ready; BVC | Code: equal-weight rolling OLS, tick rule | rewording |
+| P31 | VPIN threshold amplifier | Code: (1 + 2 VPIN) factor; VPIN > 0.7 on 98% of ticks (saturated) | rewording |
+| P32 | Weights calibrated on historical data | Hardcoded defaults | rewording |
+| P33 | fig02 is n = 4 | fig02 shows 20 variables | rewording |
+| P34 | QUBO-Ising verified n = 4-20, rel. error < 1e-10 | Max relative error 2.7e-13, n = 4-20 (fig04) | supported |
+| P35 | fig06 all ratio 1.0; fig09 noisy QAOA | SA/greedy miss the optimum often (toy, execution families); fig09 has no QAOA | contradicted |
+| P36 | fig07: SA > 1000x faster, both optimal | SA 3.7 ms vs ideal QAOA 1.5-2.9 s (400-800x); SA optimal in 1 of 5 seeds on that instance | contradicted |
+| P37 | COBYLA reliably identifies the optimum | Uniform sampling with the same shots identifies it at least as reliably (100% vs 88-100%) | contradicted |
+| P38 | fig19 reflects microstructure-venue interactions | Single-venue `ExecutionQUBO`; fig19 now shows raw and repaired QUBO schedules | rewording |
+| P39 | Dark-pool share rises with toxicity | VPIN still constant in fig27 | still unsupported |
+| P40 | fig18 x-axis is risk aversion | Axis is an impact-weight multiplier (now labelled so) | rewording |
+| P41 | 38 figures | 32 registered producers (2 illustrative); 6 referenced PDFs removed (`figures/registry.py`, `REMOVED`) | rewording |
+| P42 | Other "first" claims | Literature claim | rewording |
+| P43 | All benchmark data available | Every simulator/market result and its plotting code is committed with provenance; hardware raw counts are still missing | partly supported |
+| P44 | Calibrated synthetic data | Uncalibrated simulator | rewording |
+
+**Totals (44):** supported **1** (P34) · partly supported **2** (P15, P43) · contradicted **16** (P4-P6, P9-P14, P25-P27, P29, P35-P37) · still unsupported **13** (P1, P2, P7, P8, P17-P22, P24, P28, P39) · rewording **12** (P3, P16, P23, P30-P33, P38, P40-P42, P44).
+
+### Flagged items resolved in Phase 6
+F2 (saturating best-of-shots): probability on the optimal set, <H> ratio and a same-budget uniform baseline are now reported. F6 (unfair comparison): one engine, one book, no fills without volume, opportunity cost for unfilled shares. F9: walk-forward seeded and repeated over 30 seeds. F11: every figure is drawn from `results/` by a registered function. T5 (underfill after a policy switch): the fast path re-plans the remaining shares. `run_integrated_comparison` ranks by shortfall including opportunity cost. F5 (assumed improvement prior) remains and is documented; F10 remains until IBM raw counts are recovered.
