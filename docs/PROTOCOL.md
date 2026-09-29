@@ -160,4 +160,25 @@ only if the direction of every significant primary result is unchanged across mu
 
 ## Deviations
 
-(none yet)
+Recorded before the held-out evaluation was run (freeze commit = the parent of the commit
+that adds `results/real_data_test/`).
+
+1. **Tuning procedure made explicit.** Section 5 says hyperparameters are tuned on
+   development days; the concrete procedure and selection rules were written in
+   `experiments/real_data_tune.py` before its results were seen (QUBO setting: smallest
+   mean model-objective gap to AC among settings whose SA hits the DP optimum in >= 95% of
+   development cells with median SA time <= 1 s; hybrid checkpoints/clip: lowest mean
+   development shortfall). Selected: 4 slices x 3 bits, 16 units, SA 1000 sweeps x 16
+   restarts; hybrid 1 checkpoint, clip [0.5, 2]. Not a change of the protocol, a
+   specification of it.
+2. **Sensitivity-family Holm correction.** Section 7 says the sensitivity family is
+   "Holm-corrected within itself". We report both a per-variant Holm adjustment (12
+   comparisons per impact variant) and a joint adjustment over all four misspecified /
+   correctly specified impact variants (48 comparisons, column
+   `p_holm_sensitivity_family`); robustness statements use the joint one.
+3. **Extra secondary variant.** The secondary risk-averse analysis (lambda such that
+   lambda Var = E for TWAP) is run as variant `risk_averse`; it is exploratory as stated.
+4. **Model-cost bookkeeping fix (no effect on execution).** Before the dev run, the model
+   cost of the VWAP plan (in `gaps.csv` and `planned_expected_cost_bps`) was computed on
+   the unnormalised volume profile; it is now computed on the integer schedule summing to
+   the order. Executed VWAP orders were always normalised.
