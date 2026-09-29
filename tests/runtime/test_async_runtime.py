@@ -192,3 +192,16 @@ def test_latency_monitor_records_fast_path_slow_path_and_propagation():
     # The fast path's recorded work excludes the tick sleep.
     assert stats[LatencyMonitor.FAST_PATH].median_us < 10_000
     assert LatencyMonitor.POLICY_PROPAGATION in stats
+
+
+def test_tick_lateness_is_recorded_for_every_tick_after_the_first():
+    from qexec.runtime.latency import LatencyMonitor
+
+    monitor = LatencyMonitor()
+    queue = PolicyQueue()
+    engine = AsyncExecutionEngine(queue, tick_interval=0.001, latency_monitor=monitor)
+    engine.set_fallback_policy(policy(uniform_schedule(100, 10), "fallback"))
+    engine.start(total_ticks=10)
+    engine.wait_complete()
+    stats = monitor.get_stats(LatencyMonitor.TICK_LATENESS)
+    assert stats is not None and stats.count == 9 and stats.min_us >= 0

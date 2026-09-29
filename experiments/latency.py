@@ -3,7 +3,9 @@
     runtime   `HybridController` orders (AsyncExecutionEngine + AsyncOptimizer): each tick's
               work (policy poll, re-plan, execute; not the sleep between ticks) is
               `fast_path`; each SA solve is `slow_path_optimize`; publication-to-application
-              delay is `policy_propagation`
+              delay is `policy_propagation`; how late each tick starts versus its 5 ms
+              schedule is `tick_lateness` (the pure-Python SA thread holds the GIL, so the
+              tick thread wakes late even though its own work takes microseconds)
     pipeline  `HFTQuantumPipeline` ticks (microstructure + regime estimator updates, QUBO
               config update, policy application) are `fast_path`; the SA solve of the
               HFT QUBO is `slow_path_optimize`
@@ -34,12 +36,13 @@ COMPONENTS = (
     LatencyMonitor.FAST_PATH,
     LatencyMonitor.SLOW_PATH_OPTIMIZE,
     LatencyMonitor.POLICY_PROPAGATION,
+    LatencyMonitor.TICK_LATENESS,
 )
 
 
 @dataclass(frozen=True)
 class Config:
-    runtime_orders: int = 100
+    runtime_orders: int = 20
     ticks_per_order: int = 100
     shares_per_order: int = 10_000
     tick_interval_s: float = 0.005

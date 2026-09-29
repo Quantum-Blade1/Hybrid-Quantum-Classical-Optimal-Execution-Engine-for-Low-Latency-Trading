@@ -190,18 +190,23 @@ def fig24_latency_distribution(res: Results) -> Figure:
     env = res.manifest("latency")["environment"]
     machine = env.get("cpu_model") or env.get("processor") or env.get("machine")
     fig, (ax1, ax2) = new_figure(1, 2, figsize=(7, 2.8))
-    fast = samples[samples["component"] == "fast_path"]
-    bins = np.logspace(
-        np.log10(max(fast["duration_us"].min(), 0.5)), np.log10(fast["duration_us"].max()), 60
-    )
-    for source, color in (("runtime", "#1976D2"), ("pipeline", "#D32F2F")):
-        d = fast[fast["source"] == source]["duration_us"]
-        label = (
-            f"{source}: median {d.median():.1f}, p99 {d.quantile(0.99):.0f} $\\mu$s (n={len(d)})"
-        )
-        ax1.hist(d, bins=bins, alpha=0.6, color=color, label=label)
+    series = [
+        ("runtime", "fast_path", "runtime tick work", "#1976D2"),
+        ("pipeline", "fast_path", "pipeline tick work", "#D32F2F"),
+        ("runtime", "tick_lateness", "runtime tick lateness", "#7B1FA2"),
+    ]
+    selected = samples[samples["component"].isin({c for _, c, _, _ in series})]
+    positive = selected["duration_us"][selected["duration_us"] > 0]
+    bins = np.logspace(np.log10(max(positive.min(), 0.5)), np.log10(positive.max()), 60)
+    for source, component, name, color in series:
+        d = samples[(samples["source"] == source) & (samples["component"] == component)]
+        d = d["duration_us"]
+        if d.empty:
+            continue
+        label = f"{name}: median {d.median():.0f}, p99 {d.quantile(0.99):.0f} $\\mu$s"
+        ax1.hist(d.clip(lower=0.5), bins=bins, alpha=0.55, color=color, label=label)
     ax1.set_xscale("log")
-    ax1.set_xlabel("Fast-path tick ($\\mu$s)")
+    ax1.set_xlabel("$\\mu$s")
     ax1.set_ylabel("Ticks")
     ax1.set_title("Fast path (CPython)")
     ax1.legend(fontsize=6)

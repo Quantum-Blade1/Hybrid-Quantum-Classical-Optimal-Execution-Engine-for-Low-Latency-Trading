@@ -93,6 +93,7 @@ class LatencyMonitor:
     SLOW_PATH_SOLVE = "slow_path_solve"
     POLICY_PROPAGATION = "policy_propagation"
     POLICY_STALENESS = "policy_staleness"
+    TICK_LATENESS = "tick_lateness"
 
     def __init__(self, max_records: int = 100_000) -> None:
         self._lock = Lock()

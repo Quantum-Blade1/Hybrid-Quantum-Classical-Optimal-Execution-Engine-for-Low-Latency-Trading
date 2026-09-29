@@ -26,8 +26,9 @@ class AsyncExecutionEngine:
     unexecuted (`repair_schedule`; uniform if its tail is empty) and replaces the plan
     from t on. The order therefore completes by the last tick after any number of policy
     switches, and never overfills. With a `latency_monitor`, each tick's work (poll,
-    re-plan, execute; not the sleep) is recorded as `fast_path` and the delay between a
-    policy's publication and its application as `policy_propagation`.
+    re-plan, execute; not the sleep) is recorded as `fast_path`, the delay between a
+    policy's publication and its application as `policy_propagation`, and how late each
+    tick started relative to its schedule as `tick_lateness`.
     """
 
     def __init__(
@@ -131,11 +132,17 @@ class AsyncExecutionEngine:
         self._execute(tick, min(int(self._plan[tick]), remaining))
 
     def _execution_loop(self, total_ticks: int) -> None:
+        previous_ns = 0
         for tick in range(total_ticks):
             if self._stop_event.is_set():
                 break
             tick_start = perf_counter()
             start_ns = time.monotonic_ns()
+            if self.latency is not None and previous_ns:
+                # How much later than scheduled this tick started (sleep overshoot, GIL waits).
+                lateness = start_ns - previous_ns - int(self.tick_interval * 1e9)
+                self.latency.record_latency(LatencyMonitor.TICK_LATENESS, max(0, lateness))
+            previous_ns = start_ns
             self._tick(tick)
             if self.latency is not None:
                 self.latency.end_span(LatencyMonitor.FAST_PATH, start_ns)
