@@ -21,7 +21,7 @@ import os
 import zlib
 from collections.abc import Iterable
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -60,6 +60,13 @@ ALPHA = 0.05
 EQUIVALENCE_BPS = 0.5
 
 
+# Frozen from results/real_data_tune (development days only; selection rules in
+# experiments/real_data_tune.py). Changing them after the test run is a protocol deviation.
+FROZEN_QUBO = QUBOSettings(num_slices=4, bits=3, units=16, sweeps=1000, restarts=16)
+FROZEN_CHECKPOINTS = 1
+FROZEN_CLIP = (0.5, 2.0)
+
+
 @dataclass(frozen=True)
 class Variant:
     """Risk aversion rule ('zero' or 'rule': lambda Var = E for TWAP), the evaluator's
@@ -93,9 +100,9 @@ class Config:
     participation_cap: float = protocol.PARTICIPATION_CAP
     bucket_minutes: int = protocol.BUCKET_MINUTES
     min_lots: int = protocol.MIN_LOTS_SMALLEST_ORDER
-    qubo: QUBOSettings = field(default_factory=QUBOSettings)
-    hybrid_checkpoints: int = 3
-    hybrid_clip: tuple[float, float] = (0.5, 2.0)
+    qubo: QUBOSettings = FROZEN_QUBO
+    hybrid_checkpoints: int = FROZEN_CHECKPOINTS
+    hybrid_clip: tuple[float, float] = FROZEN_CLIP
     variants: tuple[Variant, ...] = VARIANTS
     robustness_seeds: int = 5
     synthetic: bool = False

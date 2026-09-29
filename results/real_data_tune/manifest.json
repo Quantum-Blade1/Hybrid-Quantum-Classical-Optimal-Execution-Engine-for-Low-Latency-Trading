@@ -1,0 +1,275 @@
+{
+  "experiment": "real_data_tune",
+  "status": "ok",
+  "config_type": "Config",
+  "config": {
+    "eval": {
+      "split": "dev",
+      "symbols": [
+        "BTCUSDT",
+        "LINKUSDT"
+      ],
+      "dev_days": [
+        "2026-07-22",
+        "2026-07-23",
+        "2026-07-24",
+        "2026-07-25",
+        "2026-07-26",
+        "2026-07-27",
+        "2026-07-28",
+        "2026-07-29",
+        "2026-07-30",
+        "2026-07-31",
+        "2026-08-01",
+        "2026-08-02",
+        "2026-08-03",
+        "2026-08-04",
+        "2026-08-05",
+        "2026-08-06"
+      ],
+      "eval_days": [
+        "2026-07-22",
+        "2026-07-23",
+        "2026-07-24",
+        "2026-07-25",
+        "2026-07-26",
+        "2026-07-27",
+        "2026-07-28",
+        "2026-07-29",
+        "2026-07-30",
+        "2026-07-31",
+        "2026-08-01",
+        "2026-08-02",
+        "2026-08-03",
+        "2026-08-04",
+        "2026-08-05",
+        "2026-08-06"
+      ],
+      "start_hours": [
+        0,
+        4,
+        8,
+        12,
+        16,
+        20
+      ],
+      "sizes_pct_adv": [
+        0.1,
+        0.5
+      ],
+      "horizons": [
+        60,
+        240
+      ],
+      "participation_cap": 0.25,
+      "bucket_minutes": 15,
+      "min_lots": 10000,
+      "qubo": {
+        "num_slices": 5,
+        "bits": 3,
+        "units": 20,
+        "sweeps": 1000,
+        "restarts": 16
+      },
+      "hybrid_checkpoints": 3,
+      "hybrid_clip": [
+        0.5,
+        2.0
+      ],
+      "variants": [
+        {
+          "name": "primary",
+          "risk": "zero",
+          "eval_multiple": 1.0,
+          "opt_multiple": 1.0
+        },
+        {
+          "name": "eval_x0.5",
+          "risk": "zero",
+          "eval_multiple": 0.5,
+          "opt_multiple": 1.0
+        },
+        {
+          "name": "eval_x2",
+          "risk": "zero",
+          "eval_multiple": 2.0,
+          "opt_multiple": 1.0
+        },
+        {
+          "name": "both_x0.5",
+          "risk": "zero",
+          "eval_multiple": 0.5,
+          "opt_multiple": 0.5
+        },
+        {
+          "name": "both_x2",
+          "risk": "zero",
+          "eval_multiple": 2.0,
+          "opt_multiple": 2.0
+        },
+        {
+          "name": "risk_averse",
+          "risk": "rule",
+          "eval_multiple": 1.0,
+          "opt_multiple": 1.0
+        }
+      ],
+      "robustness_seeds": 5,
+      "synthetic": false,
+      "bars_root": "data/binance/bars",
+      "workers": 10,
+      "seed": 0
+    },
+    "qubo_candidates": [
+      {
+        "num_slices": 4,
+        "bits": 3,
+        "units": 16,
+        "sweeps": 1000,
+        "restarts": 16
+      },
+      {
+        "num_slices": 5,
+        "bits": 3,
+        "units": 20,
+        "sweeps": 1000,
+        "restarts": 16
+      },
+      {
+        "num_slices": 6,
+        "bits": 3,
+        "units": 24,
+        "sweeps": 1000,
+        "restarts": 16
+      },
+      {
+        "num_slices": 8,
+        "bits": 3,
+        "units": 32,
+        "sweeps": 1000,
+        "restarts": 16
+      },
+      {
+        "num_slices": 5,
+        "bits": 4,
+        "units": 40,
+        "sweeps": 1000,
+        "restarts": 16
+      },
+      {
+        "num_slices": 8,
+        "bits": 4,
+        "units": 64,
+        "sweeps": 1000,
+        "restarts": 16
+      },
+      {
+        "num_slices": 8,
+        "bits": 4,
+        "units": 64,
+        "sweeps": 2000,
+        "restarts": 32
+      }
+    ],
+    "hybrid_candidates": [
+      [
+        1,
+        [
+          0.5,
+          2.0
+        ]
+      ],
+      [
+        3,
+        [
+          0.5,
+          2.0
+        ]
+      ],
+      [
+        6,
+        [
+          0.5,
+          2.0
+        ]
+      ],
+      [
+        3,
+        [
+          0.8,
+          1.25
+        ]
+      ]
+    ],
+    "workers": 10,
+    "seed": 0
+  },
+  "seeds": [
+    0
+  ],
+  "git": {
+    "commit": "5bc38d8cbb2909f8870c21f4e59c8bf7a8558078",
+    "dirty": false
+  },
+  "environment": {
+    "python": "3.12.14",
+    "implementation": "CPython",
+    "packages": {
+      "qexec": "0.1.0",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "pandas": "3.0.6",
+      "matplotlib": "3.11.2",
+      "qiskit": "2.5.2",
+      "qiskit-aer": "0.17.2"
+    },
+    "platform": "macOS-26.5.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "cpu_count": 10,
+    "memory_gb": 16.0,
+    "cpu_model": "Apple M5"
+  },
+  "started_utc": "2026-09-29T16:19:35+00:00",
+  "wall_time_s": 518.401,
+  "files": {
+    "qubo_cells.csv": "2196d0aad4b62953527c789099390c560e2a1cce1f8b0fc3db96f39c78862898",
+    "qubo_candidates.csv": "320abfb7e3b7ae55fbf3d37397eaf9e7dbd4e8f2f882bd0e5ca9fcb509d107d8",
+    "hybrid_candidates.csv": "397cc4b3b57c8fa8687e89a605005c97aa6bf66fe6130aca3c1a3e7da91b93e8",
+    "hybrid_by_symbol.csv": "fbce5b4755e0de162626bdb3ba3f5c1e9feafb4c5a452753e732ac3e604612ff"
+  },
+  "quick": false,
+  "dev_days": [
+    "2026-07-22",
+    "2026-07-23",
+    "2026-07-24",
+    "2026-07-25",
+    "2026-07-26",
+    "2026-07-27",
+    "2026-07-28",
+    "2026-07-29",
+    "2026-07-30",
+    "2026-07-31",
+    "2026-08-01",
+    "2026-08-02",
+    "2026-08-03",
+    "2026-08-04",
+    "2026-08-05",
+    "2026-08-06"
+  ],
+  "selected_qubo": {
+    "num_slices": 4,
+    "bits": 3,
+    "units": 16,
+    "sweeps": 1000,
+    "restarts": 16
+  },
+  "selected_hybrid": {
+    "checkpoints": 1,
+    "clip": [
+      0.5,
+      2.0
+    ]
+  },
+  "data": "Binance aggTrades"
+}
