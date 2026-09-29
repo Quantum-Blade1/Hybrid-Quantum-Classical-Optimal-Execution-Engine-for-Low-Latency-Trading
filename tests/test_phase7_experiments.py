@@ -69,6 +69,16 @@ def test_hardware_analysis_on_synthetic_fixture(tmp_path):
     manifest = json.loads((out / "manifest.json").read_text())
     assert "SYNTHETIC" in manifest["data"]
     assert "FAKE-fixture-0001" in manifest["job_ids"]
+    # The synthetic n=4 loop job comes after the only n=4 final job: an incomplete run.
+    assert manifest["incomplete_run_job_ids"] == ["FAKE-fixture-0002"]
+    tests = pd.read_csv(out / "final_tests.csv")
+    assert list(tests["job_id"]) == ["FAKE-fixture-0001", "FAKE-fixture-0003"]
+    first = tests.iloc[0]
+    assert first["success_ci_low"] < 0.4 < first["success_ci_high"]
+    assert first["binom_p_greater"] < 1e-4 and bool(first["success_significant"])
+    assert first["ratio_advantage_ci_low"] <= first["ratio_advantage"]
+    runs = pd.read_csv(out / "runs.csv")
+    assert list(runs["complete"]) == [True, False, True]
 
 
 def test_simulator_reference_reads_toy_qaoa_runs(tmp_path):

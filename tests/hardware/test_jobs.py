@@ -6,7 +6,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from qexec.hardware.jobs import analyse_counts, job_role, read_jobs, screen_and_analyse
+from qexec.hardware.jobs import (
+    RunLabel,
+    analyse_counts,
+    assign_runs,
+    job_role,
+    latest_by_job,
+    read_jobs,
+    screen_and_analyse,
+)
 from qexec.optimization.toy import toy_execution_qubo
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "ibm_jobs_sample.jsonl"
@@ -68,3 +76,46 @@ def test_malformed_lines_and_key_length(tmp_path):
     good.write_text(json.dumps(record) + "\n\n")
     screening = screen_and_analyse(read_jobs(good))
     assert screening.excluded[0]["reason"] == "count keys do not match num_bits"
+
+
+def test_duplicate_job_records_keep_the_latest_status(tmp_path):
+    # The recovery file lists a job once per status query: QUEUED, then CANCELLED.
+    lines = [
+        {"job_id": "a", "status": "QUEUED", "created": "t1"},
+        {"job_id": "b", "status": "DONE", "num_bits": 4, "shots": 2000, "counts": {"0101": 2000}},
+        {"job_id": "a", "status": "CANCELLED", "created": "t1"},
+    ]
+    path = tmp_path / "dup.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in lines) + "\n")
+    records = read_jobs(path)
+    assert [r["job_id"] for r in records] == ["a", "b"]
+    assert records[0]["status"] == "CANCELLED"
+    screening = screen_and_analyse(records)
+    assert [e["job_id"] for e in screening.excluded] == ["a"]
+    assert screening.excluded[0]["reason"] == "status 'CANCELLED'"
+    assert latest_by_job([]) == []
+
+
+def test_runs_are_assigned_per_n_by_creation_time():
+    # Two sizes interleaved in time; each run ends with its final job; trailing loop jobs
+    # without a final job form an incomplete run.
+    jobs = [
+        ("a1", 4, "optimization", "00:01"),
+        ("b1", 10, "optimization", "00:02"),
+        ("a2", 4, "optimization", "00:03"),
+        ("aF", 4, "final", "00:04"),
+        ("b2", 10, "optimization", "00:05"),
+        ("bF", 10, "final", "00:06"),
+        ("a3", 4, "optimization", "00:07"),
+        ("a4", 4, "optimization", "00:08"),
+        ("aG", 4, "final", "00:09"),
+        ("a5", 4, "optimization", "00:10"),
+    ]
+    labels = assign_runs(reversed(jobs))  # input order does not matter
+    assert labels["a1"] == RunLabel(1, 1, True)
+    assert labels["aF"] == RunLabel(1, 3, True)
+    assert labels["b2"] == RunLabel(1, 2, True)
+    assert labels["bF"] == RunLabel(1, 3, True)
+    assert labels["a3"] == RunLabel(2, 1, True)
+    assert labels["aG"] == RunLabel(2, 3, True)
+    assert labels["a5"] == RunLabel(3, 1, False)

@@ -17,6 +17,17 @@ QAOA depth p and the COBYLA iteration are not recoverable from counts; `p` is ca
 through only if the record has it. Several final jobs for one n (depths, retries) are
 analysed separately. Only completed jobs whose number of measured bits is a benchmark size
 are analysed.
+
+Duplicates. A recovery file may list a job more than once (e.g. QUEUED, then CANCELLED
+after a later status query); `read_jobs` keeps one record per job_id, the last one in the
+file (the latest status), at the position of its first appearance.
+
+Runs. A hardware run is a sequence of COBYLA-loop jobs followed by one final job, and the
+runs of one n were executed one after another (each job waits for the previous result),
+while runs of different n were interleaved in time. `assign_runs` therefore works per n in
+order of creation time: loop jobs belong to the run whose final job is the next final job
+of the same n; loop jobs after the last final job of an n form an incomplete run (no final
+job), which is labelled but never used for final-distribution statistics.
 """
 
 from __future__ import annotations
@@ -52,8 +63,17 @@ def job_role(shots: int) -> str:
     return "unknown"
 
 
+def latest_by_job(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One record per job_id: the last one seen wins, kept at its first position."""
+    latest: dict[str, dict[str, Any]] = {}
+    for record in records:
+        latest[str(record.get("job_id", "?"))] = record
+    return list(latest.values())
+
+
 def read_jobs(path: str | Path) -> list[dict[str, Any]]:
-    """Records of a JSONL file; blank lines are skipped, malformed lines raise."""
+    """Deduplicated records of a JSONL file (`latest_by_job`); blank lines are skipped,
+    malformed lines raise."""
     records = []
     for number, line in enumerate(Path(path).read_text().splitlines(), start=1):
         if not line.strip():
@@ -62,7 +82,7 @@ def read_jobs(path: str | Path) -> list[dict[str, Any]]:
             records.append(json.loads(line))
         except json.JSONDecodeError as exc:
             raise ValueError(f"{path}:{number}: not JSON ({exc})") from exc
-    return records
+    return latest_by_job(records)
 
 
 @dataclass(frozen=True)
@@ -181,3 +201,38 @@ def screen_and_analyse(records: Iterable[dict[str, Any]], seed: int = 0) -> Scre
             )
         )
     return Screening(analysed, excluded)
+
+
+@dataclass(frozen=True)
+class RunLabel:
+    """Run of a job within its n (1-based), its position in the run (1-based; the final job
+    comes last) and whether the run ended with a final job."""
+
+    run: int
+    iteration: int
+    complete: bool
+
+
+def assign_runs(jobs: Iterable[tuple[str, int, str, str]]) -> dict[str, RunLabel]:
+    """Run labels for (job_id, n, role, created) tuples; see the module docstring.
+
+    `created` must sort chronologically as a string within one n (ISO timestamps with the
+    same UTC offset do). Ties in `created` are broken by job_id.
+    """
+    by_n: dict[int, list[tuple[str, str, str]]] = {}
+    for job_id, n, role, created in jobs:
+        by_n.setdefault(int(n), []).append((created, job_id, role))
+    labels: dict[str, RunLabel] = {}
+    for items in by_n.values():
+        items.sort()
+        pending: list[str] = []
+        run = 1
+        for _, job_id, role in items:
+            pending.append(job_id)
+            if role == "final":
+                for k, jid in enumerate(pending, start=1):
+                    labels[jid] = RunLabel(run, k, True)
+                pending, run = [], run + 1
+        for k, jid in enumerate(pending, start=1):
+            labels[jid] = RunLabel(run, k, False)
+    return labels
