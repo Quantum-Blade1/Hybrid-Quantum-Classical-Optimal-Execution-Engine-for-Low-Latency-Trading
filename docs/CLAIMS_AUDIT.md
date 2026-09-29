@@ -6,7 +6,7 @@ Baseline: tag `pre-refactor`. This ledger covers `src/`, `examples/`, `README.md
 "Fabricated" here means a number shown as a result that comes from a hand-typed literal, a random draw, or a hardcoded multiplier instead of from running the project's code.
 
 > **Paths updated in Phase 3.** The entries below keep the file names that were current when the audit was written. The code now lives in the `qexec` package:
-> `src/ibm_hardware_benchmark.py` → `experiments/hardware_benchmark.py` (`build_execution_qubo` → `toy_execution_qubo`, unchanged; IBM service/sampler code → `src/qexec/hardware/ibm.py`) ·
+> `src/ibm_hardware_benchmark.py` → `experiments/hardware_benchmark.py` (`build_execution_qubo` → `toy_execution_qubo`, unchanged, now in `src/qexec/optimization/toy.py` and pinned by a golden test; IBM service/sampler code → `src/qexec/hardware/ibm.py`) ·
 > `src/generate_journal_figures.py` → `experiments/journal_figures.py` ·
 > `src/benchmark.py` → `experiments/solver_benchmark.py` ·
 > `src/is_comparison.py`, `src/load_test.py` → `experiments/` ·
@@ -189,3 +189,20 @@ These are computed from `HardwareBenchmarkResult` runs of the real SA, ideal Aer
 - `src/ac_benchmark.py`, `src/qubo_integration.py`, `src/benchmark.py` (without DQC), `src/is_comparison.py` (VWAP and TWAP only): all computed.
 - `assets/` PNGs other than R17, R19 and R20 were produced by the unchanged current code.
 - `figures/bench_n*.json`: simulator records are real runs (subject to F1 and F2). `figures/bench_hw_*.json` are untouched, pending recovery of the raw counts.
+
+---
+
+## 5. Correctness fixes found by the Phase 5 test suite
+
+Each fix has a test under `tests/` that failed before it. Outputs computed with the old code (named below) were not regenerated in Phase 5.
+
+| # | Location | Bug | Effect on outputs |
+|---|----------|-----|-------------------|
+| T1 | `qexec.execution.strategies.almgren_chriss.calculate_expected_cost` | Used η instead of η̃ = η − γτ/2 (Almgren & Chriss 2000, eq. 20), overstating E[C] by γ Σ n_k² / 2. Checked against a direct simulation of the discrete model. | `fig20_almgren_chriss_frontier` (E[C] axis shifts slightly). |
+| T2 | `qexec.analysis.shortfall.ISAnalyzer` | Opportunity cost used (P_T − P_d) U while delay already charged (P_0 − P_d) to all N shares, double counting (P_0 − P_d) U. Now (P_T − P_0) U, so the total equals Perold's shortfall. | `experiments/is_comparison.py` when orders are not fully filled. |
+| T3 | `qexec.hardware.mitigation.MeasurementErrorMitigator` | Inverted A instead of Aᵀ for A[prepared, measured]; correct only for symmetric readout error. | None committed (only the default symmetric matrix was ever used). |
+| T4 | `qexec.execution.engine.ExecutionEngine` | Child orders were not capped at the parent size, so a schedule summing to more than the order (e.g. a QUBO solution off the equality constraint) overfilled it. | `experiments/strategy_comparison.py`, `examples/qubo_vs_baselines.py`. |
+| T5 | `qexec.runtime.engine.AsyncExecutionEngine` | After switching policies mid-order the tick loop followed the new whole-order plan and could trade more than the order. Now capped at the policy total. Underfill after a switch remains possible (the runtime does not re-plan the remainder). | `experiments/load_test.py`, `examples/hybrid_runtime.py`, `apps/dashboard.py` fill counts. |
+| T6 | `qexec.execution.strategies.twap` | The remainder share could push a slice one share above `max_slice_pct`. | Negligible. |
+| T7 | `qexec.execution.strategies.vwap` | Leftover-share allocation ignored `max_slice_pct`. | VWAP schedules on short horizons. |
+| T8 | `qexec.execution.strategies.fixed` | `astype(int)` truncation made schedules sum to less than the order. Now largest-remainder rounding. | Walk-forward hybrid leg (`fig21_walk_forward_shortfall`, `experiments/walk_forward.py`). |

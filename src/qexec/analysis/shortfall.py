@@ -3,7 +3,10 @@
 For a buy of N shares decided at price P_d, arriving at P_0 and filling n_i at p_i when the
 mid is m_i, with closing price P_T and U unfilled shares:
     delay = (P_0 - P_d) N,  impact = sum (p_i - m_i) n_i,  timing = sum (m_i - P_0) n_i,
-    opportunity = (P_T - P_d) U,  total = sum of the four.
+    opportunity = (P_T - P_0) U,  total = sum of the four
+                                        = sum n_i (p_i - P_d) + U (P_T - P_d).
+Delay covers all N shares from decision to arrival, so opportunity cost of the unfilled
+shares runs from arrival to close.
 """
 
 from dataclasses import dataclass
@@ -66,7 +69,7 @@ class ISAnalyzer:
         delay_cost = (arrival_price - self.decision_price) * self.total_orders
         impact_cost = float(((df["price_exec"] - df["price_mkt"]) * df["shares"]).sum())
         timing_risk = float(((df["price_mkt"] - arrival_price) * df["shares"]).sum())
-        opportunity_cost = (last_price - self.decision_price) * unexecuted_shares
+        opportunity_cost = (last_price - arrival_price) * unexecuted_shares
         avg_exec_price = float((df["price_exec"] * df["shares"]).sum() / executed_shares)
 
         return ISComponents(

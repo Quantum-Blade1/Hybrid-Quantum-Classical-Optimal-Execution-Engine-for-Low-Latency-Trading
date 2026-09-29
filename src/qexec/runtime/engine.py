@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 class AsyncExecutionEngine:
     """Each tick polls the `PolicyQueue` (non-blocking) and executes the current policy's slice.
 
-    Before the first published policy, the fallback policy is used.
+    Before the first published policy, the fallback policy is used. A slice is cut so that
+    cumulative execution never exceeds the current policy's total.
     """
 
     def __init__(self, policy_queue: PolicyQueue, tick_interval: float = 0.1) -> None:
@@ -79,7 +80,10 @@ class AsyncExecutionEngine:
             if policy is None:
                 logger.warning("Tick %d: no policy available", tick)
             else:
-                self._execute(tick, policy.get_slice(tick))
+                # A policy published mid-order plans the whole order, not the remainder:
+                # never trade past its total.
+                remaining = policy.total_shares - self.executed_shares
+                self._execute(tick, min(policy.get_slice(tick), remaining))
 
             self.current_time_idx = tick + 1
             sleep(max(0.0, self.tick_interval - (perf_counter() - tick_start)))

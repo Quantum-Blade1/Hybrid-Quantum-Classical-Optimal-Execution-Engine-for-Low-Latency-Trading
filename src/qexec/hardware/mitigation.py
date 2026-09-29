@@ -169,7 +169,7 @@ class ZeroNoiseExtrapolation(ErrorMitigator):
 
 
 class MeasurementErrorMitigator(ErrorMitigator):
-    """Readout mitigation p_true = pinv(A) p_measured with confusion matrix A[prepared, measured].
+    """Readout mitigation p_true = pinv(A^T) p_measured with confusion matrix A[prepared, measured].
 
     Negative quasi-probabilities are clipped and the result renormalised. Without calibration,
     A assumes independent 2% bit-flip readout errors.
@@ -221,7 +221,8 @@ class MeasurementErrorMitigator(ErrorMitigator):
                 prob_vector[int(bitstring[::-1], 2)] = count / total
 
         try:
-            mitigated_probs = np.linalg.pinv(self._confusion_matrix) @ prob_vector
+            # p_measured = A^T p_true for A[prepared, measured].
+            mitigated_probs = np.linalg.pinv(self._confusion_matrix.T) @ prob_vector
             mitigated_probs = np.maximum(mitigated_probs, 0)
             mitigated_probs /= mitigated_probs.sum() + 1e-10
         except np.linalg.LinAlgError:
