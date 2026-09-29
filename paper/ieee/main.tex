@@ -18,13 +18,6 @@
 \graphicspath{{../figures/}}
 \input{numbers.tex}
 
-% Visible marker for content that cannot be written until IBM raw counts are recovered.
-\newcommand{\hwpending}[1]{%
-  \par\smallskip\noindent
-  \fcolorbox{red}{red!8}{\parbox{\dimexpr\columnwidth-2\fboxsep-2\fboxrule\relax}{%
-    \color{red!70!black}\small\textbf{[HARDWARE RESULTS PENDING]} #1}}%
-  \par\smallskip}
-
 \newtheorem{proposition}{Proposition}
 \newcommand{\E}{\mathbb{E}}
 \newcommand{\Var}{\mathrm{Var}}
@@ -65,7 +58,11 @@ plus impact costs \BtcSpreadImpact{} and \LinkSpreadImpact{}~bps, while per-orde
 has a standard deviation of \BtcStdMin{}--\LinkStdMax{}~bps. A corrected simulated annealer
 finds the exact optimum in every seed up to $n=\SaSliceAllOptimalUpTo$ variables. On simulators, QAOA puts slightly more probability on the optimum than same-budget uniform sampling on two
 benchmark families but not on the binary execution encoding, and best-of-shots metrics are
-uninformative at these sizes. We report measured latencies, state conditions under which
+uninformative at these sizes. On IBM hardware (\texttt{ibm\_fez}), $p=1$ QAOA at $n=4$ and
+$n=10$ (three runs each, recomputed from the raw counts of every job) gives a
+better-than-uniform mean energy in every run, but its probability of sampling the optimum is
+significantly above uniform in only \HwRunsSuccessSig{} of \HwNumFinalJobs{} runs, and a
+classical annealer solves these instances exactly. We report measured latencies, state conditions under which
 quantum optimization might help as hypotheses, and release all code, data manifests and
 results.
 \end{abstract}
@@ -122,15 +119,17 @@ report the results whatever they were. The contributions are the following.
 \item \emph{A solver study} comparing a corrected simulated annealer (SA), exhaustive
   search, QAOA on ideal and noisy simulators, and uniform random sampling with the same shot
   budget, using a signed-energy approximation ratio and the success probability; it shows
-  that best-of-shots metrics are uninformative at the sizes used in the literature.
+  that best-of-shots metrics are uninformative at the sizes used in the literature. The same
+  metrics, with per-job tests, are applied to the recovered raw counts of \HwNumJobs{} IBM
+  hardware jobs.
 \item \emph{An open, one-command reproducible artifact}: every number in this paper is a
   macro generated from committed result files with provenance manifests
   (Section~\ref{sec:repro}).
 \end{enumerate}
 Section~\ref{sec:discussion} states, as hypotheses, the conditions under which a quantum
 optimizer could matter for execution, and Section~\ref{sec:limitations} lists the
-limitations and threats to validity. IBM hardware results are pending the recovery of raw
-measurement counts (Section~\ref{sec:hardware}).
+limitations and threats to validity. Section~\ref{sec:hardware} reports QAOA on IBM's
+\texttt{ibm\_fez} processor, recomputed from the recovered raw counts of every job.
 
 % ======================================================================================
 \section{Related Work}
@@ -728,27 +727,118 @@ production design would run the optimizer in a separate process or service.
 \subsection{IBM quantum hardware}
 \label{sec:hardware}
 
-QAOA circuits for small instances of the toy QUBO were submitted to IBM's \texttt{ibm\_fez}
-processor. The result records committed at the time are not usable as evidence: their count
-tables are empty, their success-probability and approximation-ratio fields are inconsistent
-with those tables, and the configuration actually executed cannot be verified. We therefore report
-no hardware number in this version. The analysis pipeline is in place: it recomputes every
-energy from the raw counts with the known QUBO, separates optimization-loop jobs from final
-sampling jobs by their shot counts, and compares each job with uniform sampling at the same
-number of shots and with the simulator results of Section~\ref{sec:solvers}.
+\emph{Data.} QAOA was run on IBM's \texttt{ibm\_fez} processor on \HwDate{} for the toy
+QUBO of Section~\ref{sec:solvers}, at $n=\HwMinN$ and $n=\HwMaxN$ only, with \HwRunsPerN{}
+runs per size and the configured depth $p=1$ (the depth is not recorded in the job data).
+Each run optimized the two angles with COBYLA on \HwLoopShots-shot jobs
+(\HwLoopJobsMin--\HwLoopJobsMax{} per run) and ended with one \HwFinalShots-shot job at the
+final angles. The records committed with the earlier draft of this work are not usable as
+evidence: their count tables are empty and their derived fields are inconsistent with them.
+They also listed one run each at $n=6$ and $n=8$; these could not be matched to any job on
+the account. We therefore recovered the raw counts of every job on the account from IBM
+Quantum: \HwNumRecords{} records for \HwNumUniqueJobs{} jobs, of which \HwNumJobs{}
+completed with counts and \HwNumExcluded{} were cancelled while queued. Every energy is
+recomputed from the counts with the known QUBO (Qiskit bit order, checked by a test). Loop
+and final jobs are told apart by their shot counts, and loop jobs are assigned to runs per
+size by creation time: the runs of one size ran one after another, while the two sizes were
+interleaved. The \HwNumIncompleteJobs{} loop jobs created after the last final job
+(\HwNFourIncomplete{} at $n=4$, \HwNOneZeroIncomplete{} at $n=10$) belong to a fourth run
+per size that has no final job; they appear in Fig.~\ref{fig:hwtraj} but not in the
+statistics.
 
-\ifnum\HwRecovered=0
-\hwpending{This subsection will be completed from the raw measurement counts of the
-\texttt{ibm\_fez} jobs once they are recovered from IBM Quantum into
-\texttt{results/ibm\_fez\_recovered.jsonl} and analysed with
-\texttt{python -m experiments.hardware\_analysis}. It will report, per problem size, the
-success probability and mean-energy ratio recomputed from counts against the same-shot
-uniform baseline and the Aer simulators, with the job list and any excluded jobs. No hardware
-claim is made until then.}
-\else
-\hwpending{Recovered counts are present in \texttt{results/hardware/}; rewrite this
-subsection from them (see \texttt{experiments/hardware\_analysis.py}) before submission.}
-\fi
+\emph{Statistics.} For each final job we report the success probability $\Popt$ with a
+Wilson 95\% interval and a one-sided exact binomial test against uniform sampling (the
+optimum is unique at both sizes, so $\Popt^{\mathrm{unif}}=2^{-n}$), and the approximation
+ratio $r$ of the mean energy minus its exact uniform value, with a shot-level bootstrap 95\%
+interval (\HwBootstrap{} multinomial resamples). These intervals describe shot noise within
+one job. Runs differ by far more than shot noise (different random starting angles, device
+drift), so we report each run and the range over runs rather than pooling them. Three runs
+per size is small: even three runs out of three on the same side of uniform sampling give
+only $p=\HwSignP$ by a sign test.
+
+\begin{table}[t]
+\caption{IBM \texttt{ibm\_fez}, $p=1$ QAOA on the toy QUBO: final jobs of \HwFinalShots{}
+shots. $\Popt$ with Wilson 95\% CI; $p_>$: one-sided exact binomial test of
+$\Popt>2^{-n}$, unadjusted; $r$: approximation ratio of the mean energy; $\Delta r$: $r$
+minus its uniform value, with shot-bootstrap 95\% CI. Rows ``unif.'': exact values for
+uniform sampling.}
+\label{tab:hw}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.7pt}
+\begin{tabular}{rllrrl}
+\toprule
+$n$ & Run & $\Popt$ [95\% CI] & $p_>$ & $r$ & $\Delta r$ [95\% CI]\\
+\midrule
+\HwTableRows
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_hw_ibm_success_prob.pdf}\\[2pt]
+\includegraphics[width=\columnwidth]{fig_hw_ibm_approx_ratio.pdf}
+\caption{Final \texttt{ibm\_fez} jobs, one marker per run, next to the Aer $p=1$ results on
+the same QUBO (mean and range over \HwNFourIdealSeeds{} seeds). Top: $\Popt$ relative to
+uniform sampling (log axis; Wilson 95\% CIs). Bottom: approximation ratio of the mean energy
+(bootstrap CIs are smaller than the markers); dotted: exact uniform value.}
+\label{fig:hw}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_hw_ibm_trajectory.pdf}
+\caption{COBYLA on \texttt{ibm\_fez}: approximation ratio of the mean energy of each
+\HwLoopShots-shot loop job by position in its run; the final job of each run is the marker at
+the end. Gray: the fourth run of each size, which has no final job.}
+\label{fig:hwtraj}
+\end{figure}
+
+\emph{Mean energy.} Every final job has a lower mean energy than uniform sampling, with
+bootstrap intervals that exclude zero (Table~\ref{tab:hw}): $\Delta r$ is
+\HwNFourAdvMin--\HwNFourAdvMax{} at $n=4$ and \HwNOneZeroAdvMin--\HwNOneZeroAdvMax{} at
+$n=10$ (all three runs above uniform at both sizes). The ratios,
+\HwNFourRatioMin--\HwNFourRatioMax{} and \HwNOneZeroRatioMin--\HwNOneZeroRatioMax, are
+comparable to those of the Aer simulators at $p=1$ (means \HwNFourIdealRatio{} and
+\HwNOneZeroIdealRatio{} ideal, \HwNFourNoisyRatio{} and \HwNOneZeroNoisyRatio{} noisy;
+Fig.~\ref{fig:hw}). The simulator runs used fewer shots per evaluation
+(Section~\ref{sec:protocol}), so this comparison says that the device did not prevent
+COBYLA from finding useful angles, not that it matches an ideal device. The optimization
+itself worked on hardware: in every complete run, the mean ratio of the last five loop jobs
+(\HwNFourLastFiveMin--\HwNFourLastFiveMax{} at $n=4$,
+\HwNOneZeroLastFiveMin--\HwNOneZeroLastFiveMax{} at $n=10$) exceeds that of the first five
+(\HwNFourFirstFiveMin--\HwNFourFirstFiveMax{} and
+\HwNOneZeroFirstFiveMin--\HwNOneZeroFirstFiveMax; Fig.~\ref{fig:hwtraj}), although one
+$n=10$ run stayed close to the uniform value throughout.
+
+\emph{Probability of the optimum.} Here the evidence for any advantage is weak. At $n=4$,
+one run placed $\Popt=\HwNFourPoptMax$ on the optimum, \HwNFourPoptMaxRatio{} times the
+uniform \HwNFourUniform{} ($p_>$\,\HwNFourPMin), but the other two placed \HwNFourPoptMid{} and
+\HwNFourPoptMin, significantly \emph{below} the uniform value (one-sided exact test,
+$p$\,\HwNFourPLessMax); the run with the highest
+$\Popt$ has the lowest mean-energy ratio, so the angles found trade concentration on the
+optimum against low energy overall. At $n=10$, \HwNOneZeroRunsAbove{} of three runs are
+above $2^{-10}$ but none significantly ($p_>=\HwNOneZeroPMin$ to \HwNOneZeroPMax), with
+$\Popt$ between \HwNOneZeroPoptMin{} and \HwNOneZeroPoptMax{} against \HwNOneZeroUniform. The
+spread between runs is of the same order as the spread between simulator seeds (ideal Aer
+at $n=4$: \HwNFourIdealPoptMin--\HwNFourIdealPoptMax), which points to the starting angles
+rather than the device as its main source. The optimum was sampled in every final job, but,
+as in Section~\ref{sec:solvers}, this carries no information: uniform sampling with
+\HwFinalShots{} shots misses it with probability \HwNOneZeroUniformMiss{} at $n=10$.
+
+\emph{No advantage over classical solvers.} Both sizes are solved exactly by enumeration and
+by SA in every seed (Section~\ref{sec:solvers}; \SaTimeMin--\SaTimeMax~s per SA solve). The
+hardware returned a distribution with better-than-random mean energy, not a better solution.
+A complete run spanned \HwRunSpanMin--\HwRunSpanMax~s from its first to its last job
+creation, with a median of \HwJobIntervalMedian~s between consecutive jobs of a run; these
+are wall-clock intervals that include queueing and the classical loop, not QPU time. Neither
+the QPU time nor the cost of the runs is recorded in the recovered data, so we report
+neither.
+
+\emph{Data.} The raw counts are in \url{results/ibm_fez_recovered.jsonl}; the IDs of all
+analysed, final, incomplete-run and excluded jobs are listed in
+\url{results/hardware/manifest.json}.
 
 % ======================================================================================
 \section{Discussion: When Could Quantum Optimization Help?}
@@ -780,8 +870,10 @@ conditions fail; each would need its own pre-registered test.
   the best sample.
 \item \emph{Latency compatibility.} The decoupled architecture tolerates slow solves, but a
   schedule is only useful if it arrives within the re-planning interval. Remote quantum
-  execution adds queueing, transpilation and communication delays that were not measured
-  here and would have to be.
+  execution adds queueing, transpilation and communication delays: on \texttt{ibm\_fez}, a
+  median of \HwJobIntervalMedian~s passed between consecutive jobs of a QAOA run, and a
+  complete run took \HwRunSpanMin--\HwRunSpanMax~s (Section~\ref{sec:hardware}), against
+  the \OptimizerIntervalMs~ms re-solve interval of our runtime.
 \end{enumerate}
 
 \subsection*{Lessons from auditing the earlier draft}
@@ -827,8 +919,9 @@ affected by the schedule; a different cap would shift levels, not the comparison
 all strategies face the same cap.
 
 \emph{Problem size and solvers.} The real-data QUBO has \TuneVariables{} variables and is
-solved exactly by DP; QAOA was run only up to $n=\QaoaMaxN$ and only on simulators, with a
-generic noise model rather than a device calibration. The \emph{hybrid} strategy's
+solved exactly by DP; QAOA was simulated only up to $n=\QaoaMaxN$, with a generic noise
+model rather than a device calibration, and run on hardware only at $n=4$ and $n=10$ with
+three runs each, at one depth, on one device and one day. The \emph{hybrid} strategy's
 re-planning rule was selected on development days although every variant was worse than
 TWAP there; a different adaptive rule might behave differently.
 
@@ -872,7 +965,9 @@ within half a basis point, and the reason is that the costs a schedule controls 
 compared with the price noise it does not. On the solver side, a correct classical annealer
 solves every real-data instance and every benchmark instance up to
 $n=\SaSliceAllOptimalUpTo$, and QAOA on simulators does not beat uniform sampling at
-finding the optimum of the binary execution encoding. The contribution is therefore a
+finding the optimum of the binary execution encoding. On IBM hardware, $p=1$ QAOA at $n=4$
+and $n=10$ lowered the mean energy below that of uniform sampling in every run but did not
+reliably raise the probability of the optimum. The contribution is therefore a
 reproducible system, an evaluation method, and a clear statement of what a quantum optimizer
 would have to demonstrate, on which problems, to matter for trade execution.
 

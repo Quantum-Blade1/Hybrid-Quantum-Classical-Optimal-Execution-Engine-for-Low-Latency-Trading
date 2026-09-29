@@ -566,7 +566,7 @@ def latency(t: Tables, m: Macros) -> None:
 # --------------------------------------------------------------------------------------
 
 
-def hardware(t: Tables, m: Macros) -> None:
+def hardware(t: Tables, m: Macros) -> None:  # noqa: PLR0915 - one flat list of numbers
     recovered = t.has("hardware", "summary.csv") and t.has("hardware", "manifest.json")
     if recovered:
         manifest = t.json("hardware", "manifest")
@@ -575,21 +575,103 @@ def hardware(t: Tables, m: Macros) -> None:
     m["HwRecovered"] = "1" if recovered else "0"
     if not recovered:
         return
-    s = t.csv("hardware", "summary")
+    s = t.csv("hardware", "summary").sort_values("n")
     jobs = t.csv("hardware", "jobs")
+    tests = t.csv("hardware", "final_tests").sort_values(["n", "run"])
+    runs = t.csv("hardware", "runs")
+    m["HwNumRecords"] = str(manifest["records_in_file"])
+    m["HwNumUniqueJobs"] = str(manifest["unique_jobs"])
     m["HwNumJobs"] = str(len(jobs))
+    m["HwNumExcluded"] = spell_small(len(manifest["excluded_job_ids"]))
+    m["HwNumFinalJobs"] = spell_small(len(tests))
+    m["HwNumLoopJobs"] = str(int((jobs["role"] == "optimization").sum()))
+    m["HwNumIncompleteJobs"] = str(len(manifest["incomplete_run_job_ids"]))
+    m["HwDate"] = str(pd.to_datetime(jobs["created"]).min().date())
     m["HwMinN"] = str(int(s["n"].min()))
     m["HwMaxN"] = str(int(s["n"].max()))
-    rows = []
-    for _, r in s.sort_values("n").iterrows():
+    m["HwRunsPerN"] = spell_small(int(s["num_runs"].min()))
+    m["HwLoopShots"] = fmt_int(s["loop_shots"].max())
+    m["HwFinalShots"] = fmt_int(s["final_shots"].max())
+    complete = runs[runs["complete"]]
+    m["HwLoopJobsMin"] = str(int(complete["num_loop_jobs"].min()))
+    m["HwLoopJobsMax"] = str(int(complete["num_loop_jobs"].max()))
+    m["HwRunSpanMin"] = fmt_int(complete["creation_span_s"].min())
+    m["HwRunSpanMax"] = fmt_int(complete["creation_span_s"].max())
+    m["HwJobIntervalMedian"] = fmt(complete["median_creation_interval_s"].median(), 1)
+    m["HwSignP"] = fmt(s["sign_p_ratio"].min(), 3)
+    m["HwBootstrap"] = fmt_int(tests["bootstrap_resamples"].iloc[0])
+    m["HwRunsSuccessSig"] = spell_small(int(s["runs_success_significant"].sum()))
+    m["HwAllOptimalFound"] = "1" if bool((s["optimal_found_runs"] == s["num_runs"]).all()) else "0"
+    for _, r in s.iterrows():
         n = int(r["n"])
-        m[f"HwNFor{spell(n)}Popt"] = fmt(r["success_probability"], 4)
-        m[f"HwNFor{spell(n)}Uniform"] = fmt(r["uniform_success_probability"], 4)
+        k = f"HwN{spell(n)}"
+        m[f"{k}Uniform"] = fmt(r["uniform_success_probability"], 5 if n > 6 else 4)
+        m[f"{k}PoptMean"] = fmt(r["success_probability"], 5 if n > 6 else 3)
+        m[f"{k}PoptMin"] = fmt(r["success_probability_min"], 4)
+        m[f"{k}PoptMax"] = fmt(r["success_probability_max"], 4)
+        m[f"{k}RatioMean"] = fmt(r["approx_ratio_mean"], 3)
+        m[f"{k}RatioMin"] = fmt(r["approx_ratio_mean_min"], 3)
+        m[f"{k}RatioMax"] = fmt(r["approx_ratio_mean_max"], 3)
+        m[f"{k}UniformRatio"] = fmt(r["uniform_approx_ratio_mean"], 3)
+        m[f"{k}AdvMin"] = fmt(r["ratio_advantage_min"], 3)
+        m[f"{k}AdvMax"] = fmt(r["ratio_advantage_max"], 3)
+        m[f"{k}RunsAbove"] = spell_small(int(r["runs_success_above_uniform"]))
+        m[f"{k}RunsSig"] = spell_small(int(r["runs_success_significant"]))
+        m[f"{k}RunsBelowSig"] = spell_small(int(r["runs_success_below_significant"]))
+        m[f"{k}Incomplete"] = str(int(r["incomplete_loop_jobs"]))
+        miss = (1 - r["uniform_success_probability"]) ** int(r["final_shots"])
+        m[f"{k}UniformMiss"] = _sci(miss) if miss < 1e-3 else fmt(miss, 3)
+        for solver, name in (("qaoa_ideal", "Ideal"), ("qaoa_noisy", "Noisy")):
+            col = f"{solver}_p1_success_probability"
+            if col not in r:
+                continue
+            nd = 5 if n > 6 else 3
+            m[f"{k}{name}Popt"] = fmt(r[col], nd)
+            m[f"{k}{name}PoptMin"] = fmt(r[f"{col}_min"], nd)
+            m[f"{k}{name}PoptMax"] = fmt(r[f"{col}_max"], nd)
+            m[f"{k}{name}Ratio"] = fmt(r[f"{solver}_p1_approx_ratio_mean"], 3)
+            m[f"{k}{name}Seeds"] = str(int(r[f"{solver}_p1_num_seeds"]))
+        g = tests[tests["n"] == n]
+        m[f"{k}PMin"] = fmt_p(g["binom_p_greater"].min())
+        m[f"{k}PMax"] = fmt_p(g["binom_p_greater"].max())
+        m[f"{k}PoptMid"] = fmt(g["success_probability"].median(), 4)
+        m[f"{k}PoptMaxRatio"] = fmt(g["success_ratio_vs_uniform"].max(), 1)
+        below = g[g["binom_p_less"] < ALPHA_PAPER]
+        if len(below):
+            m[f"{k}PLessMax"] = fmt_p(below["binom_p_less"].max())
+        rr = complete[complete["n"] == n]
+        m[f"{k}FirstFiveMin"] = fmt(rr["loop_ratio_first5_mean"].min(), 2)
+        m[f"{k}FirstFiveMax"] = fmt(rr["loop_ratio_first5_mean"].max(), 2)
+        m[f"{k}LastFiveMin"] = fmt(rr["loop_ratio_last5_mean"].min(), 2)
+        m[f"{k}LastFiveMax"] = fmt(rr["loop_ratio_last5_mean"].max(), 2)
+    rows = []
+    for n, g in tests.groupby("n", sort=True):
+        u = s[s["n"] == n].iloc[0]
+        nd = 5 if n > 6 else 4
+        for i, (_, r) in enumerate(g.iterrows()):
+            lead = f"\\multirow{{{len(g) + 1}}}{{*}}{{{int(n)}}}" if i == 0 else ""
+            rows.append(
+                f"{lead} & {int(r['run'])} & {fmt(r['success_probability'], nd)} "
+                f"{fmt_ci(r['success_ci_low'], r['success_ci_high'], nd)} & "
+                f"{fmt_p(r['binom_p_greater'])} & {fmt(r['approx_ratio_mean'], 3)} & "
+                f"{fmt(r['ratio_advantage'], 3, sign=True)} "
+                f"{fmt_ci(r['ratio_advantage_ci_low'], r['ratio_advantage_ci_high'], 3)} \\\\"
+            )
         rows.append(
-            f"{n} & {fmt(r['success_probability'], 4)} & "
-            f"{fmt(r['uniform_success_probability'], 4)} \\\\"
+            f" & unif. & {fmt(u['uniform_success_probability'], nd)} & & "
+            f"{fmt(u['uniform_approx_ratio_mean'], 3)} & \\\\"
         )
-    m["HwTableRows"] = "\n".join(rows)
+        rows.append("\\midrule" if n != tests["n"].max() else "")
+    m["HwTableRows"] = "\n".join(r for r in rows if r)
+
+
+ALPHA_PAPER = 0.05
+
+
+def spell_small(k: int) -> str:
+    """Integers 0-10 as words for running text."""
+    words = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
+    return words[k] if 0 <= k < len(words) else str(k)
 
 
 # --------------------------------------------------------------------------------------

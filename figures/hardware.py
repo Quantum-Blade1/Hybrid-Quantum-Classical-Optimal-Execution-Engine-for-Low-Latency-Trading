@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
+from matplotlib.ticker import NullFormatter
 
 from figures.common import Results
 from figures.paper import COLUMN_IN, _figure, _panel_label
@@ -87,6 +88,9 @@ def fig_hw_ibm_success_prob(res: Results) -> Figure:
     _sim_points(ax, summary, "success_probability", np.arange(len(sizes)), lambda s: s / u)
     ax.axhline(1.0, color="0.5", ls=":", lw=0.8, label="uniform sampling")
     ax.set_yscale("log")
+    ticks = [0.125, 0.25, 0.5, 1, 2, 4, 8]
+    ax.set_yticks(ticks, [f"{t:g}" for t in ticks])
+    ax.yaxis.set_minor_formatter(NullFormatter())
     ax.set_xticks(range(len(sizes)), [f"$n={n}$" for n in sizes])
     ax.set_xlim(-0.5, len(sizes) - 0.3)
     ax.set_ylabel(r"$P_{\mathrm{opt}}$ / uniform $2^{-n}$")
