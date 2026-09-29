@@ -1,0 +1,65 @@
+{
+  "experiment": "ac_frontier",
+  "status": "ok",
+  "config_type": "Config",
+  "config": {
+    "frontier_points": 20,
+    "frontier_shares": 10000,
+    "frontier_steps": 15,
+    "schedule_shares": 10000,
+    "schedule_steps": 15,
+    "comparison_shares": 50000,
+    "comparison_steps": 20,
+    "comparison_days": 0.038461538461538464,
+    "comparison_risk_aversions": [
+      1e-09,
+      0.0001
+    ],
+    "seed": 0,
+    "num_seeds": 10
+  },
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "git": {
+    "commit": "28df913273d525e8c79489a069b40473b748ee55",
+    "dirty": false
+  },
+  "environment": {
+    "python": "3.12.14",
+    "implementation": "CPython",
+    "packages": {
+      "qexec": "0.1.0",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "pandas": "3.0.6",
+      "matplotlib": "3.11.2",
+      "qiskit": "2.5.2",
+      "qiskit-aer": "0.17.2"
+    },
+    "platform": "macOS-26.5.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "cpu_count": 10,
+    "memory_gb": 16.0,
+    "cpu_model": "Apple M5"
+  },
+  "started_utc": "2026-09-29T02:20:00+00:00",
+  "wall_time_s": 0.22,
+  "files": {
+    "frontier.csv": "0af90e4c50847b50a08e8e3a887642ed388bc3321efde8109faa9467ac72ef93",
+    "schedules.csv": "29f77f2f0fe6c2a204885c296a905fb72d60d1d6ae41dcf069c45dd7ad5c5c98",
+    "ac_vs_qubo.csv": "be0dc954a7aa9d1963e8592a3f211c93856d160bd2c0a93a0a13488bfb85f6d7",
+    "ac_vs_qubo_summary.csv": "56a577774c95fddc2afbcc3143696dada83caa5c5cd0e96217420398e99f92d5"
+  },
+  "quick": false
+}

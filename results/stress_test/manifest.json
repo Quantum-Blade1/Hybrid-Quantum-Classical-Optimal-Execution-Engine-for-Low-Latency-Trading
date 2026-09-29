@@ -1,0 +1,90 @@
+{
+  "experiment": "stress_test",
+  "status": "ok",
+  "config_type": "Config",
+  "config": {
+    "total_shares": 50000,
+    "scenarios": [
+      "Flash Crash",
+      "Liquidity Crisis",
+      "Volatility Spike",
+      "Market Outage"
+    ],
+    "strategies": [
+      "TWAP",
+      "VWAP",
+      "SA-QUBO",
+      "Hybrid"
+    ],
+    "baselines": [
+      "TWAP",
+      "VWAP"
+    ],
+    "seed": 2000,
+    "num_seeds": 30
+  },
+  "seeds": [
+    2000,
+    2001,
+    2002,
+    2003,
+    2004,
+    2005,
+    2006,
+    2007,
+    2008,
+    2009,
+    2010,
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025,
+    2026,
+    2027,
+    2028,
+    2029
+  ],
+  "git": {
+    "commit": "28df913273d525e8c79489a069b40473b748ee55",
+    "dirty": false
+  },
+  "environment": {
+    "python": "3.12.14",
+    "implementation": "CPython",
+    "packages": {
+      "qexec": "0.1.0",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "pandas": "3.0.6",
+      "matplotlib": "3.11.2",
+      "qiskit": "2.5.2",
+      "qiskit-aer": "0.17.2"
+    },
+    "platform": "macOS-26.5.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "cpu_count": 10,
+    "memory_gb": 16.0,
+    "cpu_model": "Apple M5"
+  },
+  "started_utc": "2026-09-29T02:21:06+00:00",
+  "wall_time_s": 7.289,
+  "files": {
+    "runs.csv": "8ad310542e7a02ac31d7f9577ad174f6ef5384b40f270e60f5968eac0398c36c",
+    "summary.csv": "196f8c93533f9638741c6b763458c729649c54f81bb2935a9d729361d29438e4",
+    "paired.csv": "b9c36eea37ff5c5f455b756af5f352bd3b4b6da3f4678f406320df98f1577754"
+  },
+  "quick": false,
+  "crashed_runs": 0
+}

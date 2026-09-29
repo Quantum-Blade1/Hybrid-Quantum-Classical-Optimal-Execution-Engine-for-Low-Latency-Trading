@@ -1,0 +1,13 @@
+{
+  "n": 4,
+  "min_energy": -3999999.3188679656,
+  "max_energy": 0.0,
+  "uniform_mean_energy": -2499999.657933983,
+  "uniform_success_probability": 0.25,
+  "best_grid_point": {
+    "gamma": 4.5553093477052,
+    "beta": 0.7853981633974483,
+    "expected_energy": -3979476.387045799,
+    "success_probability": 0.9799074874304234
+  }
+}

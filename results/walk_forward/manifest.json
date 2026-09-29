@@ -1,0 +1,82 @@
+{
+  "experiment": "walk_forward",
+  "status": "ok",
+  "config_type": "Config",
+  "config": {
+    "total_days": 13,
+    "train_days": 3,
+    "daily_shares": 500000,
+    "baselines": [
+      "TWAP",
+      "Static",
+      "Adaptive"
+    ],
+    "seed": 3000,
+    "num_seeds": 30
+  },
+  "seeds": [
+    3000,
+    3001,
+    3002,
+    3003,
+    3004,
+    3005,
+    3006,
+    3007,
+    3008,
+    3009,
+    3010,
+    3011,
+    3012,
+    3013,
+    3014,
+    3015,
+    3016,
+    3017,
+    3018,
+    3019,
+    3020,
+    3021,
+    3022,
+    3023,
+    3024,
+    3025,
+    3026,
+    3027,
+    3028,
+    3029
+  ],
+  "git": {
+    "commit": "28df913273d525e8c79489a069b40473b748ee55",
+    "dirty": false
+  },
+  "environment": {
+    "python": "3.12.14",
+    "implementation": "CPython",
+    "packages": {
+      "qexec": "0.1.0",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "pandas": "3.0.6",
+      "matplotlib": "3.11.2",
+      "qiskit": "2.5.2",
+      "qiskit-aer": "0.17.2"
+    },
+    "platform": "macOS-26.5.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "cpu_count": 10,
+    "memory_gb": 16.0,
+    "cpu_model": "Apple M5"
+  },
+  "started_utc": "2026-09-29T02:21:13+00:00",
+  "wall_time_s": 32.782,
+  "files": {
+    "windows.csv": "19dcc379b5e671ddda0e41522aaacbc67bf1c04bdb5845d06a9e38d679e9bfb2",
+    "per_seed.csv": "e52fde8c99f4098f24701d2ed558e16dac69163f3510b37cd7741060514f751a",
+    "summary.csv": "710021cbd962032aaf95b41bf611c376357d990e87e93466cfd5aef403bd5514",
+    "paired.csv": "5d032d9005b2c81d28ad8c99b3519331b4b19811d69c7454496ca5a421bbc9d6",
+    "wins.csv": "dd782772bf55a99e496929da8c28014b523f6cd8fb1c182f15bf1b77defb8171"
+  },
+  "quick": false
+}

@@ -1,0 +1,91 @@
+{
+  "experiment": "strategy_comparison",
+  "status": "ok",
+  "config_type": "Config",
+  "config": {
+    "order_fractions_of_adv": [
+      0.001,
+      0.01,
+      0.05
+    ],
+    "minutes": 390,
+    "initial_price": 175.0,
+    "annual_volatility": 0.22,
+    "daily_volume": 60000000,
+    "strategies": [
+      "TWAP",
+      "VWAP",
+      "SA-QUBO",
+      "Hybrid"
+    ],
+    "baselines": [
+      "TWAP",
+      "VWAP"
+    ],
+    "seed": 1000,
+    "num_seeds": 30
+  },
+  "seeds": [
+    1000,
+    1001,
+    1002,
+    1003,
+    1004,
+    1005,
+    1006,
+    1007,
+    1008,
+    1009,
+    1010,
+    1011,
+    1012,
+    1013,
+    1014,
+    1015,
+    1016,
+    1017,
+    1018,
+    1019,
+    1020,
+    1021,
+    1022,
+    1023,
+    1024,
+    1025,
+    1026,
+    1027,
+    1028,
+    1029
+  ],
+  "git": {
+    "commit": "28df913273d525e8c79489a069b40473b748ee55",
+    "dirty": false
+  },
+  "environment": {
+    "python": "3.12.14",
+    "implementation": "CPython",
+    "packages": {
+      "qexec": "0.1.0",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "pandas": "3.0.6",
+      "matplotlib": "3.11.2",
+      "qiskit": "2.5.2",
+      "qiskit-aer": "0.17.2"
+    },
+    "platform": "macOS-26.5.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "cpu_count": 10,
+    "memory_gb": 16.0,
+    "cpu_model": "Apple M5"
+  },
+  "started_utc": "2026-09-29T02:20:34+00:00",
+  "wall_time_s": 31.908,
+  "files": {
+    "runs.csv": "fd83837be0f8f0796363359d94db813b1b95dc662f3964a222177b6cd7004817",
+    "summary.csv": "0803b043813532b3d7ce6577a0c74cef70b2f629f00b9e6605abf73d2624161e",
+    "paired.csv": "2c2d5cfcefa617bc743d6ee22a1140a797c04088c3b57554c120c3e582dac3f1"
+  },
+  "quick": false
+}

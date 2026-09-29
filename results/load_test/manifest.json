@@ -1,0 +1,49 @@
+{
+  "experiment": "load_test",
+  "status": "ok",
+  "config_type": "Config",
+  "config": {
+    "num_orders": 100,
+    "concurrency": 20,
+    "min_shares": 100,
+    "max_shares": 10000,
+    "min_slices": 10,
+    "max_slices": 50,
+    "tick_interval_s": 0.05,
+    "optimizer_interval_s": 1.0,
+    "seed": 0
+  },
+  "seeds": [
+    0
+  ],
+  "git": {
+    "commit": "28df913273d525e8c79489a069b40473b748ee55",
+    "dirty": false
+  },
+  "environment": {
+    "python": "3.12.14",
+    "implementation": "CPython",
+    "packages": {
+      "qexec": "0.1.0",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "pandas": "3.0.6",
+      "matplotlib": "3.11.2",
+      "qiskit": "2.5.2",
+      "qiskit-aer": "0.17.2"
+    },
+    "platform": "macOS-26.5.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "cpu_count": 10,
+    "memory_gb": 16.0,
+    "cpu_model": "Apple M5"
+  },
+  "started_utc": "2026-09-29T02:23:35+00:00",
+  "wall_time_s": 10.91,
+  "files": {
+    "orders.csv": "7c98a75088f2585ea1f7f8a7194b4d413c4597b4be94e36164e85699a725e11c",
+    "summary.json": "8feb6db5e0cc408adb8ea9f94677c8429031ecc43a01bd9567fb71390dd9bd98"
+  },
+  "quick": false
+}
