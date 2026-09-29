@@ -42,15 +42,29 @@ def test_every_paper_figure_has_a_producer_or_is_listed_as_removed():
     assert not set(registry.REMOVED) & registered
 
 
-def test_paper_includegraphics_are_registered_or_removed():
-    tex = (ROOT / "paper" / "main.tex").read_text()
-    referenced = {
-        line.split("{")[-1].rstrip("}").strip()
-        for line in tex.splitlines()
-        if "\\includegraphics" in line
+def _includegraphics(tex_path: Path) -> set[str]:
+    return {
+        line.split("{")[-1].split("}")[0].strip()
+        for line in tex_path.read_text().splitlines()
+        if "\\includegraphics" in line and not line.lstrip().startswith("%")
     }
+
+
+def test_ieee_paper_uses_only_registered_figures():
+    tex = ROOT / "paper" / "ieee" / "main.tex"
+    if not tex.exists():
+        pytest.skip("paper/ieee/main.tex not written yet")
+    referenced = {n if n.endswith(".pdf") else f"{n}.pdf" for n in _includegraphics(tex)}
+    assert referenced, "the IEEE paper includes no figures"
+    unknown = referenced - set(registry.by_file())
+    assert not unknown, f"IEEE paper references figures with no producer: {sorted(unknown)}"
+    assert not referenced & set(registry.REMOVED)
+
+
+def test_archived_draft_includegraphics_are_registered_or_removed():
+    referenced = _includegraphics(ROOT / "paper" / "springer_qip_old" / "main.tex")
     unknown = referenced - set(registry.by_file()) - set(registry.REMOVED)
-    assert not unknown, f"paper references figures with no producer: {sorted(unknown)}"
+    assert not unknown, f"archived draft references unknown figures: {sorted(unknown)}"
 
 
 def test_illustrative_figures_have_no_inputs_and_empirical_ones_do():

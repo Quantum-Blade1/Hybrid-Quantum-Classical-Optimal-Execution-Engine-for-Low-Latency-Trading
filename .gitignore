@@ -37,17 +37,20 @@ Thumbs.db
 # Logs
 *.log
 
-# Paper build artifacts (only paper/main.tex is tracked)
+# Paper build artifacts (sources, numbers.tex and paper/figures/*.pdf are tracked)
 paper/*.pdf
-paper/*.aux
-paper/*.log
-paper/*.out
-paper/*.bbl
-paper/*.blg
-paper/*.synctex.gz
-paper/*.fls
-paper/*.fdb_latexmk
-paper/*.toc
+paper/ieee/*.pdf
+paper/springer_qip_old/*.pdf
+paper/**/*.aux
+paper/**/*.log
+paper/**/*.out
+paper/**/*.bbl
+paper/**/*.blg
+paper/**/*.synctex.gz
+paper/**/*.fls
+paper/**/*.fdb_latexmk
+paper/**/*.toc
+paper/ieee/build/
 
 # Raw / large market data
 data/
