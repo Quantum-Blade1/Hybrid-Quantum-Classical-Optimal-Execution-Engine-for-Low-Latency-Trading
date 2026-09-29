@@ -1,5 +1,3 @@
-"""Counts post-processing: readout-error inversion and zero-noise extrapolation."""
-
 import numpy as np
 import pytest
 
@@ -7,8 +5,7 @@ from qexec.hardware.mitigation import MeasurementErrorMitigator, ZeroNoiseExtrap
 
 
 def test_readout_mitigation_inverts_an_asymmetric_confusion_matrix():
-    # Real readout error is asymmetric (|1> decays to 0 more often than 0 flips to 1).
-    # Calibration rows are prepared states: P(read 1 | 0) = 2%, P(read 0 | 1) = 20%.
+    # Asymmetric readout error as on hardware: P(read 1 | 0) = 2%, P(read 0 | 1) = 20%.
     mitigator = MeasurementErrorMitigator()
     mitigator.calibrate([{"0": 980, "1": 20}, {"0": 200, "1": 800}], n_qubits=1)
     # True distribution (0.3, 0.7) is read as (0.3*0.98 + 0.7*0.2, 0.3*0.02 + 0.7*0.8).
@@ -43,7 +40,6 @@ def test_zne_recovers_the_zero_noise_intercept_of_linear_decay(extrapolation):
 
 
 def test_zne_exponential_keeps_the_sign_of_negative_energies():
-    # Regression: the exponential fit took log of negative values and lost the sign.
     zne = ZeroNoiseExtrapolation(noise_factors=[1.0, 2.0, 3.0], extrapolation="exponential")
     values = [-10 * np.exp(-0.5 * c) for c in (1.0, 2.0, 3.0)]
     assert zne._extrapolate([1.0, 2.0, 3.0], values) == pytest.approx(-10.0)

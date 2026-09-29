@@ -1,8 +1,3 @@
-"""IBM job persistence with a fake SamplerV2: every job's ID and raw counts reach disk.
-
-qiskit-ibm-runtime is never imported: a stand-in module is placed in sys.modules.
-"""
-
 import json
 import sys
 import types
@@ -24,8 +19,6 @@ def read_log(path) -> list[dict]:
 
 
 class FakeSampler:
-    """SamplerV2 stand-in; `on_run(job_number)` runs before each job is created."""
-
     jobs_run = 0
     on_run = None
     fail_on_job: int | None = None

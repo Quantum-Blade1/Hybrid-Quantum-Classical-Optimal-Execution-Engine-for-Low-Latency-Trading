@@ -1,5 +1,3 @@
-"""paper/ieee/numbers.tex is generated from results/ and must match a fresh regeneration."""
-
 import re
 from pathlib import Path
 

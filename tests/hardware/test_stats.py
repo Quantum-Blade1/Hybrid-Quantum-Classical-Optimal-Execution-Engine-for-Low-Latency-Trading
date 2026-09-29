@@ -1,5 +1,3 @@
-"""Hardware final-job statistics: Wilson interval, exact binomial tests, shot bootstrap."""
-
 import numpy as np
 import pytest
 from scipy import stats

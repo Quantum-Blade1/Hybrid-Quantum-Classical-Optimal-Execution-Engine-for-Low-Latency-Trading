@@ -1,5 +1,3 @@
-"""Approximation ratio and optimality gap for signed QUBO energies."""
-
 import numpy as np
 import pytest
 from hypothesis import given
@@ -44,13 +42,11 @@ def test_ratio_and_gap_properties_over_all_assignments(n, seed, shift):
     suboptimal = energies > bounds.min_energy + 1e-9
     assert np.all(ratios[suboptimal] < 1.0)
     assert np.all(gaps[suboptimal] > 0.0)
-    # Monotone: lower energy never has a lower ratio.
     order = np.argsort(energies)
     assert np.all(np.diff(ratios[order]) <= 1e-12)
 
 
 def test_ratio_is_below_one_for_suboptimal_negative_energy():
-    # Regression: the old metric min(E_opt / E, 1) scored this 1.0 (claims audit F1).
     bounds = EnergyBounds(min_energy=-248.9, max_energy=10.0)
     assert min(bounds.min_energy / -248.7, 1.0) == 1.0
     assert approximation_ratio(-248.7, bounds) < 1.0

@@ -1,5 +1,3 @@
-"""Provenance: every results directory carries a manifest that pins config, code and files."""
-
 import json
 from dataclasses import dataclass, field
 
@@ -49,7 +47,6 @@ def test_tampered_or_stale_files_are_detected_and_removed(tmp_path):
     (tmp_path / "demo" / "runs.csv").write_text("x\n2\n")
     assert verify_files(tmp_path / "demo") == ["runs.csv"]
 
-    # A new run clears files the previous run wrote.
     with ExperimentRecorder("demo", DemoConfig(), seeds=[0], root=tmp_path) as rec:
         rec.write_table("runs", pd.DataFrame({"x": [3]}))
     assert sorted(p.name for p in (tmp_path / "demo").iterdir()) == ["manifest.json", "runs.csv"]

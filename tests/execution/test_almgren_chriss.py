@@ -1,5 +1,3 @@
-"""Almgren-Chriss trajectory shape and its analytic cost moments against direct simulation."""
-
 import numpy as np
 import pytest
 
@@ -9,10 +7,7 @@ RISK_AVERSIONS = [0.0, 1e-8, 1e-6, 1e-4]
 
 
 def simulate_costs(config: ACConfig, trades: np.ndarray, shocks: np.ndarray) -> np.ndarray:
-    """Implementation shortfall X S_0 - sum n_k S~_k of the discrete AC model, one per path.
-
-    S_k = S_{k-1} + sigma S_0 sqrt(tau) xi_k - rho n_k and S~_k = S_{k-1} - eta n_k / tau.
-    """
+    # S_k = S_{k-1} + sigma S_0 sqrt(tau) xi_k - rho n_k; fills at S_{k-1} - eta n_k / tau.
     tau = config.n_days / config.n_steps
     sigma_dollars = config.sigma * config.price
     steps = sigma_dollars * np.sqrt(tau) * shocks - config.rho * trades
@@ -29,7 +24,7 @@ def test_sell_trajectory_starts_at_x_ends_at_zero_and_is_monotone(risk_aversion)
     assert traj["shares_held_end"].iloc[-1] == pytest.approx(0, abs=1e-6)
     assert traj["shares_to_trade"].sum() == pytest.approx(10_000)
     assert np.all(traj["shares_to_trade"] > 0)
-    assert np.all(np.diff(traj["shares_to_trade"]) <= 1e-9)  # never trades faster later
+    assert np.all(np.diff(traj["shares_to_trade"]) <= 1e-9)
 
 
 def test_zero_risk_aversion_limit_is_twap():

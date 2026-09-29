@@ -1,5 +1,3 @@
-"""Synthetic market data: quote invariants, volume profile shape, stream independence."""
-
 from datetime import datetime
 
 import numpy as np
@@ -17,7 +15,7 @@ def test_quotes_are_consistent_on_the_tick_grid(seed):
     assert (data["bid"] < data["ask"]).all()
     assert (data["bid"] <= data["price"]).all() and (data["price"] <= data["ask"]).all()
     np.testing.assert_allclose(data["spread"], data["ask"] - data["bid"])
-    assert (data["spread"] / data["price"] < 0.01).all()  # below 100 bps
+    assert (data["spread"] / data["price"] < 0.01).all()
     for column in ("price", "bid", "ask"):
         ticks = data[column] / 0.01
         np.testing.assert_allclose(ticks, ticks.round(), atol=1e-6)
@@ -49,7 +47,6 @@ def test_daily_price_volatility_matches_parameters():
 
 
 def test_price_volume_and_spread_streams_are_independent():
-    # Regression: the three generators shared one seed, so volume noise reused price shocks.
     sim = MarketDataSimulator(seed=3)
     price_draw = sim.price_generator.rng.standard_normal(1000)
     volume_draw = sim.volume_generator.rng.standard_normal(1000)

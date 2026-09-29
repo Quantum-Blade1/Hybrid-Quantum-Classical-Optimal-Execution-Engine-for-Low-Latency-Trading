@@ -1,5 +1,3 @@
-"""QUBO <-> Ising mapping and the sign conventions of the QAOA cost layer."""
-
 import numpy as np
 import pytest
 from hypothesis import given
@@ -27,8 +25,7 @@ def test_ising_energy_matches_qubo_energy_for_every_bitstring(Q, bitstrings):
 
 @pytest.mark.parametrize("gamma", [0.3, 1.1])
 def test_qaoa_cost_layer_applies_phase_exp_minus_i_gamma_energy(small_qubo, bitstrings, gamma):
-    # With beta = 0 the mixer is the identity, so the state is H^n followed by exp(-i gamma H_C):
-    # amplitude of basis state x is 2^{-n/2} exp(-i gamma (E(x) - offset)) up to a global phase.
+    # beta = 0: amplitude of x is 2^{-n/2} exp(-i gamma (E(x) - offset)) up to a global phase.
     Q = small_qubo[:4, :4]
     ising = qubo_to_ising(Q)
     qc = build_qaoa_circuit_from_ising(ising, gamma=gamma, beta=0.0, p=1)

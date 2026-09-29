@@ -1,5 +1,3 @@
-"""Implementation shortfall decomposition on a hand-computed example."""
-
 import pandas as pd
 import pytest
 
@@ -22,8 +20,7 @@ def test_shortfall_components_sum_to_perold_shortfall():
     # Delay already charges the unfilled shares from decision to arrival.
     assert result.opportunity_cost == pytest.approx((104 - 101) * 300)
 
-    # Perold: paper-portfolio return minus real return,
-    # sum n_i (p_i - P_d) + U (P_T - P_d) = 615 + 1240 + 1200.
+    # Perold: sum n_i (p_i - P_d) + U (P_T - P_d) = 615 + 1240 + 1200.
     perold = 300 * (102.05 - 100) + 400 * (103.10 - 100) + 300 * (104 - 100)
     parts = (result.delay_cost, result.market_impact, result.timing_risk, result.opportunity_cost)
     assert sum(parts) == pytest.approx(result.total_shortfall)

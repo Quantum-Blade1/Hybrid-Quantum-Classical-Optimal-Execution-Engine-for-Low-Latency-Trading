@@ -1,5 +1,3 @@
-"""Kyle's lambda, VPIN and adverse selection on synthetic data with known answers."""
-
 import numpy as np
 import pytest
 from hypothesis import given
@@ -22,7 +20,7 @@ def test_kyle_lambda_recovers_the_generating_slope(true_lambda, rng):
 
 
 def test_kyle_lambda_is_the_ols_slope_of_the_window(rng):
-    # Regression: numerator and denominator used different ddof, biasing the slope.
+    # Guards against mixed ddof in numerator and denominator, which biased the slope.
     volume = rng.normal(0, 1000, 60)
     dp = 2e-4 * volume + rng.normal(0, 0.01, 60)
     estimator = KyleLambdaEstimator(window_size=60)
@@ -35,8 +33,8 @@ def test_kyle_lambda_waits_for_twenty_observations_and_clamps_negative_slopes():
     estimator = KyleLambdaEstimator()
     for k in range(19):
         assert estimator.update(-1e-4 * (k - 9), float(k - 9)) == 0.0
-    assert estimator.update(1e-4, -10.0) < 0  # raw slope is negative ...
-    assert estimator.lambda_value == 0.0  # ... but the reported impact is clamped
+    assert estimator.update(1e-4, -10.0) < 0
+    assert estimator.lambda_value == 0.0
 
 
 @given(
@@ -66,8 +64,7 @@ def test_vpin_extremes(step, expected):
 
 
 def test_adverse_selection_equals_twice_the_post_trade_mid_move():
-    # Buys at mid + half-spread while the mid drifts up by `drift` per trade:
-    # effective = spread, realised = spread - 2 * horizon * drift.
+    # Buys at mid + half-spread, mid drifting up: realised = spread - 2 * horizon * drift.
     spread, drift, horizon = 0.02, 0.001, 10
     model = AdverseSelectionModel(lookback_ticks=50, realized_horizon=horizon)
     for t in range(60):

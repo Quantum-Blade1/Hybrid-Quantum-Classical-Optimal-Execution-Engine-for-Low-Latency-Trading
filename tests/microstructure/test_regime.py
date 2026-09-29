@@ -1,5 +1,3 @@
-"""Volatility/spread regime detection and the regime-dependent risk aversion."""
-
 import numpy as np
 import pytest
 
@@ -17,8 +15,7 @@ def gbm_prices(rng: np.random.Generator, vols: np.ndarray, start: float = 100.0)
 
 
 def test_volatility_regime_switches_on_a_volatility_step(rng):
-    # The regime is the ratio of a fast to a slow EWMA volatility, i.e. a change detector:
-    # a 5x volatility step must register as stressed within a few ticks.
+    # The fast/slow EWMA vol ratio is a change detector: a 5x step registers within a few ticks.
     vols = np.r_[np.full(400, 1e-4), np.full(100, 5e-4)]
     estimator = VolatilityEstimator()
     regimes = []

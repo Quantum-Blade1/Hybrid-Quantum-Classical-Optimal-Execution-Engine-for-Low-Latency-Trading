@@ -1,5 +1,3 @@
-"""Cost model, discretized Almgren-Chriss optimum, and the exact binary-encoded QUBO."""
-
 import numpy as np
 import pytest
 from hypothesis import given, settings
@@ -99,7 +97,6 @@ def test_qubo_optimum_decodes_to_the_integer_program_optimum(slices, bits, units
     assert p.is_feasible(counts)
     assert energies[best] == pytest.approx(ip_value, rel=1e-9, abs=1e-12)
     assert p.objective(counts) == pytest.approx(ip_value, rel=1e-9, abs=1e-12)
-    # Every infeasible assignment is strictly worse than the optimum.
     for index in np.argsort(energies)[:20]:
         c = p.decode(np.array([(int(index) >> i) & 1 for i in range(p.num_variables)]))
         if not p.is_feasible(c):

@@ -1,5 +1,3 @@
-"""AC, QUBO and adaptive hybrid schedules for the execution cost model."""
-
 from datetime import datetime, timedelta
 
 import numpy as np

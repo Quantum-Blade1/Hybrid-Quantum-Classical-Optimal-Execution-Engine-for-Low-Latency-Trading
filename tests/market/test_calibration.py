@@ -1,5 +1,3 @@
-"""Dev-day calibration: profiles, Kyle-style impact regression and lot sizes."""
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -15,7 +13,6 @@ from qexec.market.calibration import (
 
 
 def synthetic_bars(days: int, beta: float, seed: int = 0) -> pd.DataFrame:
-    """Bars whose returns are exactly beta * SV / Vbar plus noise (Vbar = 100 everywhere)."""
     rng = np.random.default_rng(seed)
     n = days * MINUTES_PER_DAY
     ts = pd.date_range("2026-07-22", periods=n, freq="min")

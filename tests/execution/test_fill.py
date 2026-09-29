@@ -1,5 +1,3 @@
-"""Real-bar impact fill model, alone and through the shared ExecutionEngine rules."""
-
 from datetime import datetime, timedelta
 
 import numpy as np

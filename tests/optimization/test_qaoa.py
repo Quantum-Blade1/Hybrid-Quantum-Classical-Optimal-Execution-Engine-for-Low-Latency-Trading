@@ -1,5 +1,3 @@
-"""QAOA driver: sample post-processing with a fake sampler, and seeded runs on Aer."""
-
 import numpy as np
 import pytest
 
@@ -32,7 +30,6 @@ def test_sample_statistics_use_qiskit_bit_order(small_qubo):
 
 
 def test_run_qaoa_reports_best_sample_and_its_frequency():
-    # A sampler that ignores the circuit and returns every bitstring equally often.
     calls: list[tuple[str, int]] = []
 
     def sampler(circuit, shots):
@@ -76,8 +73,7 @@ def test_seeded_qaoa_on_aer_is_reproducible():
 @pytest.mark.parametrize("seed", range(3))
 @pytest.mark.parametrize("Q", [TRIVIAL_QUBO, toy_execution_qubo(4)], ids=["trivial", "toy4"])
 def test_qaoa_optimised_expectation_beats_uniform_sampling(Q, seed):
-    # Finding the optimum among 10x shots samples of 16 states says little (claims audit F2);
-    # the optimised <H> falling below the uniform-superposition mean shows the angles matter.
+    # Sampling the optimum of 16 states is easy; beating the uniform mean shows the angles matter.
     result = QAOASolver(p=2, shots=512, maxiter=60, seed=seed).solve(Q)
     assert result.energy == energy_bounds(Q).min_energy
     assert min(result.history) < float(np.mean(enumerate_energies(Q)))

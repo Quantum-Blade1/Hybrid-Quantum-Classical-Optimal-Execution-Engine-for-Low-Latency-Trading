@@ -1,6 +1,3 @@
-"""Phase 7 experiment plumbing: graceful skips, hardware analysis on the SYNTHETIC fixture,
-optional figures, and a quick real-data run on synthetic bars."""
-
 import dataclasses
 import json
 import sys
@@ -44,7 +41,7 @@ def test_run_all_skips_experiments_without_inputs(tmp_path, monkeypatch, capsys)
     monkeypatch.chdir(tmp_path)
     argv = ["run_all", "--results-dir", "out", "--only", "real_data_dev", "real_data_test"]
     monkeypatch.setattr(sys, "argv", [*argv, "hardware"])
-    run_all.main()  # must not exit non-zero
+    run_all.main()
     out = capsys.readouterr().out
     assert out.count("skipped") == 3
     assert "make data" in out and "ibm_fez_recovered.jsonl" in out

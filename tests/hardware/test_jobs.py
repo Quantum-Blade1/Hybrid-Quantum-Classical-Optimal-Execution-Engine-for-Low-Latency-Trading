@@ -1,5 +1,3 @@
-"""Recovered IBM job analysis on a fake fixture: bit order, roles, exclusions, metrics."""
-
 import json
 from pathlib import Path
 
@@ -97,8 +95,7 @@ def test_duplicate_job_records_keep_the_latest_status(tmp_path):
 
 
 def test_runs_are_assigned_per_n_by_creation_time():
-    # Two sizes interleaved in time; each run ends with its final job; trailing loop jobs
-    # without a final job form an incomplete run.
+    # Each run ends with its final job; trailing loop jobs form an incomplete run.
     jobs = [
         ("a1", 4, "optimization", "00:01"),
         ("b1", 10, "optimization", "00:02"),

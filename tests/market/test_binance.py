@@ -1,5 +1,3 @@
-"""Binance aggTrades parsing and 1-minute bars on a tiny synthetic fixture."""
-
 import hashlib
 import zipfile
 from pathlib import Path
@@ -74,7 +72,6 @@ def test_minute_bars_values(trades):
     assert m0.spread_pairs == 3
     assert m0.half_spread_bps == pytest.approx(0.02 / 99.99 * 1e4 / 2)
 
-    # Empty minute: zero volume, previous close carried, no spread estimate.
     assert m1.volume == 0 and m1.trade_count == 0
     assert m1.open == m1.close == m1.vwap == 99.98
     assert np.isnan(m1.half_spread_bps)

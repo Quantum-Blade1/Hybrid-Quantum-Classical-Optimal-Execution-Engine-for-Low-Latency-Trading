@@ -1,5 +1,3 @@
-"""Execution QUBOs: penalty algebra, energy decomposition, decoding, and the pinned toy problem."""
-
 import json
 from pathlib import Path
 
@@ -54,13 +52,9 @@ def binary_vectors(n: int):
     return st.lists(st.integers(0, 1), min_size=n, max_size=n).map(np.array)
 
 
-# --- ExecutionQUBO -------------------------------------------------------------------------
-
-
 @given(x=binary_vectors(32))
 def test_equality_penalty_is_p_times_squared_shortfall(x):
-    # Without the capacity term, x^T C x = P (sum q x - S)^2 - P S^2, so the penalty
-    # (plus the dropped constant) is zero iff the selected quantity equals the order size.
+    # Without capacity, x^T C x + P S^2 = P (sum q x - S)^2, zero iff exactly S is selected.
     qubo = execution_qubo()
     cfg = qubo.config
     costs = qubo.calculate_solution_cost(x)
@@ -115,9 +109,6 @@ def test_capacity_violation_raises_energy():
     assert float(over @ Q @ over) > float(within @ Q @ within)
 
 
-# --- Schedules from solved QUBOs ------------------------------------------------------------
-
-
 @pytest.mark.parametrize(("total_shares", "num_slices"), [(900, 3), (1200, 4), (1000, 5)])
 def test_exact_slice_schedule_is_feasible(total_shares, num_slices):
     # Levels {0, N/2T, N/T}: when they divide N the optimum meets the order size exactly.
@@ -146,9 +137,6 @@ def test_spread_over_minutes_conserves_shares(quantities, extra_minutes):
     assert len(schedule) == num_minutes
     assert np.all(schedule >= 0)
     assert schedule.sum() == sum(quantities)
-
-
-# --- HFT QUBO ---------------------------------------------------------------------------------
 
 
 @given(x=binary_vectors(18))
@@ -187,9 +175,6 @@ def test_hft_qubo_vpin_raises_cost_of_the_same_schedule():
     assert toxic > calm > 0
 
 
-# --- Toy hardware-benchmark QUBO --------------------------------------------------------------
-
-
 def test_toy_execution_qubo_n4_is_pinned():
     # Changing this matrix changes the problem that results/bench_hw_*.json were measured on.
     expected = np.array(
@@ -209,9 +194,6 @@ def test_toy_execution_qubo_optimum_matches_committed_benchmarks(n):
         records = json.loads((RESULTS_DIR / name).read_text())
         recorded = {round(r["optimal_energy"], 9) for r in records}
         assert recorded == {round(energy_bounds(toy_execution_qubo(n)).min_energy, 9)}
-
-
-# --- Schedule repair ----------------------------------------------------------------------
 
 
 @given(

@@ -1,5 +1,3 @@
-"""Figures are produced only from results/: registry coverage and the import boundary."""
-
 import ast
 from pathlib import Path
 
@@ -7,7 +5,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 FIGURES_DIR = ROOT / "figures"
-# Modules a figure may use to *read* results. Anything under qexec/qiskit computes.
+# Importing any of these would mean a figure computes results instead of reading them.
 FORBIDDEN_PREFIXES = ("qexec", "qiskit", "qiskit_aer", "experiments")
 ILLUSTRATIVE_MODULES = {"diagrams"}
 

@@ -1,5 +1,3 @@
-"""Shared fixtures: seeded RNG, a small synthetic market and a small random QUBO."""
-
 from datetime import datetime
 
 import numpy as np
@@ -21,7 +19,6 @@ def rng() -> np.random.Generator:
 
 @pytest.fixture
 def small_market() -> pd.DataFrame:
-    """30 one-minute bars from the seeded simulator."""
     from qexec.market.simulator import MarketDataSimulator
 
     return MarketDataSimulator(total_daily_volume=10_000_000, seed=7).generate(
@@ -31,7 +28,6 @@ def small_market() -> pd.DataFrame:
 
 @pytest.fixture
 def small_qubo(rng: np.random.Generator) -> np.ndarray:
-    """Random symmetric 6x6 QUBO matrix."""
     Q = rng.standard_normal((6, 6))
     return (Q + Q.T) / 2
 

@@ -1,5 +1,3 @@
-"""Execution runners used by the experiments: one fill model for every strategy."""
-
 import numpy as np
 import pytest
 
@@ -33,8 +31,7 @@ def test_shortfall_is_execution_plus_opportunity_cost(small_market, name):
 
 @pytest.mark.parametrize("name", STRATEGIES)
 def test_no_strategy_fills_in_a_zero_volume_bar(name):
-    # Regression (claims audit F6): the hybrid runner filled at mid + spread/2 during the
-    # outage, which with the outage's $1000 spread gave absurd slippage.
+    # Guards against filling at mid + spread/2 across the outage's $1000 spread.
     data = StressGenerator.market_outage(seed=3)
     outage = set(np.flatnonzero(data["volume"].to_numpy() == 0))
     assert outage
@@ -47,8 +44,7 @@ def test_no_strategy_fills_in_a_zero_volume_bar(name):
 
 
 def test_unfilled_shares_are_charged_not_dropped(small_market):
-    # No liquidity after minute 4: most of the order cannot fill, and the remainder is
-    # priced at the last bar's ask (the final bar has no book), not dropped.
+    # No liquidity after minute 4 and no final book: the remainder is priced at the last ask.
     data = small_market.copy()
     data.loc[5:, "volume"] = 0
     result = run_strategy("TWAP", data, total_shares=3000, seed=0)

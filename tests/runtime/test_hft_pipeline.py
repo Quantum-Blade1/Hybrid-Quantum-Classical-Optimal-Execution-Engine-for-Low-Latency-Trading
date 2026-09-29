@@ -1,5 +1,3 @@
-"""Tick-level HFT pipeline and its latency bookkeeping."""
-
 import numpy as np
 import pytest
 

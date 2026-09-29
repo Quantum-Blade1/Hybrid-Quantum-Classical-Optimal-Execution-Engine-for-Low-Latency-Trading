@@ -1,5 +1,3 @@
-"""Bootstrap intervals and paired comparisons used by the multi-seed experiments."""
-
 import numpy as np
 import pytest
 from hypothesis import given
@@ -51,7 +49,7 @@ def test_summary_uses_sample_std():
 def test_paired_comparison_detects_a_consistent_difference():
     rng = np.random.default_rng(2)
     b = rng.normal(10, 5, 30)
-    a = b - 1.0 + rng.normal(0, 0.1, 30)  # a is cheaper in every pair
+    a = b - 1.0 + rng.normal(0, 0.1, 30)
     c = paired_comparison(a, b, seed=0)
     assert c.mean_diff == pytest.approx(-1.0, abs=0.1)
     assert c.ci_high < 0 and c.significant

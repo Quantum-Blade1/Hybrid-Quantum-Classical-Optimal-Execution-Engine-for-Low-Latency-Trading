@@ -1,5 +1,3 @@
-"""Synthetic order book: snapshot shape and book-walking fills."""
-
 import numpy as np
 import pytest
 from hypothesis import given
@@ -24,7 +22,6 @@ def test_snapshot_levels_are_ordered_outside_the_mid(mid, spread_ticks, volume, 
 
 
 def test_bar_without_volume_has_no_liquidity():
-    # Regression (claims audit F6): outage bars used to get a 100-share minimum book.
     book = OrderBook(seed=0)
     snap = book.generate_snapshot(100.0, 0.02, 0)
     assert snap.bids == [] and snap.asks == []
@@ -32,7 +29,6 @@ def test_bar_without_volume_has_no_liquidity():
 
 
 def test_keyed_snapshots_are_common_random_numbers():
-    # Same (seed, minute) gives the same book whatever else the book was used for.
     a, b = OrderBook(seed=5), OrderBook(seed=5)
     a.generate_snapshot(100.0, 0.02, 50_000)  # advances a's own stream only
     snap_a = a.generate_snapshot(100.0, 0.02, 50_000, key=17)

@@ -1,5 +1,3 @@
-"""Optimizer resilience wrapper: timeout, retry, validation and fallback."""
-
 import time
 
 import numpy as np

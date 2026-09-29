@@ -1,5 +1,3 @@
-"""Fast/slow path runtime: the tick loop never waits for the optimizer."""
-
 import threading
 import time
 
@@ -54,8 +52,7 @@ def test_uniform_schedule_splits_order_exactly(total, slices):
 
 
 def test_fast_path_does_not_block_on_a_slow_optimizer(monkeypatch):
-    # The optimizer takes 1 s per solve; 20 ticks at 1 ms must finish long before that,
-    # all on the fallback policy.
+    # Each solve takes 1 s, so 20 ticks at 1 ms must all finish on the fallback policy.
     def slow_solve(self, order_size, num_slices):
         time.sleep(1.0)
         return uniform_schedule(order_size, num_slices).astype(float)
@@ -75,13 +72,11 @@ def test_fast_path_does_not_block_on_a_slow_optimizer(monkeypatch):
 
     assert elapsed < 0.5
     assert engine.executed_shares == 2000
-    assert {entry["policy_id"] for entry in engine.execution_log} == {0}  # fallback only
+    assert {entry["policy_id"] for entry in engine.execution_log} == {0}
 
 
 def test_fast_path_switches_to_published_policy_without_overfilling():
-    # Fallback trades 10 per tick; after tick 1 the optimizer publishes a back-loaded
-    # whole-order schedule. Following it blindly would trade 10 + 10 + 20 + 20 = 60 of a
-    # 40-share order; its tail [20, 20] is rescaled to the 20 shares left.
+    # Followed blindly, the back-loaded policy trades 60 of 40; its tail [20, 20] is rescaled to 20.
     queue = PolicyQueue()
     engine = AsyncExecutionEngine(queue, tick_interval=0.0)
     engine.set_fallback_policy(policy([10, 10, 10, 10], "fallback"))
@@ -100,9 +95,7 @@ def test_fast_path_switches_to_published_policy_without_overfilling():
 
 
 def test_policy_switch_replans_the_remaining_shares_so_the_order_completes():
-    # Regression (claims audit T5): a front-loaded policy arriving after tick 1 has nothing
-    # left in its tail; the runtime used to follow it (0 shares) and stop at 20 of 40.
-    # Now the remaining 20 shares are re-planned over the remaining ticks.
+    # A front-loaded policy arriving after tick 1 has an empty tail; the last 20 are re-planned.
     queue = PolicyQueue()
     engine = AsyncExecutionEngine(queue, tick_interval=0.0)
     engine.set_fallback_policy(policy([10, 10, 10, 10], "fallback"))
@@ -131,8 +124,7 @@ def test_replan_keeps_the_shape_of_the_new_policy_tail():
     engine.set_on_execute(publish)
     engine.start(total_ticks=4)
     engine.wait_complete()
-    # After tick 0 (25 done), the tail [60, 30, 10] is rescaled to 75: [45, 22.5, 7.5]
-    # -> largest remainder [45, 23, 7].
+    # Tail [60, 30, 10] rescaled to 75 is [45, 22.5, 7.5]; largest remainder gives [45, 23, 7].
     assert [e["shares"] for e in engine.execution_log] == [25, 45, 23, 7]
 
 
@@ -156,7 +148,7 @@ def test_random_policy_switches_always_complete_the_order(seed):
 
 
 def test_unsupported_optimizer_is_rejected():
-    # QAOA is offline-only; the runtime must not silently relabel SA as QAOA (claims audit R7).
+    # QAOA is offline-only; the runtime must not silently relabel SA as QAOA.
     with pytest.raises(ValueError, match="Unsupported optimizer_type"):
         AsyncOptimizer(PolicyQueue(), optimizer_type="qaoa")
 

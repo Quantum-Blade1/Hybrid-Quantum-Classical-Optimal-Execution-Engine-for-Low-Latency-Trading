@@ -1,5 +1,3 @@
-"""TWAP, VWAP and fixed schedules: conservation of shares and the caps they promise."""
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -43,7 +41,7 @@ def test_twap_schedule_conserves_shares_and_respects_caps(total, minutes, interv
     if len(points) * cap >= total:
         assert schedule.sum() == total
     else:
-        assert schedule.sum() == len(points) * cap  # every slice filled to its cap
+        assert schedule.sum() == len(points) * cap
 
 
 @given(total=st.integers(1, 20_000), minutes=st.integers(1, 120))

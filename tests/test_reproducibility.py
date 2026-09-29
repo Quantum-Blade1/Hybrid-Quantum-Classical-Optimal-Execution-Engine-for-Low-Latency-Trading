@@ -1,5 +1,3 @@
-"""Seeds fully determine results: same seed, same output; different seed, different output."""
-
 from datetime import datetime
 
 import numpy as np
@@ -49,7 +47,7 @@ def test_simulated_annealing_is_determined_by_seed(rng):
     Q = rng.standard_normal((15, 15))
     Q = (Q + Q.T) / 2
     assert annealing(3, Q) == annealing(3, Q)
-    assert annealing(3, Q)[1] != annealing(4, Q)[1]  # different random walk
+    assert annealing(3, Q)[1] != annealing(4, Q)[1]
 
 
 def test_engine_fills_are_determined_by_seed():

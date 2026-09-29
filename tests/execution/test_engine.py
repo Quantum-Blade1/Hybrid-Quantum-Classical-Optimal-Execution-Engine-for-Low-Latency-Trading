@@ -1,5 +1,3 @@
-"""Execution engine: fill accounting on a hand-built book, fill timing, and fill bounds."""
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -13,8 +11,6 @@ from qexec.market.order_book import OrderBook, OrderBookSnapshot, PriceLevel
 
 
 class TwoLevelBook(OrderBook):
-    """Deterministic book: 100 shares one tick from mid, then 1,000 shares two ticks away."""
-
     def generate_snapshot(self, mid_price, spread, minute_volume, key=None):
         return OrderBookSnapshot(
             bids=[PriceLevel(mid_price - 0.01, 100), PriceLevel(mid_price - 0.02, 1000)],
@@ -45,9 +41,7 @@ def order(side: OrderSide, quantity: int, horizon: int = 4) -> ParentOrder:
 def test_fill_prices_and_average_on_hand_built_book(
     side, first_price, second_price, arrival_slippage_sign
 ):
-    # Minute 0 (mid 100): 100 shares, all at the touch.
-    # Minute 2 (mid 102): 200 shares; a buy takes 100 @ 102.01 + 100 @ 102.02 = 102.015 average,
-    # a sell 100 @ 101.99 + 100 @ 101.98 = 101.985.
+    # Minute 2 (mid 102), 200 shares: buy 100 @ 102.01 + 100 @ 102.02 = 102.015, sell 101.985.
     market = hand_market([100.0, 101.0, 102.0, 103.0])
     engine = ExecutionEngine(order_book=TwoLevelBook())
     report = engine.process_order(order(side, 300), market, FixedScheduleStrategy([1, 0, 2, 0]))
@@ -66,8 +60,7 @@ def test_fill_prices_and_average_on_hand_built_book(
     assert report.benchmark_vwap == pytest.approx(101.5)  # equal volumes: mean price
     assert report.arrival_price == 100.0
     assert np.sign(report.slippage_vs_arrival_bps) == arrival_slippage_sign
-    # Half-spread (1 tick) on every share; impact = last fill minus touch (1 tick) on the
-    # second child's 200 shares.
+    # Half-spread (1 tick) on all 300 shares; impact adds one tick on the second child's 200.
     assert report.spread_cost == pytest.approx(300 * 0.01)
     assert report.impact_cost == pytest.approx(200 * 0.01)
     assert report.timing_risk == pytest.approx(
@@ -77,7 +70,6 @@ def test_fill_prices_and_average_on_hand_built_book(
 
 
 def test_child_fills_happen_at_their_scheduled_minute(small_market):
-    # Regression: the k-th non-zero slice used to be filled at minute k-1, not its own minute.
     schedule = np.zeros(len(small_market))
     schedule[[5, 20]] = 100
     engine = ExecutionEngine(seed=1)
@@ -132,8 +124,6 @@ def test_zero_volume_bar_fills_nothing_and_delays_the_shares():
 
 
 def test_shortfall_charges_unfilled_shares_at_the_final_far_touch():
-    # Nothing can fill (no volume anywhere): the whole order is opportunity cost at the
-    # last ask, so an order that does not trade is not free.
     market = hand_market([100.0, 101.0, 103.0])
     market["volume"] = 0
     report = ExecutionEngine(seed=0).process_order(
@@ -146,8 +136,7 @@ def test_shortfall_charges_unfilled_shares_at_the_final_far_touch():
 
 
 def test_unfilled_remainder_pays_the_impact_of_a_clean_up_order():
-    # 2,000 shares in the only minute: 1,100 fill; the 900 left are completed by a
-    # clean-up walk of the final book: 100 @ 100.01 + 800 @ 100.02.
+    # 1,100 fill in the only minute; the other 900 walk the final book: 100 @ 100.01 + 800 @ 100.02.
     market = hand_market([100.0])
     report = ExecutionEngine(order_book=TwoLevelBook(), carry_forward=False).process_order(
         order(OrderSide.BUY, 2000, 1), market, FixedScheduleStrategy([1])

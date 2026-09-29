@@ -1,5 +1,3 @@
-"""CSV tick loader: column normalisation, sorting and required columns."""
-
 import pytest
 
 from qexec.market.loader import DataLoader
