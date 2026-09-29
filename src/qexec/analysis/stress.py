@@ -1,12 +1,3 @@
-"""Stress scenarios on 60 simulated minutes and a VWAP-vs-hybrid runner.
-
-Scenarios: flash crash (50% linear drop over 5 minutes from minute 20, then a slow
-recovery), liquidity crisis (spread 10x and volume -90% over minutes 20-40), volatility
-spike (N(0, $5) price jumps over minutes 15-44) and market outage (minutes 25-35 with
-zero volume, frozen price and a $1000 spread). Nothing fills in a zero-volume bar; the
-engine carries the shares forward.
-"""
-
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -46,8 +37,6 @@ def _base_data(num_minutes: int, seed: int, params: MarketParams | None = None) 
 
 
 class StressGenerator:
-    """Scenario market data; every generator is deterministic given `seed`."""
-
     @staticmethod
     def flash_crash(
         num_minutes: int = SCENARIO_MINUTES,
@@ -120,10 +109,7 @@ def scenario_data(name: str, seed: int) -> pd.DataFrame:
 
 
 class StressRunner:
-    """Runs every strategy in `strategies` on each scenario through the same engine.
-
-    All strategies on a (scenario, seed) share the price path and the per-minute books.
-    """
+    """All strategies on a (scenario, seed) share the price path and the per-minute books."""
 
     def __init__(
         self,
@@ -136,7 +122,6 @@ class StressRunner:
         self.strategies = strategies
 
     def run_scenario(self, name: str, data: pd.DataFrame) -> list[StressResult]:
-        """One result per strategy; a strategy that raises is recorded as crashed."""
         results = []
         for strategy in self.strategies:
             # Stress data can break any stage of a pipeline; record it as a crash.

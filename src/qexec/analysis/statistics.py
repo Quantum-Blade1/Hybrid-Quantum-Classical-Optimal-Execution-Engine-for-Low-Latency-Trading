@@ -1,8 +1,3 @@
-"""Summary statistics for multi-seed experiments: bootstrap CIs and paired comparisons.
-
-All resampling is seeded, so reported intervals are reproducible.
-"""
-
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -33,10 +28,7 @@ def bootstrap_ci(
     confidence: float = DEFAULT_CONFIDENCE,
     seed: int = 0,
 ) -> tuple[float, float]:
-    """Percentile bootstrap interval for `statistic` (default: the mean).
-
-    With a single value, or identical values, the interval collapses to that value.
-    """
+    """Percentile bootstrap interval for `statistic`; collapses to the value for constant input."""
     arr = _as_array(values)
     if not 0 < confidence < 1:
         raise ValueError("confidence must be in (0, 1)")
@@ -94,12 +86,7 @@ def summarize(
 
 @dataclass(frozen=True)
 class PairedComparison:
-    """Paired differences a - b over matched observations (e.g. the same seed).
-
-    For costs, a negative mean difference means `a` is cheaper. `wilcoxon_p` is the
-    two-sided Wilcoxon signed-rank p-value (1.0 when every difference is zero);
-    `frac_a_lower` is the fraction of pairs with a < b.
-    """
+    """Paired differences a - b; for costs, a negative mean difference means `a` is cheaper."""
 
     n: int
     mean_diff: float
@@ -132,7 +119,6 @@ class PairedComparison:
 def paired_comparison(
     a: ArrayLike, b: ArrayLike, *, confidence: float = DEFAULT_CONFIDENCE, seed: int = 0
 ) -> PairedComparison:
-    """Compare matched samples `a` and `b` via their differences a - b."""
     arr_a = _as_array(a)
     arr_b = _as_array(b)
     if arr_a.shape != arr_b.shape:
@@ -155,11 +141,7 @@ def paired_comparison(
 
 
 def holm_adjust(p_values: ArrayLike) -> NDArray[np.float64]:
-    """Holm (1979) step-down adjusted p-values (family-wise error control).
-
-    Sort p ascending, multiply the i-th smallest (0-based) by m - i, take the running
-    maximum and cap at 1; reject H_i at level alpha iff its adjusted p <= alpha.
-    """
+    """Holm (1979) step-down adjusted p-values; reject H_i at alpha iff adjusted p <= alpha."""
     p = np.asarray(p_values, dtype=np.float64).ravel()
     if p.size == 0:
         return p

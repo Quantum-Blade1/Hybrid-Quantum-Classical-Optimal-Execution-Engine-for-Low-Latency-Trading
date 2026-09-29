@@ -1,22 +1,3 @@
-"""Provenance for experiment outputs: every results directory carries a manifest.
-
-Convention: an experiment `name` writes to `<root>/<name>/`:
-
-    <table>.csv      tabular results (one row per observation or per summary cell)
-    <summary>.json   small nested results (scalars, per-group summaries)
-    manifest.json    experiment name, config, seeds, git commit and dirty flag, package
-                     versions, platform, UTC start time, wall time, and SHA-256 of every file
-
-Usage:
-
-    with ExperimentRecorder("walk_forward", config, seeds=seeds) as rec:
-        rec.write_table("runs", df)
-        rec.write_json("summary", summary)
-
-Stale files from a previous run of the same experiment are removed on entry, so the
-directory always reflects exactly one run.
-"""
-
 from __future__ import annotations
 
 import dataclasses
@@ -44,10 +25,7 @@ _TRACKED_PACKAGES = ("qexec", "numpy", "scipy", "pandas", "matplotlib", "qiskit"
 
 
 def to_jsonable(obj: Any) -> Any:  # noqa: PLR0911 - one return per supported type
-    """Recursively convert dataclasses, numpy scalars/arrays, paths and enums to JSON types.
-
-    Non-finite floats become None, so the output is strict JSON.
-    """
+    """Convert recursively to JSON types; non-finite floats become None (strict JSON)."""
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return to_jsonable(dataclasses.asdict(obj))
     if isinstance(obj, Mapping):
@@ -73,7 +51,7 @@ def to_jsonable(obj: Any) -> Any:  # noqa: PLR0911 - one return per supported ty
 
 
 def git_state(cwd: Path | None = None) -> dict[str, Any]:
-    """Commit hash and whether tracked files differ from it; None fields outside a repo."""
+    """Commit hash and dirty flag of tracked files; both None outside a git repository."""
     try:
         commit = subprocess.run(
             ["git", "rev-parse", "HEAD"], cwd=cwd, capture_output=True, text=True, check=True
@@ -98,7 +76,6 @@ def _package_version(name: str) -> str | None:
 
 
 def environment() -> dict[str, Any]:
-    """Interpreter, package versions and machine description."""
     info: dict[str, Any] = {
         "python": sys.version.split()[0],
         "implementation": platform.python_implementation(),
@@ -132,7 +109,7 @@ def _sha256(path: Path) -> str:
 
 
 class ExperimentRecorder:
-    """Context manager that owns `<root>/<name>/` for one experiment run."""
+    """Context manager owning `<root>/<name>/` for one run; stale files are removed on entry."""
 
     def __init__(
         self,
@@ -172,19 +149,16 @@ class ExperimentRecorder:
         return self.directory / filename
 
     def write_table(self, name: str, df: pd.DataFrame, float_format: str = "%.10g") -> Path:
-        """Write `df` as `<name>.csv` (no index)."""
         path = self._register(f"{name}.csv")
         df.to_csv(path, index=False, float_format=float_format)
         return path
 
     def write_json(self, name: str, obj: Any) -> Path:
-        """Write `obj` (converted by `to_jsonable`) as `<name>.json`."""
         path = self._register(f"{name}.json")
         path.write_text(json.dumps(to_jsonable(obj), indent=2, sort_keys=False) + "\n")
         return path
 
     def note(self, key: str, value: Any) -> None:
-        """Add a free-form entry to the manifest (e.g. a sizes reduction in quick mode)."""
         self.extra[key] = value
 
     def manifest(self, wall_time_s: float, status: str) -> dict[str, Any]:
@@ -214,13 +188,12 @@ class ExperimentRecorder:
 
 
 def load_manifest(directory: Path) -> dict[str, Any]:
-    """Read `manifest.json` of a results directory."""
     data: dict[str, Any] = json.loads((Path(directory) / MANIFEST).read_text())
     return data
 
 
 def verify_files(directory: Path) -> list[str]:
-    """Files whose SHA-256 no longer matches the manifest (or that are missing)."""
+    """Files whose SHA-256 no longer matches the manifest, or that are missing."""
     manifest = load_manifest(directory)
     bad = []
     for name, digest in manifest["files"].items():

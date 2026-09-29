@@ -1,35 +1,3 @@
-"""Analysis of recovered IBM Quantum job records (raw counts) for the toy execution QUBO.
-
-Input records (one JSON object per line) carry `job_id`, `status`, `created`,
-`num_bits`, `shots` and `counts`; count keys are Qiskit bitstrings (little-endian: qubit 0
-is the rightmost character), as `qexec.optimization.solvers.metrics.counts_quality`
-expects.
-
-Job roles. The original hardware script (`qexec.hardware.ibm.run_qaoa_on_hardware`)
-sampled `shots` per COBYLA evaluation and `5 * shots` for the final distribution. The
-configuration of the ibm_fez run said shots = 2000 (final 10,000); because the record of
-which configuration was actually used is not verifiable (claims audit F10), the loop sizes
-{1000, 2000, 4000} and final sizes {5000, 10000, 20000} are all admitted. The two sets
-do not overlap, so the role follows from the shot count alone: `final` if shots in
-FINAL_SHOTS, `optimization` if shots in LOOP_SHOTS, `unknown` otherwise (excluded and
-reported, never guessed). When a record has no `shots`, the total of its counts is used.
-QAOA depth p and the COBYLA iteration are not recoverable from counts; `p` is carried
-through only if the record has it. Several final jobs for one n (depths, retries) are
-analysed separately. Only completed jobs whose number of measured bits is a benchmark size
-are analysed.
-
-Duplicates. A recovery file may list a job more than once (e.g. QUEUED, then CANCELLED
-after a later status query); `read_jobs` keeps one record per job_id, the last one in the
-file (the latest status), at the position of its first appearance.
-
-Runs. A hardware run is a sequence of COBYLA-loop jobs followed by one final job, and the
-runs of one n were executed one after another (each job waits for the previous result),
-while runs of different n were interleaved in time. `assign_runs` therefore works per n in
-order of creation time: loop jobs belong to the run whose final job is the next final job
-of the same n; loop jobs after the last final job of an n form an incomplete run (no final
-job), which is labelled but never used for final-distribution statistics.
-"""
-
 from __future__ import annotations
 
 import json
@@ -50,6 +18,7 @@ from qexec.optimization.solvers.metrics import (
 from qexec.optimization.toy import toy_execution_qubo
 
 SIZES = (4, 6, 8, 10)
+# Disjoint shot sets, so a job's role follows from its shot count (claims audit F10).
 FINAL_SHOTS = frozenset({5_000, 10_000, 20_000})
 LOOP_SHOTS = frozenset({1_000, 2_000, 4_000})
 DONE_STATUSES = frozenset({"DONE", "COMPLETED", "JobStatus.DONE"})
@@ -72,8 +41,7 @@ def latest_by_job(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def read_jobs(path: str | Path) -> list[dict[str, Any]]:
-    """Deduplicated records of a JSONL file (`latest_by_job`); blank lines are skipped,
-    malformed lines raise."""
+    """`latest_by_job` records of a JSONL file; blank lines are skipped, malformed lines raise."""
     records = []
     for number, line in enumerate(Path(path).read_text().splitlines(), start=1):
         if not line.strip():
@@ -160,8 +128,6 @@ def analyse_counts(
 
 @dataclass(frozen=True)
 class Screening:
-    """Records split into analysed jobs and exclusions (with reasons)."""
-
     analysed: list[JobAnalysis]
     excluded: list[dict[str, Any]]
 
@@ -205,8 +171,7 @@ def screen_and_analyse(records: Iterable[dict[str, Any]], seed: int = 0) -> Scre
 
 @dataclass(frozen=True)
 class RunLabel:
-    """Run of a job within its n (1-based), its position in the run (1-based; the final job
-    comes last) and whether the run ended with a final job."""
+    """Run number within its n and position in that run (both 1-based; the final job is last)."""
 
     run: int
     iteration: int
@@ -214,11 +179,7 @@ class RunLabel:
 
 
 def assign_runs(jobs: Iterable[tuple[str, int, str, str]]) -> dict[str, RunLabel]:
-    """Run labels for (job_id, n, role, created) tuples; see the module docstring.
-
-    `created` must sort chronologically as a string within one n (ISO timestamps with the
-    same UTC offset do). Ties in `created` are broken by job_id.
-    """
+    """Loop jobs join the next final job of their n by `created`; trailing ones are incomplete."""
     by_n: dict[int, list[tuple[str, str, str]]] = {}
     for job_id, n, role, created in jobs:
         by_n.setdefault(int(n), []).append((created, job_id, role))

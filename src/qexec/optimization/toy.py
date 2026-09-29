@@ -1,20 +1,9 @@
-"""Toy execution QUBO used by the hardware benchmark (results/bench_*.json, bench_hw_*.json).
-
-This is not the multi-venue `ExecutionQUBO` or the six-term HFT QUBO: it is a small,
-fixed problem kept so that the committed hardware results stay reproducible. Changing it
-changes the problem those results were measured on.
-"""
-
 import numpy as np
 from numpy.typing import NDArray
 
 
 def toy_execution_qubo(n_qubits: int) -> NDArray[np.float64]:
-    """n/2 slices x 2 levels q in {1, 2}.
-
-    Impact 0.1 q^2 + timing 0.05 (t+1) q on the diagonal and the equality penalty
-    10 (sum q_i x_i - n/2)^2 (without its constant term).
-    """
+    """Fixed toy QUBO behind results/bench_*.json; changing it invalidates those results."""
     Q = np.zeros((n_qubits, n_qubits))
     num_levels = 2
     num_slices = n_qubits // num_levels

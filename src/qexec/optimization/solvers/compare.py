@@ -1,5 +1,3 @@
-"""Run several QUBO solvers on the same instance and tabulate the results."""
-
 from collections.abc import Sequence
 
 import numpy as np
@@ -14,7 +12,6 @@ _BRUTE_FORCE_LIMIT = 20
 
 
 def default_solvers(n: int, seed: int = 42) -> list[QUBOSolver]:
-    """Brute force (when n <= 20), greedy and SA with 500 and 2000 sweeps."""
     solvers: list[QUBOSolver] = []
     if n <= _BRUTE_FORCE_LIMIT:
         solvers.append(BruteForceSolver())
@@ -29,14 +26,12 @@ def default_solvers(n: int, seed: int = 42) -> list[QUBOSolver]:
 def compare_solvers(
     Q: NDArray[np.float64], solvers: Sequence[QUBOSolver] | None = None
 ) -> list[QUBOResult]:
-    """Solve `Q` with each solver (default: `default_solvers`) in order."""
     if solvers is None:
         solvers = default_solvers(Q.shape[0])
     return [solver.solve(Q) for solver in solvers]
 
 
 def format_comparison(results: Sequence[QUBOResult]) -> str:
-    """Plain-text table of energy, evaluations and time, with the best solver last."""
     lines = [f"{'Solver':<25} {'Energy':>18} {'Evaluations':>12} {'Time (s)':>12}"]
     lines += [
         f"{r.solver_name:<25} {r.energy:>18.4f} {r.num_evaluations:>12,} {r.solve_time:>12.4f}"

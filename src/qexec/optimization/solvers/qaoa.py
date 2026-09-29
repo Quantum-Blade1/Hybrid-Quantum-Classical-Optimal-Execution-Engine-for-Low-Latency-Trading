@@ -1,10 +1,3 @@
-"""QAOA for QUBO problems with a pluggable sampler (ideal Aer, noisy Aer or IBM hardware).
-
-QUBO -> Ising -> p-layer QAOA circuit; the 2p angles are optimised classically
-(COBYLA by default) on the sampled mean energy, then the optimised circuit is
-sampled once more and the lowest-energy measured bitstring is returned.
-"""
-
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -27,7 +20,7 @@ Sampler = Callable[[QuantumCircuit, int], Counts]
 
 @dataclass
 class QAOAResult:
-    """Lowest-energy sampled solution and the variational run that produced it."""
+    """`success_probability` is the shot frequency of the returned lowest-energy bitstring."""
 
     solution: NDArray[np.int_]
     energy: float
@@ -40,12 +33,10 @@ class QAOAResult:
 
 
 def bitstring_to_binary(bitstring: str, n: int) -> NDArray[np.int_]:
-    """Qiskit bitstring (qubit 0 rightmost) to the binary vector of the first n qubits."""
     return np.array([int(b) for b in bitstring[::-1]])[:n]
 
 
 def expected_energy(counts: Counts, Q: NDArray[np.float64]) -> float:
-    """Sample mean of x^T Q x over the measured bitstrings."""
     n = Q.shape[0]
     total = sum(counts.values())
     energy = 0.0
@@ -70,11 +61,7 @@ def best_bitstring(counts: Counts, Q: NDArray[np.float64]) -> tuple[str | None, 
 
 
 def aer_sampler(backend: BackendV2, seed: int | None = None) -> Sampler:
-    """Sampler that transpiles for and runs on an Aer backend.
-
-    With `seed`, each call passes the next seed of a generator seeded with it as
-    `seed_simulator`, so shot noise is reproducible.
-    """
+    """With `seed`, each call draws a fresh `seed_simulator`, so shot noise is reproducible."""
     rng = np.random.default_rng(seed)
 
     def sample(circuit: QuantumCircuit, shots: int) -> Counts:
@@ -98,11 +85,7 @@ def run_qaoa(
     method: str = "COBYLA",
     on_iteration: Callable[[int, float], None] | None = None,
 ) -> QAOAResult:
-    """Optimise the QAOA angles for `Q` and sample the final circuit with `final_shots` shots.
-
-    Initial angles: gammas ~ U[0, 2pi), betas ~ U[0, pi) drawn from `rng`.
-    `on_iteration(k, energy)` is called after each expectation-value evaluation.
-    """
+    """Optimise the 2p angles on sampled mean energy, then keep the best of `final_shots` shots."""
     start = perf_counter()
     ising = qubo_to_ising(Q)
     history: list[float] = []

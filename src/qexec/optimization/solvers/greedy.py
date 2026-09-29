@@ -1,5 +1,3 @@
-"""Greedy single-bit-flip descent (fast local-search baseline)."""
-
 from time import perf_counter
 
 import numpy as np
@@ -12,7 +10,7 @@ _IMPROVEMENT_TOL = 1e-10
 
 
 class GreedySolver:
-    """Sweeps the bits in order, flipping any bit that lowers the energy, until a local minimum."""
+    """Sweeps bits in order, flipping any bit that lowers the energy, until a local minimum."""
 
     def __init__(self, max_iterations: int = 1000, seed: int | None = None) -> None:
         self.max_iterations = max_iterations

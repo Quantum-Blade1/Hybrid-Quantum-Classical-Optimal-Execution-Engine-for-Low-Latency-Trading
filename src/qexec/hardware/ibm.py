@@ -1,9 +1,3 @@
-"""IBM Quantum access via qiskit-ibm-runtime, persisting every job's ID and raw counts.
-
-Each hardware job is appended to a JSONL file as soon as its result returns, so the
-record survives a later crash or quota cut-off. Requires the `hardware` extra.
-"""
-
 from __future__ import annotations
 
 import json
@@ -26,7 +20,6 @@ if TYPE_CHECKING:
 
 
 def save_account(token: str, channel: str = "ibm_quantum", overwrite: bool = True) -> None:
-    """Store IBM Quantum credentials in the qiskit-ibm-runtime account file."""
     from qiskit_ibm_runtime import QiskitRuntimeService
 
     QiskitRuntimeService.save_account(channel=channel, token=token, overwrite=overwrite)
@@ -37,7 +30,6 @@ def connect_service(
     channel: str | None = None,
     instance: str | None = None,
 ) -> QiskitRuntimeService:
-    """Runtime service; channel defaults to "ibm_cloud" when an instance CRN is given."""
     from qiskit_ibm_runtime import QiskitRuntimeService
 
     if channel is None:
@@ -53,7 +45,6 @@ def connect_service(
 def get_backend(
     service: QiskitRuntimeService, name: str | None = None, min_qubits: int = 0
 ) -> BackendV2:
-    """Named backend, or the least busy operational backend with at least `min_qubits`."""
     if name:
         return service.backend(name)
     from qiskit_ibm_runtime import least_busy
@@ -73,7 +64,6 @@ def backend_properties(backend: BackendV2) -> dict[str, Any]:
 
 
 def transpile_for(backend: BackendV2, optimization_level: int = 3) -> PassManager:
-    """Preset pass manager producing ISA circuits for `backend`."""
     return generate_preset_pass_manager(optimization_level=optimization_level, backend=backend)
 
 
@@ -104,7 +94,7 @@ def _json_default(obj: object) -> int | float | list[Any]:
 
 
 def append_jsonl(path: str | Path, record: dict[str, Any]) -> None:
-    """Append one JSON record and fsync, so it is on disk before the caller continues."""
+    """Append one JSON record and fsync it, so it survives a later crash or quota cut-off."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a") as f:
@@ -120,11 +110,6 @@ def run_sampler_job(
     log_path: str | Path,
     metadata: dict[str, Any] | None = None,
 ) -> tuple[Counts, str]:
-    """Run one ISA circuit with SamplerV2 and append its record to `log_path`.
-
-    The record holds submit/complete timestamps, job ID, backend, shots, transpiled
-    depth, `metadata` and the raw counts. Returns (counts, job_id).
-    """
     from qiskit_ibm_runtime import SamplerV2
 
     submitted = datetime.now(timezone.utc).isoformat()
@@ -158,11 +143,7 @@ def run_qaoa_on_hardware(
     log_path: str | Path,
     metadata: dict[str, Any] | None = None,
 ) -> tuple[QAOAResult, list[str]]:
-    """QAOA on an IBM backend: COBYLA on `shots`-shot estimates, final sampling with 5x shots.
-
-    Every job is logged with `metadata`, its stage ("optimize"/"final"), evaluation index
-    and angles. Returns (result, job IDs in submission order).
-    """
+    """QAOA on an IBM backend (final sampling at 5x shots); returns (result, job IDs in order)."""
     pm = transpile_for(backend)
     job_ids: list[str] = []
     base_meta = dict(metadata or {}, num_qubits=int(Q.shape[0]), p=p)

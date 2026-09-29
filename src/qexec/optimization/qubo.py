@@ -1,10 +1,3 @@
-"""Execution QUBO: split an order over time slices, venues and discrete quantity levels.
-
-x_{t,v,k} = 1 means "trade q_k shares in slice t on venue v". The objective is
-w_I C_impact + w_T C_timing + w_C C_transaction + P (sum q_k x_{t,v,k} - S)^2
-plus a pairwise per-slice capacity penalty; see `ExecutionQUBO.build_qubo_matrix`.
-"""
-
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -22,8 +15,6 @@ _COEFF_TOL = 1e-10
 
 @dataclass
 class QUBOConfig:
-    """Problem size, cost weights, market parameters and penalty weights."""
-
     total_shares: int = 10_000
     num_time_slices: int = 10
     num_venues: int = 2
@@ -44,17 +35,14 @@ class QUBOConfig:
 
     @property
     def num_variables(self) -> int:
-        """T * V * K."""
         return self.num_time_slices * self.num_venues * self.num_quantity_levels
 
     def variable_index(self, time: int, venue: int, qty_level: int) -> int:
-        """Flat index t*V*K + v*K + k."""
         K = self.num_quantity_levels
         V = self.num_venues
         return time * V * K + venue * K + qty_level
 
     def decode_index(self, idx: int) -> tuple[int, int, int]:
-        """Inverse of `variable_index`: (time slice, venue, quantity level)."""
         K = self.num_quantity_levels
         V = self.num_venues
         time, remainder = divmod(idx, V * K)
@@ -63,7 +51,7 @@ class QUBOConfig:
 
 
 class ExecutionQUBO:
-    """Builds the symmetric QUBO matrix Q (minimise x^T Q x) for a `QUBOConfig`."""
+    """Symmetric Q (minimise x^T Q x); x_{t,v,k} = 1 trades q_k shares in slice t on venue v."""
 
     def __init__(self, config: QUBOConfig) -> None:
         self.config = config
@@ -75,7 +63,6 @@ class ExecutionQUBO:
         self._constraint_matrix = np.zeros((n, n))
 
     def build_qubo_matrix(self) -> NDArray[np.float64]:
-        """Weighted sum of the cost terms plus unweighted penalties, symmetrised."""
         n = self.config.num_variables
         self._impact_matrix = np.zeros((n, n))
         self._timing_matrix = np.zeros((n, n))
@@ -99,8 +86,7 @@ class ExecutionQUBO:
         return self.Q
 
     def _add_market_impact_cost(self) -> None:
-        """Linear impact eta sigma q on the diagonal, plus same-slice cross-venue impact
-        0.3 eta sigma sqrt(q_i q_j) (a linearised Almgren-Chriss temporary impact)."""
+        """Linearised Almgren-Chriss temporary impact, plus 0.3x cross-venue impact per slice."""
         cfg = self.config
         impact_per_share = cfg.impact_coefficient * cfg.volatility
         for t in range(cfg.num_time_slices):
@@ -120,8 +106,6 @@ class ExecutionQUBO:
                             )
 
     def _add_timing_risk_cost(self) -> None:
-        """sigma sqrt((t+1)/T) q^2 / S on the diagonal (later, larger slices cost more), and a
-        small negative coupling -0.01 sigma min(q_i, q_j) between adjacent slices."""
         cfg = self.config
         for t in range(cfg.num_time_slices):
             time_risk_factor = cfg.volatility * np.sqrt((t + 1) / cfg.num_time_slices)
@@ -145,7 +129,6 @@ class ExecutionQUBO:
                             )
 
     def _add_transaction_cost(self) -> None:
-        """Half-spread per share times a venue fee multiplier (venue 1 is 20% cheaper)."""
         cfg = self.config
         half_spread = (cfg.avg_spread_bps / 10000) / 2
         for t in range(cfg.num_time_slices):
@@ -157,7 +140,7 @@ class ExecutionQUBO:
                     self._transaction_matrix[i, i] += half_spread * q * multiplier
 
     def _add_equality_constraint(self) -> None:
-        """P (sum_i q_i x_i - S)^2 without the constant P S^2 (x_i^2 = x_i on the diagonal)."""
+        """P (sum_i q_i x_i - S)^2 without the constant P S^2, using x_i^2 = x_i."""
         cfg = self.config
         P = cfg.equality_penalty
         S = cfg.total_shares
@@ -169,7 +152,6 @@ class ExecutionQUBO:
                 self._constraint_matrix[i, j] += 2 * P * q_i * q_j
 
     def _add_capacity_constraint(self) -> None:
-        """Soft cap: P_cap (q_i + q_j - M) for every same-slice pair with q_i + q_j > M."""
         cfg = self.config
         P = cfg.capacity_penalty
         M = cfg.max_shares_per_slice
@@ -191,7 +173,6 @@ class ExecutionQUBO:
         )
 
     def slice_quantities(self, x: BinaryVector) -> NDArray[np.float64]:
-        """Total quantity selected in each time slice (summed over venues and levels)."""
         cfg = self.config
         quantities = np.zeros(cfg.num_time_slices)
         for i in np.flatnonzero(np.asarray(x) > 0.5):
@@ -200,7 +181,6 @@ class ExecutionQUBO:
         return quantities
 
     def interpret_solution(self, x: BinaryVector) -> pd.DataFrame:
-        """Non-zero trades as rows (time_slice, venue, venue_name, quantity), sorted by slice."""
         cfg = self.config
         schedule = []
         for i, val in enumerate(x):
@@ -220,7 +200,6 @@ class ExecutionQUBO:
         return self.Q if self.Q is not None else self.build_qubo_matrix()
 
     def calculate_solution_cost(self, x: BinaryVector) -> dict[str, float]:
-        """Total QUBO energy, each weighted cost term, the penalty, and shares selected."""
         Q = self._built_matrix()
         cfg = self.config
         total_shares = self._selected_quantity(x)
@@ -236,7 +215,6 @@ class ExecutionQUBO:
         }
 
     def validate_solution(self, x: BinaryVector) -> dict[str, bool]:
-        """Total within 1% of the target, per-slice capacity, and binary entries."""
         cfg = self.config
         shares_ok = abs(self._selected_quantity(x) - cfg.total_shares) < 0.01 * cfg.total_shares
         capacity_ok = bool(np.all(self.slice_quantities(x) <= cfg.max_shares_per_slice))
@@ -249,7 +227,6 @@ class ExecutionQUBO:
         }
 
     def get_qubo_dict(self) -> dict[tuple[int, int], float]:
-        """Upper-triangular non-zero entries {(i, j): Q_ij}."""
         Q = self._built_matrix()
         n = self.config.num_variables
         return {
@@ -268,7 +245,6 @@ class ExecutionQUBO:
 
 
 def create_random_binary_solution(config: QUBOConfig, seed: int | None = None) -> BinaryVector:
-    """One random (venue, level) choice per time slice."""
     rng = np.random.default_rng(seed)
     x = np.zeros(config.num_variables)
     for t in range(config.num_time_slices):
@@ -279,7 +255,7 @@ def create_random_binary_solution(config: QUBOConfig, seed: int | None = None) -
 
 
 def create_uniform_solution(config: QUBOConfig) -> BinaryVector:
-    """TWAP-like baseline: on venue 0, the level closest to S/T in every slice."""
+    """TWAP-like baseline: the level closest to S/T on venue 0 in every slice."""
     x = np.zeros(config.num_variables)
     shares_per_slice = config.total_shares // config.num_time_slices
     best_k = int(np.argmin([abs(q - shares_per_slice) for q in config.quantity_levels]))

@@ -1,9 +1,3 @@
-"""QUBO <-> Ising mapping and the QAOA circuit for an Ising cost Hamiltonian.
-
-With x_i = (1 - z_i)/2 and symmetric Q, x^T Q x = sum_i h_i z_i + sum_{i<j} J_ij z_i z_j + c,
-where h_i = -(sum_j Q_ij)/2, J_ij = Q_ij/2 and c = (tr Q + sum_{i<j} Q_ij)/2.
-"""
-
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -24,7 +18,6 @@ class IsingHamiltonian:
     num_qubits: int
 
     def evaluate(self, spins: NDArray[np.int_]) -> float:
-        """Energy of a +/-1 spin configuration."""
         s = np.asarray(spins, dtype=np.float64)
         return float(self.h @ s + s @ np.triu(self.J, k=1) @ s + self.offset)
 
@@ -39,7 +32,7 @@ class IsingHamiltonian:
 
 
 def qubo_to_ising(Q: NDArray[np.float64]) -> IsingHamiltonian:
-    """Ising form of min x^T Q x (Q is symmetrised first)."""
+    """Ising form via x = (1 - z)/2: h_i = -sum_j Q_ij/2, J_ij = Q_ij/2, Q symmetrised first."""
     n = Q.shape[0]
     Q_sym = (Q + Q.T) / 2
     offset = float(np.trace(Q_sym) / 2 + np.sum(np.triu(Q_sym, k=1)) / 2)
@@ -54,11 +47,7 @@ def build_qaoa_circuit_from_ising(
     beta: float | Sequence[float] | NDArray[np.float64],
     p: int = 1,
 ) -> QuantumCircuit:
-    """p-layer QAOA circuit on |+>^n with measurement of every qubit.
-
-    Layer k applies exp(-i gamma_k H_C) as RZ(2 gamma_k h_i) and RZZ(2 gamma_k J_ij),
-    then the mixer exp(-i beta_k sum X_i) as RX(2 beta_k). Scalar angles are reused per layer.
-    """
+    """p-layer QAOA on |+>^n: RZ(2 g h_i), RZZ(2 g J_ij), RX(2 b); scalars reused per layer."""
     gammas = np.broadcast_to(np.asarray(gamma, dtype=np.float64), (p,))
     betas = np.broadcast_to(np.asarray(beta, dtype=np.float64), (p,))
     n = ising.num_qubits

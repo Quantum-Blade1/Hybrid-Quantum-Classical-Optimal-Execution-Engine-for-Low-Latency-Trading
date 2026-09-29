@@ -1,17 +1,3 @@
-"""Seeded walk-forward backtest of TWAP, static VWAP, adaptive VWAP and SA-QUBO schedules.
-
-Each window trains on `train_days` simulated days and tests on the next `test_days`:
-    TWAP     - uniform over the day
-    Static   - VWAP on the first training day's volume profile (stale forecast)
-    Adaptive - VWAP on the mean training-window volume profile
-    Hybrid   - SA-solved `slice_level_config` QUBO with the training-window volatility,
-               repaired to the order size and spread evenly within each slice
-Shortfall per test day is the implementation shortfall in bps of arrival notional,
-including the opportunity cost of unfilled shares (positive = cost); a window reports the
-mean over its test days. All strategies on a given day go through the same engine with
-the same book seed, so they face identical books minute by minute.
-"""
-
 import logging
 from dataclasses import dataclass
 
@@ -60,7 +46,7 @@ class WindowResult:
 
 
 class WalkForwardAnalyzer:
-    """Rolling train/test windows over `total_days` chained simulated days."""
+    """Rolling train/test windows; all strategies on a test day share one book seed."""
 
     def __init__(
         self,
@@ -115,7 +101,6 @@ class WalkForwardAnalyzer:
         return results
 
     def _hybrid_schedule(self, num_minutes: int, train_vol: float) -> NDArray[np.float64]:
-        """SA-QUBO slice quantities, repaired to the order size and spread over each slice."""
         num_slices = min(_MAX_QUBO_SLICES, num_minutes)
         config = slice_level_config(
             self.daily_shares,

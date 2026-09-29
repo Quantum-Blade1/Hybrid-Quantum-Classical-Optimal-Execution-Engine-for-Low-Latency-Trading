@@ -1,15 +1,9 @@
-"""Simulated device noise for QAOA benchmarks (not calibrated to any IBM backend)."""
-
 from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel, ReadoutError, depolarizing_error
 
 
 def noisy_aer_backend(noise_level: float = 0.02) -> AerSimulator:
-    """Aer simulator with depolarizing gate noise and asymmetric readout error.
-
-    Depolarizing probability p on the 1-qubit gates (rx, rz, h) and 5p on the 2-qubit
-    gates (rzz, cx); readout p(0|1) = p, p(1|0) = 0.8p.
-    """
+    """Illustrative gate and readout noise, not calibrated to any IBM backend."""
     noise_model = NoiseModel()
     noise_model.add_all_qubit_quantum_error(depolarizing_error(noise_level, 1), ["rx", "rz", "h"])
     noise_model.add_all_qubit_quantum_error(depolarizing_error(noise_level * 5, 2), ["rzz", "cx"])

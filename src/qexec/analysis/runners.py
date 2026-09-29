@@ -1,19 +1,3 @@
-"""Single-order runners on a minute-bar DataFrame, all through the same `ExecutionEngine`.
-
-    TWAP      uniform over the minutes
-    VWAP      proportional to the *expected* intraday volume profile (no look-ahead)
-    SA-QUBO   one SA-solved `slice_level_config` QUBO schedule, repaired to the order size
-    Hybrid    starts uniform; at five checkpoints the decision layer may re-solve the
-              remaining shares with SA-QUBO over the remaining minutes
-
-Every runner pays the same fill model (a synthetic book whose depth scales with bar
-volume, nothing fills in a zero-volume bar, unfilled shares carry forward) and, with the
-same `seed`, faces the same book at every minute. The shortfall charges unfilled shares
-at the final bar's far touch. This replaces the earlier runners, in which the SA and
-hybrid modes filled at mid + spread/2 with no impact and even during outages
-(docs/CLAIMS_AUDIT.md F6).
-"""
-
 from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Any
@@ -76,7 +60,6 @@ class ExecutionResult:
         return self.executed_shares / self.total_shares if self.total_shares else 0.0
 
     def metrics(self) -> dict[str, float | int | str]:
-        """Flat row for a results table."""
         return {
             "strategy": self.mode,
             "total_shares": self.total_shares,
@@ -100,7 +83,7 @@ class ExecutionResult:
 
 
 def seed_improvement_prior(engine: OptimizationDecisionEngine) -> None:
-    """Five synthetic 5% improvements (baseline 100 -> 95): an assumption, not data."""
+    """Five synthetic 5% improvements: an assumed prior, not data (docs/CLAIMS_AUDIT.md F5)."""
     for _ in range(5):
         engine.record_outcome(
             baseline_cost=100, optimized_cost=95, order_size=10_000, volatility=0.01
@@ -108,18 +91,12 @@ def seed_improvement_prior(engine: OptimizationDecisionEngine) -> None:
 
 
 def expected_volume_profile(num_minutes: int, daily_volume: int = DEFAULT_DAILY_VOLUME) -> Any:
-    """The simulator's noise-free U-shaped volume curve, in shares per minute."""
+    """Noise-free U-shaped volume curve in shares per minute; VWAP's forecast, so no look-ahead."""
     return VolumeProfileGenerator._volume_profile_weights(num_minutes) * daily_volume
 
 
 class HybridStrategy(BaseStrategy):
-    """Uniform start; at `NUM_CHECKPOINTS` evenly spaced minutes the decision layer decides
-    whether to re-solve the remaining shares with SA-QUBO over the remaining minutes.
-
-    The decision layer's improvement tracker is seeded with five synthetic 5% improvements
-    (`seed_improvement_prior`), so its invocation decisions rest on an assumed prior
-    (docs/CLAIMS_AUDIT.md F5). Each re-solve uses max(4, remaining minutes / 3) slices.
-    """
+    """Uniform start, re-solved by SA-QUBO at checkpoints when the decision layer invokes it."""
 
     strategy_name = "Hybrid"
 
@@ -188,7 +165,7 @@ def make_strategy(
     seed: int,
     daily_volume: int = DEFAULT_DAILY_VOLUME,
 ) -> tuple[BaseStrategy, dict[str, float]]:
-    """Strategy object for `name` (one of `STRATEGIES`) and solver diagnostics."""
+    """Strategy object for `name` (one of `STRATEGIES`) and its solver diagnostics."""
     n = len(market_data)
     if name == "TWAP":
         return FixedScheduleStrategy(np.ones(n)), {}
@@ -214,7 +191,7 @@ def execute_report(
     seed: int,
     side: OrderSide = OrderSide.BUY,
 ) -> tuple[ExecutionReport, ExecutionEngine]:
-    """Run `strategy` through a fresh engine whose book is keyed by `seed`."""
+    """Run `strategy` on a fresh engine keyed by `seed`, so equal seeds face the same book."""
     engine = ExecutionEngine(seed=seed)
     order = ParentOrder(
         symbol=str(market_data["symbol"].iloc[0]) if "symbol" in market_data else "SIM",
@@ -234,7 +211,7 @@ def run_strategy(
     seed: int = 42,
     daily_volume: int = DEFAULT_DAILY_VOLUME,
 ) -> ExecutionResult:
-    """Execute a buy of `total_shares` with strategy `name` and return its shortfall."""
+    """Buy `total_shares` with strategy `name`; unfilled shares cost the last far touch."""
     strategy, extra = make_strategy(
         name, market_data, total_shares, seed=seed, daily_volume=daily_volume
     )
@@ -245,8 +222,7 @@ def run_strategy(
         for c in engine.state.child_orders
         if c.filled_quantity > 0
     ]
-    # Shortfall decomposition of the fills (buy): crossing = sum n (p - m) splits into the
-    # half spread (touch - mid) and impact (walking past the touch); timing = sum n (m - P0).
+    # Buy fills: crossing sum n (p - m) = half spread + impact; timing = sum n (m - P0).
     filled = [c for c in engine.state.child_orders if c.filled_quantity > 0]
     crossing = sum(
         c.filled_quantity * (c.execution_price - c.market_price_at_execution) for c in filled

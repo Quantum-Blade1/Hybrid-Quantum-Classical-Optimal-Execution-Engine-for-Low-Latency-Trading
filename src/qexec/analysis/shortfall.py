@@ -1,14 +1,3 @@
-"""Implementation shortfall (Perold, 1988) split into delay, impact, timing and opportunity cost.
-
-For a buy of N shares decided at price P_d, arriving at P_0 and filling n_i at p_i when the
-mid is m_i, with closing price P_T and U unfilled shares:
-    delay = (P_0 - P_d) N,  impact = sum (p_i - m_i) n_i,  timing = sum (m_i - P_0) n_i,
-    opportunity = (P_T - P_0) U,  total = sum of the four
-                                        = sum n_i (p_i - P_d) + U (P_T - P_d).
-Delay covers all N shares from decision to arrival, so opportunity cost of the unfilled
-shares runs from arrival to close.
-"""
-
 from dataclasses import dataclass
 
 import pandas as pd
@@ -40,17 +29,14 @@ class ISComponents:
 
 
 class ISAnalyzer:
-    """Computes `ISComponents` for a fill log against minute-bar mid prices."""
+    """Buy-side implementation shortfall (Perold, 1988): delay, impact, timing, opportunity cost."""
 
     def __init__(self, decision_price: float, total_orders: int) -> None:
         self.decision_price = decision_price
         self.total_orders = total_orders
 
     def analyze(self, execution_log: pd.DataFrame, market_data: pd.DataFrame) -> ISComponents:
-        """`execution_log`: timestamp, shares, price (fill); `market_data`: timestamp, price (mid).
-
-        Each fill is matched to the nearest market-data timestamp.
-        """
+        """`execution_log`: timestamp, shares, fill price; `market_data`: timestamp, mid price."""
         if execution_log.empty:
             return ISComponents(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 

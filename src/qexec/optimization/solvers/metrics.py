@@ -1,5 +1,3 @@
-"""Solution-quality metrics for QUBO solvers that are valid for signed energies."""
-
 from dataclasses import dataclass
 
 import numpy as np
@@ -39,11 +37,7 @@ def _bits(index: int, n: int) -> NDArray[np.int8]:
 
 
 def energy_bounds(Q: NDArray[np.float64]) -> EnergyBounds:
-    """Exact energy range by exhaustive enumeration.
-
-    The extremal assignments are re-evaluated as x @ Q @ x, the same expression the
-    solvers use, so an optimal solver result compares equal to `min_energy`.
-    """
+    """Exact energy range, recomputed as x @ Q @ x like the solvers so optima compare equal."""
     n = Q.shape[0]
     energies = enumerate_energies(Q)
     x_min = _bits(int(np.argmin(energies)), n)
@@ -52,10 +46,7 @@ def energy_bounds(Q: NDArray[np.float64]) -> EnergyBounds:
 
 
 def approximation_ratio(energy: float, bounds: EnergyBounds) -> float:
-    """r = (E_max - E) / (E_max - E_min): 1 at the optimum, 0 at the worst assignment.
-
-    Unlike E_min / E, this is monotone in E for energies of either sign.
-    """
+    """r = (E_max - E) / (E_max - E_min): 1 at the optimum, 0 at the worst; sign-agnostic."""
     span = bounds.max_energy - bounds.min_energy
     if span <= 0:
         return 1.0
@@ -74,11 +65,7 @@ OPTIMUM_TOL = 1e-6
 
 @dataclass(frozen=True)
 class DistributionQuality:
-    """Quality of a sampled distribution over bitstrings (e.g. QAOA's final shots).
-
-    `success_probability` is the fraction of shots on *any* optimal bitstring, not the
-    frequency of the best sampled one; `mean_energy` is the sample mean of x^T Q x.
-    """
+    """`success_probability` is the shot fraction on any optimal bitstring, not the best sampled."""
 
     shots: int
     success_probability: float
@@ -111,8 +98,7 @@ def counts_quality(
 
 @dataclass(frozen=True)
 class RandomBaseline:
-    """Uniform sampling of {0,1}^n: exact success probability and mean energy, and the
-    best energy among `shots` seeded samples (the same budget a sampler was given)."""
+    """Uniform sampling: exact success probability and mean energy, best of `shots` seeded draws."""
 
     shots: int
     success_probability: float

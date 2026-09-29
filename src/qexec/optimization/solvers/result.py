@@ -1,5 +1,3 @@
-"""Result type shared by the classical QUBO solvers."""
-
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -35,6 +33,4 @@ class QUBOResult:
 
 
 class QUBOSolver(Protocol):
-    """Any solver returning a `QUBOResult` for a QUBO matrix."""
-
     def solve(self, Q: NDArray[np.float64]) -> QUBOResult: ...

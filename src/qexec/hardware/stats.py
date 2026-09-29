@@ -1,19 +1,3 @@
-"""Tests and intervals for one hardware job's final distribution against uniform sampling.
-
-Per job, the shots are treated as independent draws from the job's output distribution
-(the usual shot-noise model; drift within a job is not modelled):
-
-* success probability: Wilson score interval, and a one-sided exact binomial test of
-  H0: P(optimum) <= p0 against P(optimum) > p0, where p0 is the exact uniform mass on the
-  optimal bitstrings (num_optimal / 2^n; 2^-n for a unique optimum);
-* mean energy: shot-level (multinomial) bootstrap percentile interval of the approximation
-  ratio of the mean energy minus the exact uniform value (a constant).
-
-These statements are about one job. Runs differ by far more than shot noise (different
-COBYLA starting angles and hardware drift), so runs are not pooled here; with 3 runs the
-only across-run statement is a sign count (`sign_test_greater`).
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -26,7 +10,6 @@ from qexec.optimization.solvers.metrics import EnergyBounds, approximation_ratio
 
 
 def wilson_interval(successes: int, trials: int, confidence: float = 0.95) -> tuple[float, float]:
-    """Wilson score interval for a binomial proportion."""
     if trials <= 0:
         raise ValueError("trials must be positive")
     if not 0 <= successes <= trials:
@@ -40,19 +23,15 @@ def wilson_interval(successes: int, trials: int, confidence: float = 0.95) -> tu
 
 
 def binomial_test_greater(successes: int, trials: int, p0: float) -> float:
-    """One-sided exact binomial p-value for P(success) > p0."""
     return float(stats.binomtest(successes, trials, p0, alternative="greater").pvalue)
 
 
 def binomial_test_less(successes: int, trials: int, p0: float) -> float:
-    """One-sided exact binomial p-value for P(success) < p0."""
     return float(stats.binomtest(successes, trials, p0, alternative="less").pvalue)
 
 
 def sign_test_greater(num_above: int, num_runs: int) -> float:
-    """One-sided sign-test p-value: P(at least `num_above` of `num_runs` runs above the
-    baseline) if each run were equally likely to fall above or below it. With 3 runs the
-    smallest attainable value is 1/8."""
+    """Across-run sign-test p-value; runs are not pooled as they differ by more than shot noise."""
     return binomial_test_greater(num_above, num_runs, 0.5)
 
 
@@ -90,8 +69,7 @@ def bootstrap_ratio_advantage(
     confidence: float = 0.95,
     rng: np.random.Generator,
 ) -> RatioAdvantage:
-    """Shot-level bootstrap: resample the job's shots (multinomial on its empirical
-    distribution) and recompute the mean-energy approximation ratio."""
+    """Shot-level multinomial bootstrap of the mean-energy ratio minus the uniform value."""
     total = int(weights.sum())
     if total <= 0:
         raise ValueError("empty counts")

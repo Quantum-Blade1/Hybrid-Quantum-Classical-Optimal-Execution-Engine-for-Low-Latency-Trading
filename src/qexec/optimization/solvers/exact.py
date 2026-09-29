@@ -1,5 +1,3 @@
-"""Exact QUBO solver by exhaustive enumeration (reference optimum for small n)."""
-
 from time import perf_counter
 
 import numpy as np

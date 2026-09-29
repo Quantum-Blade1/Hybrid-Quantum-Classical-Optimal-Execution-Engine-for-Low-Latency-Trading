@@ -1,33 +1,3 @@
-"""Exact binary-encoded execution QUBO (Phase 7) for the `CostModel` objective.
-
-The order of N units is cut into U equal *units*; the horizon into T contiguous *slices*.
-Slice t trades c_t units, c_t in {0, ..., 2^B - 1}, encoded in base 2 by B bits:
-
-    c_t = sum_b 2^b z_{t,b},     z in {0,1}^{T B}.
-
-Within a slice the units are spread over its minutes in proportion to expected volume
-(weights w_k, summing to 1 per slice), so the minute fractions are f = W c / U and the
-objective is J(W c / U), a quadratic in c and hence in z. The integer program is
-
-    (IP)   min_c J(W c / U)   s.t.  sum_t c_t = U,  0 <= c_t <= 2^B - 1,  c integer,
-
-and the QUBO is E(z) = J(W E z / U) + P (sum_t c_t - U)^2 (constant terms in `offset`).
-
-Penalty rule (exactness). J >= 0 for every c >= 0 (half spreads, impact and variance are
-non-negative), and every infeasible z has (sum c - U)^2 >= 1. With P > J(c_ref) for one
-feasible c_ref (the balanced allocation), every infeasible z has E(z) >= P > J(c_ref) >=
-min IP, so the QUBO minimisers are exactly the encodings of the IP minimisers. We use
-P = penalty_margin * J(c_ref) with penalty_margin = 1.5 (> 1 as the argument requires).
-
-Unlike the Phase 6 level encoding (per-slice indicator variables for a few quantity
-levels, which allowed summing two levels in one slice and could not represent most
-schedules), every integer allocation with c_t < 2^B is representable, exactly once.
-
-The IP also has a chain structure: slice t's cost depends only on c_t and the units still
-unexecuted before it, so `solve_dp` finds the exact IP optimum by dynamic programming in
-O(T U 2^B). It is the ground truth for the solvers.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -39,6 +9,7 @@ from numpy.typing import ArrayLike, NDArray
 from qexec.execution.cost_model import CostModel
 from qexec.optimization.schedule import repair_schedule
 
+# Exact iff P > J(c_ref): J >= 0 and every infeasible z has (sum c - U)^2 >= 1.
 DEFAULT_PENALTY_MARGIN = 1.5
 
 
@@ -57,7 +28,7 @@ class QUBOProblem:
 
 @dataclass(frozen=True)
 class SliceProgram:
-    """Integer program over per-slice unit counts and its exact binary QUBO."""
+    """min J(W c / U) s.t. sum_t c_t = U over per-slice unit counts c, and its exact binary QUBO."""
 
     model: CostModel
     total: int
@@ -87,8 +58,6 @@ class SliceProgram:
             W[a:b, t] = v / v.sum()
         object.__setattr__(self, "_bounds", bounds)
         object.__setattr__(self, "_weights", W)
-
-    # -- structure ------------------------------------------------------------------
 
     @property
     def capacity(self) -> int:
@@ -133,10 +102,7 @@ class SliceProgram:
         c = np.asarray(counts)
         return bool(c.sum() == self.units and np.all(c >= 0) and np.all(c <= self.capacity))
 
-    # -- objective ------------------------------------------------------------------
-
     def fractions(self, counts: ArrayLike) -> NDArray[np.float64]:
-        """Per-minute fractions of the order, W c / U."""
         return np.asarray(self._weights @ np.asarray(counts, dtype=np.float64) / self.units)
 
     def objective(self, counts: ArrayLike) -> float:
@@ -153,9 +119,9 @@ class SliceProgram:
         return self.penalty_margin * self.objective(self.reference_counts())
 
     def qubo(self) -> QUBOProblem:
-        """Exact QUBO; its minimisers encode the IP minimisers (see module docstring)."""
+        """Exact QUBO J(W E z / U) + P (sum_t c_t - U)^2; its minimisers encode the IP's."""
         A, b, c0 = self.model.quadratic_form(self.total)
-        M = self._weights @ self.encoding_matrix() / self.units  # f = M z
+        M = self._weights @ self.encoding_matrix() / self.units
         P = self.penalty_weight()
         ones = self.encoding_matrix().sum(axis=0)  # sum_t c_t = ones @ z
         Q = M.T @ A @ M + P * np.outer(ones, ones)
@@ -163,16 +129,11 @@ class SliceProgram:
         Q[np.diag_indices_from(Q)] += linear  # z_i^2 = z_i
         return QUBOProblem(Q=(Q + Q.T) / 2, offset=c0 + P * self.units**2, penalty=P)
 
-    # -- schedules ------------------------------------------------------------------
-
     def schedule(self, counts: ArrayLike) -> NDArray[np.int_]:
         """Integer units per minute summing to `total` (off-constraint counts rescaled)."""
         return repair_schedule(self.fractions(counts) * self.total, self.total)
 
-    # -- exact solutions ------------------------------------------------------------
-
     def _slice_cost(self, t: int, remaining: int, count: int) -> float:
-        """Cost of slice t trading `count` units with `remaining` units unexecuted."""
         a, b = self._bounds[t]
         m = self.model
         w = self._weights[a:b, t]
@@ -186,7 +147,7 @@ class SliceProgram:
         return float(spread_impact + risk)
 
     def solve_dp(self) -> tuple[NDArray[np.int_], float]:
-        """Exact IP optimum (counts, J) by dynamic programming over remaining units."""
+        """Exact IP optimum (counts, J) by dynamic programming over remaining units, O(T U 2^B)."""
         T, U, C = self.num_slices, self.units, self.capacity
         value = np.full((T + 1, U + 1), np.inf)
         choice = np.zeros((T, U + 1), dtype=np.int_)
@@ -210,7 +171,6 @@ class SliceProgram:
         return counts, float(value[0, U])
 
     def solve_enumeration(self) -> tuple[NDArray[np.int_], float]:
-        """Exact IP optimum by enumerating every feasible allocation (small problems)."""
         best_c, best = np.zeros(self.num_slices, dtype=np.int_), np.inf
         for head in product(range(self.capacity + 1), repeat=self.num_slices - 1):
             last = self.units - sum(head)

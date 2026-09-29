@@ -1,9 +1,3 @@
-"""Solve an execution QUBO and turn the solution into shares per slice or per minute.
-
-Shared by the slow-path optimizer, the HFT pipeline, `QUBOStrategy`, the
-walk-forward backtest and the analysis runners.
-"""
-
 from typing import Protocol
 
 import numpy as np
@@ -14,8 +8,6 @@ from qexec.optimization.solvers.result import BinaryVector, QUBOResult, QUBOSolv
 
 
 class ScheduleQUBO(Protocol):
-    """An execution QUBO whose solutions decode to per-slice quantities."""
-
     def build_qubo_matrix(self) -> NDArray[np.float64]: ...
 
     def slice_quantities(self, x: BinaryVector) -> NDArray[np.float64]: ...
@@ -28,7 +20,6 @@ def slice_level_config(
     volatility: float | None = None,
     impact_coefficient: float | None = None,
 ) -> QUBOConfig:
-    """Single-venue `QUBOConfig` with levels {0, N/(2T), N/T} and equality penalty 100."""
     config = QUBOConfig(
         total_shares=total_shares,
         num_time_slices=num_slices,
@@ -44,13 +35,7 @@ def slice_level_config(
 
 
 def repair_schedule(quantities: ArrayLike, total_shares: int) -> NDArray[np.int_]:
-    """Integer schedule proportional to `quantities` that sums exactly to `total_shares`.
-
-    QUBO solutions select discrete quantity levels, so the decoded schedule can miss the
-    order size (e.g. 4,997 of 5,000 shares) or, off the equality constraint, overshoot it.
-    The shape is kept by rescaling, then largest-remainder rounding makes the integers sum
-    to the order. An all-zero (or empty-mass) schedule becomes a uniform split.
-    """
+    """Rescale `quantities` to integers summing exactly to `total_shares` (largest remainder)."""
     q = np.clip(np.asarray(quantities, dtype=np.float64), 0.0, None)
     if q.ndim != 1 or q.size == 0:
         raise ValueError("quantities must be a non-empty 1-D array")
@@ -73,7 +58,7 @@ def optimize_schedule(
     solver: QUBOSolver,
     Q: NDArray[np.float64] | None = None,
 ) -> tuple[NDArray[np.float64], QUBOResult]:
-    """Solve `qubo` (or the pre-built `Q`) and return (quantity per slice, solver result)."""
+    """Solve `qubo` (or the pre-built `Q`); returns (quantity per slice, solver result)."""
     if Q is None:
         Q = qubo.build_qubo_matrix()
     result = solver.solve(Q)
@@ -83,11 +68,7 @@ def optimize_schedule(
 def spread_over_minutes(
     slice_quantities: NDArray[np.float64], num_minutes: int
 ) -> NDArray[np.float64]:
-    """Spread each slice's quantity evenly over its `num_minutes // num_slices` minutes.
-
-    The integer remainder of a slice goes to its first minute; minutes after the
-    last full slice receive nothing.
-    """
+    """Even split within each slice; the integer remainder goes to the slice's first minute."""
     schedule = np.zeros(num_minutes)
     minutes_per_slice = num_minutes // len(slice_quantities)
     for t, quantity in enumerate(slice_quantities):

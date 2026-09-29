@@ -1,9 +1,3 @@
-"""Post-processing error mitigation on measured counts: ZNE, readout-matrix inversion, voting.
-
-These operate on counts only; noise-scaled circuits (e.g. gate folding) for ZNE and
-calibration circuits for readout mitigation must be produced by the caller.
-"""
-
 import logging
 from abc import ABC, abstractmethod
 from collections import Counter
@@ -74,22 +68,20 @@ class MitigationResult:
 
 
 class ErrorMitigator(ABC):
+    """Counts-only post-processing; noise-scaled and calibration circuits come from the caller."""
+
     @property
     @abstractmethod
     def name(self) -> str: ...
 
     @abstractmethod
-    def mitigate(self, counts: Counts, Q: NDArray[np.float64], **kwargs: Any) -> MitigationResult:
-        """Mitigate `counts` of a circuit whose bitstrings are scored with `Q`."""
+    def mitigate(
+        self, counts: Counts, Q: NDArray[np.float64], **kwargs: Any
+    ) -> MitigationResult: ...
 
 
 class ZeroNoiseExtrapolation(ErrorMitigator):
-    """Extrapolates the mean energy measured at noise factors c_k to c = 0.
-
-    `extrapolation` is "linear", "polynomial" (degree <= 2) or "exponential" (a e^{bc},
-    requiring energies of one sign). Mitigated counts are the raw counts reweighted by
-    1 / (1 + |E(x) - E_0|), a heuristic that favours bitstrings near the extrapolated energy.
-    """
+    """Extrapolates mean energy to zero noise; counts reweighted by 1 / (1 + |E(x) - E_0|)."""
 
     def __init__(
         self, noise_factors: Sequence[float] = (1.0, 1.5, 2.0), extrapolation: str = "linear"
@@ -169,11 +161,7 @@ class ZeroNoiseExtrapolation(ErrorMitigator):
 
 
 class MeasurementErrorMitigator(ErrorMitigator):
-    """Readout mitigation p_true = pinv(A^T) p_measured with confusion matrix A[prepared, measured].
-
-    Negative quasi-probabilities are clipped and the result renormalised. Without calibration,
-    A assumes independent 2% bit-flip readout errors.
-    """
+    """Readout mitigation p_true = pinv(A^T) p_meas, A[prepared, measured]; negatives clipped."""
 
     def __init__(self, confusion_matrix: NDArray[np.float64] | None = None) -> None:
         self._confusion_matrix = confusion_matrix

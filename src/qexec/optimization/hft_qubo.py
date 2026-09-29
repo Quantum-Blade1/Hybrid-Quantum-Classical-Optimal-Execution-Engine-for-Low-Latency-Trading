@@ -1,10 +1,3 @@
-"""Tick-level multi-venue execution QUBO with microstructure-dependent cost terms.
-
-Adds adverse selection (scaled by VPIN), inventory risk and cross-venue information
-leakage to the impact/timing/transaction terms of `ExecutionQUBO`, and adds Kyle's
-lambda to the impact coefficient.
-"""
-
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -23,8 +16,6 @@ _DEFAULT_FILL_PROBABILITY = 0.9
 
 @dataclass
 class HFTQUBOConfig:
-    """Problem size, six cost weights, market and microstructure inputs, venue properties."""
-
     total_shares: int = 5000
     num_tick_slices: int = 20
     num_venues: int = 3
@@ -86,11 +77,7 @@ class HFTQUBOConfig:
 
 
 class HFTExecutionQUBO:
-    """Symmetric QUBO for `HFTQUBOConfig`:
-
-    Q = sum_c w_c C_c + P_eq (sum q x - S)^2 + capacity penalty,
-    c in {impact, timing, transaction, adverse selection, inventory, leakage}.
-    """
+    """Six weighted microstructure-aware cost terms plus equality and capacity penalties."""
 
     _TERMS = ("impact", "timing", "transaction", "adverse", "inventory", "leakage")
 
@@ -141,8 +128,6 @@ class HFTExecutionQUBO:
         return self.Q
 
     def _add_market_impact_cost(self) -> None:
-        """(eta + lambda_Kyle) sigma q on the diagonal; 0.4 of that times sqrt(q_i q_j) across
-        venues within the same tick."""
         cfg = self.config
         M = self._matrices["impact"]
         base_impact = (cfg.impact_coefficient + cfg.kyle_lambda) * cfg.volatility
@@ -161,7 +146,6 @@ class HFTExecutionQUBO:
                             M[i, j] += _CROSS_VENUE_IMPACT * base_impact * np.sqrt(q_i * q_j)
 
     def _add_timing_risk_cost(self) -> None:
-        """sigma_tick sqrt(t+1) q^2 / S on the diagonal."""
         cfg = self.config
         M = self._matrices["timing"]
         tick_vol = cfg.tick_volatility
@@ -174,7 +158,6 @@ class HFTExecutionQUBO:
                     M[i, i] += time_factor * (q_i**2) / cfg.total_shares
 
     def _add_transaction_cost(self) -> None:
-        """Half-spread divided by the venue fill probability, per share."""
         cfg = self.config
         M = self._matrices["transaction"]
         half_spread = (cfg.avg_spread_bps / 10000) / 2
@@ -191,7 +174,6 @@ class HFTExecutionQUBO:
                     M[i, i] += effective_cost * cfg.quantity_levels[k]
 
     def _add_adverse_selection_cost(self) -> None:
-        """AS cost x venue AS factor x (1 + 2 VPIN), per share."""
         cfg = self.config
         M = self._matrices["adverse"]
         vpin_multiplier = 1.0 + 2.0 * cfg.vpin
@@ -205,8 +187,6 @@ class HFTExecutionQUBO:
                     M[i, i] += as_cost * cfg.quantity_levels[k]
 
     def _add_inventory_risk_cost(self) -> None:
-        """sigma_tick sqrt(T - t) (1 - q/S) q on the diagonal, and a coupling
-        -0.01 sigma_tick (t2 - t) min(q_i, q_j) / S between every later tick t2 > t."""
         cfg = self.config
         M = self._matrices["inventory"]
         tick_vol = cfg.tick_volatility
@@ -238,8 +218,6 @@ class HFTExecutionQUBO:
                                 )
 
     def _add_information_leakage_cost(self) -> None:
-        """For lit venues (AS factor >= 0.5): exp(-dt/3) eta sqrt(q_i q_j) for trades on a
-        different venue in the next 1..3 ticks."""
         cfg = self.config
         M = self._matrices["leakage"]
         for t in range(cfg.num_tick_slices):
@@ -288,7 +266,6 @@ class HFTExecutionQUBO:
                         M[i, j] += P * (q_i + q_j - cap)
 
     def slice_quantities(self, x: BinaryVector) -> NDArray[np.float64]:
-        """Total quantity selected in each tick slice (summed over venues and levels)."""
         cfg = self.config
         quantities = np.zeros(cfg.num_tick_slices)
         for i in np.flatnonzero(np.asarray(x) > 0.5):
@@ -297,7 +274,6 @@ class HFTExecutionQUBO:
         return quantities
 
     def interpret_solution(self, x: BinaryVector) -> dict[str, Any]:
-        """Tick-sorted trade list with venue names, plus totals and venues used."""
         cfg = self.config
         schedule = []
         total_shares = 0
@@ -329,7 +305,6 @@ class HFTExecutionQUBO:
         }
 
     def calculate_cost_breakdown(self, x: BinaryVector) -> dict[str, float]:
-        """Total energy, each weighted cost term and the constraint penalty."""
         Q = self.Q if self.Q is not None else self.build_qubo_matrix()
         m = self._matrices
         w = self._weights()

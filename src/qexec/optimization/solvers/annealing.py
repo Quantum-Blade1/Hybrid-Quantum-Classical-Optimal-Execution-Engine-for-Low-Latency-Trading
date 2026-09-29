@@ -1,22 +1,3 @@
-"""Simulated annealing QUBO solver with single-bit-flip Metropolis moves and restarts.
-
-Schedule (Phase 7): exactly `num_sweeps` sweeps at geometrically spaced temperatures
-
-    T_s = T0 (T_f / T0)^(s / (num_sweeps - 1)),   s = 0, ..., num_sweeps - 1,
-
-so `num_sweeps` is honoured (the Phase 6 schedule, T <- 0.95 T from 10 to 0.01, stopped
-after 135 sweeps whatever `num_sweeps` said). A sweep visits every bit once in a random
-order. `num_restarts` independent replicas run in lock-step (vectorised over replicas);
-the best state seen by any replica is returned.
-
-Temperatures default to the bounds used by D-Wave's `neal` sampler: T0 accepts the
-largest possible uphill single flip with probability 1/2, T_f accepts the smallest
-non-zero coefficient-sized uphill flip with probability 1/100:
-
-    T0 = max_i (|Q_ii| + 2 sum_{j!=i} |Q_ij|) / ln 2
-    T_f = min{|Q_ii|, 2|Q_ij| : non-zero} / ln 100
-"""
-
 import logging
 from time import perf_counter
 
@@ -37,7 +18,7 @@ def flip_delta(Q: NDArray[np.float64], x: NDArray[np.int8], i: int) -> float:
 
 
 def default_temperatures(Q: NDArray[np.float64]) -> tuple[float, float]:
-    """(T0, T_final) from the coefficient bounds described in the module docstring."""
+    """(T0, T_f) as in D-Wave's neal: largest uphill flip at p = 1/2, smallest at p = 1/100."""
     diag = np.abs(np.diag(Q))
     off = np.abs(Q - np.diag(np.diag(Q)))
     max_delta = float(np.max(diag + 2 * off.sum(axis=1))) if Q.size else 1.0
@@ -49,7 +30,7 @@ def default_temperatures(Q: NDArray[np.float64]) -> tuple[float, float]:
 
 
 class SimulatedAnnealingSolver:
-    """Geometric-schedule SA with `num_restarts` vectorised replicas (see module docstring)."""
+    """Metropolis single-flip SA on a geometric schedule with vectorised `num_restarts` replicas."""
 
     def __init__(
         self,
@@ -70,7 +51,6 @@ class SimulatedAnnealingSolver:
         self.rng = np.random.default_rng(seed)
 
     def temperatures(self, Q: NDArray[np.float64]) -> NDArray[np.float64]:
-        """The `num_sweeps` temperatures used on `Q`."""
         auto_t0, auto_tf = default_temperatures(Q)
         t0 = self.initial_temp if self.initial_temp is not None else auto_t0
         tf = self.final_temp if self.final_temp is not None else min(auto_tf, t0)
