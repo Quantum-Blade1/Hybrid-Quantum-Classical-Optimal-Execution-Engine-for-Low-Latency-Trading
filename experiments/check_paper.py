@@ -6,10 +6,13 @@
 * every result macro used (a control word starting with an upper-case letter) is defined
   in numbers.tex or in main.tex, except a small list of LaTeX/IEEEtran commands;
 * every \\ref / \\cite target is defined, and no hand-typed result from the retracted
-  draft (listed in RETRACTED) reappears.
+  draft (listed in RETRACTED) reappears;
+* every TODO is an author TODO, written ``TODO(author): ...`` in a LaTeX comment. These
+  mark facts only the authors can supply (degrees, funding, reference details); they are
+  allowed and listed, not errors (``make paper-todos`` prints them).
 
 Usage:
-    python -m experiments.check_paper [--tex paper/ieee/main.tex]
+    python -m experiments.check_paper [--tex paper/ieee/main.tex] [--todos]
 Exits non-zero and lists the problems if any check fails.
 """
 
@@ -151,8 +154,32 @@ def check_retracted(text: str) -> list[str]:
     ]
 
 
+AUTHOR_TODO = "TODO(author)"
+
+
+def author_todos(raw: str) -> list[tuple[int, str]]:
+    """(line number, text) of every ``TODO(author)`` note in the raw source."""
+    return [
+        (number, line.split(AUTHOR_TODO, 1)[1].lstrip(": ").strip())
+        for number, line in enumerate(raw.splitlines(), start=1)
+        if AUTHOR_TODO in line
+    ]
+
+
+def check_todos(raw: str) -> list[str]:
+    problems = []
+    for number, line in enumerate(raw.splitlines(), start=1):
+        rest = line.replace(AUTHOR_TODO, "")
+        if "TODO" in rest:
+            problems.append(f"line {number}: TODO not written as {AUTHOR_TODO}")
+        elif AUTHOR_TODO in line and AUTHOR_TODO not in line[line.find("%") :]:
+            problems.append(f"line {number}: {AUTHOR_TODO} outside a LaTeX comment")
+    return problems
+
+
 def check(tex_path: Path) -> list[str]:
-    text = _strip_comments(tex_path.read_text())
+    raw = tex_path.read_text()
+    text = _strip_comments(raw)
     numbers_path = tex_path.parent / "numbers.tex"
     numbers = numbers_path.read_text() if numbers_path.exists() else ""
     problems = []
@@ -163,19 +190,30 @@ def check(tex_path: Path) -> list[str]:
     problems += check_macros(text, numbers)
     problems += check_references(text)
     problems += check_retracted(text)
+    problems += check_todos(raw)
     return problems
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--tex", type=Path, default=DEFAULT_TEX)
+    parser.add_argument("--todos", action="store_true", help="only list TODO(author) notes")
     args = parser.parse_args()
+    todos = author_todos(args.tex.read_text())
+    if args.todos:
+        for number, note in todos:
+            print(f"{args.tex.name}:{number}: {note}")
+        return
     problems = check(args.tex)
     for problem in problems:
         print(f"PAPER: {problem}")
     if problems:
         sys.exit(1)
     print(f"{args.tex}: environments, figures, macros, references and retracted claims OK")
+    if todos:
+        print(f"{len(todos)} {AUTHOR_TODO} notes (allowed; `make paper-todos` lists them):")
+        for number, note in todos:
+            print(f"  line {number}: {note}")
 
 
 if __name__ == "__main__":

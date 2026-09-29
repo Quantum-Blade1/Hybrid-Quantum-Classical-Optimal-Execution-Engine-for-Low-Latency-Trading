@@ -80,3 +80,13 @@ def test_source_checks_catch_problems(tmp_path):
     assert "\\Unknown" in problems and "\\Known" not in problems.replace("\\Unknown", "")
     assert "nowhere" in problems and "ghost" in problems
     assert "production-ready" in problems
+
+
+def test_author_todos_are_listed_and_other_todos_fail(tmp_path):
+    from experiments import check_paper
+
+    raw = "text % TODO(author): confirm funding\nmore % TODO fix this\nTODO(author): visible\n"
+    assert check_paper.author_todos(raw) == [(1, "confirm funding"), (3, "visible")]
+    problems = check_paper.check_todos(raw)
+    assert len(problems) == 2
+    assert "line 2" in problems[0] and "line 3" in problems[1]

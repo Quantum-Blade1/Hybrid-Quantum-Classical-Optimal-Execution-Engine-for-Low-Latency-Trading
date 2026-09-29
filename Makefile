@@ -4,7 +4,7 @@ PYTHON ?= python
 export PYTHONPATH := src:.
 
 .PHONY: all data experiments figures quick experiments-quick figures-quick check-figures test lint \
-	paper-numbers check-paper paper
+	paper-numbers check-paper paper-todos paper
 
 all: data experiments figures paper-numbers
 
@@ -44,6 +44,10 @@ paper-numbers:
 check-paper:
 	$(PYTHON) -m experiments.paper_numbers --check
 	$(PYTHON) -m experiments.check_paper
+
+# Lists the TODO(author) notes in the manuscript: facts only the authors can supply.
+paper-todos:
+	$(PYTHON) -m experiments.check_paper --todos
 
 # Builds paper/ieee/main.pdf with latexmk if installed, else tectonic.
 paper: check-paper
