@@ -1,0 +1,182 @@
+{
+  "experiment": "real_data_dev",
+  "status": "ok",
+  "config_type": "Config",
+  "config": {
+    "split": "dev",
+    "symbols": [
+      "BTCUSDT",
+      "LINKUSDT"
+    ],
+    "dev_days": [
+      "2026-07-22",
+      "2026-07-23",
+      "2026-07-24",
+      "2026-07-25",
+      "2026-07-26",
+      "2026-07-27",
+      "2026-07-28",
+      "2026-07-29",
+      "2026-07-30",
+      "2026-07-31",
+      "2026-08-01",
+      "2026-08-02",
+      "2026-08-03",
+      "2026-08-04",
+      "2026-08-05",
+      "2026-08-06"
+    ],
+    "eval_days": [
+      "2026-07-22",
+      "2026-07-23",
+      "2026-07-24",
+      "2026-07-25",
+      "2026-07-26",
+      "2026-07-27",
+      "2026-07-28",
+      "2026-07-29",
+      "2026-07-30",
+      "2026-07-31",
+      "2026-08-01",
+      "2026-08-02",
+      "2026-08-03",
+      "2026-08-04",
+      "2026-08-05",
+      "2026-08-06"
+    ],
+    "start_hours": [
+      0,
+      4,
+      8,
+      12,
+      16,
+      20
+    ],
+    "sizes_pct_adv": [
+      0.1,
+      0.5
+    ],
+    "horizons": [
+      60,
+      240
+    ],
+    "participation_cap": 0.25,
+    "bucket_minutes": 15,
+    "min_lots": 10000,
+    "qubo": {
+      "num_slices": 4,
+      "bits": 3,
+      "units": 16,
+      "sweeps": 1000,
+      "restarts": 16
+    },
+    "hybrid_checkpoints": 1,
+    "hybrid_clip": [
+      0.5,
+      2.0
+    ],
+    "variants": [
+      {
+        "name": "primary",
+        "risk": "zero",
+        "eval_multiple": 1.0,
+        "opt_multiple": 1.0
+      },
+      {
+        "name": "eval_x0.5",
+        "risk": "zero",
+        "eval_multiple": 0.5,
+        "opt_multiple": 1.0
+      },
+      {
+        "name": "eval_x2",
+        "risk": "zero",
+        "eval_multiple": 2.0,
+        "opt_multiple": 1.0
+      },
+      {
+        "name": "both_x0.5",
+        "risk": "zero",
+        "eval_multiple": 0.5,
+        "opt_multiple": 0.5
+      },
+      {
+        "name": "both_x2",
+        "risk": "zero",
+        "eval_multiple": 2.0,
+        "opt_multiple": 2.0
+      },
+      {
+        "name": "risk_averse",
+        "risk": "rule",
+        "eval_multiple": 1.0,
+        "opt_multiple": 1.0
+      }
+    ],
+    "robustness_seeds": 5,
+    "synthetic": false,
+    "bars_root": "data/binance/bars",
+    "workers": 10,
+    "seed": 0
+  },
+  "seeds": [
+    0
+  ],
+  "git": {
+    "commit": "164b4c5002688169f7dc915cd2bbb60c8d798082",
+    "dirty": true
+  },
+  "environment": {
+    "python": "3.12.14",
+    "implementation": "CPython",
+    "packages": {
+      "qexec": "0.1.0",
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "pandas": "3.0.6",
+      "matplotlib": "3.11.2",
+      "qiskit": "2.5.2",
+      "qiskit-aer": "0.17.2"
+    },
+    "platform": "macOS-26.5.1-arm64-arm-64bit",
+    "machine": "arm64",
+    "processor": "arm",
+    "cpu_count": 10,
+    "memory_gb": 16.0,
+    "cpu_model": "Apple M5"
+  },
+  "started_utc": "2026-09-29T16:29:07+00:00",
+  "wall_time_s": 385.603,
+  "files": {
+    "orders.csv": "f33214df894436d84ac756407fafac21c83c2b976cc8172826b95e4f6c21c1f6",
+    "calibration.csv": "72d8aeb03ae22bb9637686121ebbe7f236a07ed1f11a22d43e4b2944558ce65a",
+    "gaps.csv": "9bfea108801bcb2a15e979c54dd2f0d483adff4cce7a6aa0f28ba9a723a4cc6a",
+    "comparisons.csv": "9d42870e582dc8abaa860b249ea7cb9b06f533dff7b6208cb3b8950a1afff452",
+    "comparisons_secondary.csv": "d7d80d96f4b84b5dd031fcb59c87541cb241e903b65070310233f9bbde348bd1",
+    "cells.csv": "aaa97e9c25fc9fd7df5f4c3b02f84309088bd5fb49992ec446be487434a3c334",
+    "strategy_summary.csv": "09446b25781fa75fd0f30be8ce1822e274a55d6d4c55b65297fbb22d07675871",
+    "robustness.csv": "3f629ef9ed7ab11b4aea95add0ee0c3c9bf6d842fbd644c27ab6588f936e3e02",
+    "impact_bins.csv": "efd54078b62303e382d768714709d5932ac3af298667c2957bc3cd5ce1d01367",
+    "profiles.csv": "5ee960654c5118d83cd1aee13c5a9687c3a86c11b3ec8ff8497741b9ec5073d5"
+  },
+  "quick": false,
+  "data": "Binance aggTrades",
+  "eval_days": [
+    "2026-07-22",
+    "2026-07-23",
+    "2026-07-24",
+    "2026-07-25",
+    "2026-07-26",
+    "2026-07-27",
+    "2026-07-28",
+    "2026-07-29",
+    "2026-07-30",
+    "2026-07-31",
+    "2026-08-01",
+    "2026-08-02",
+    "2026-08-03",
+    "2026-08-04",
+    "2026-08-05",
+    "2026-08-06"
+  ]
+}

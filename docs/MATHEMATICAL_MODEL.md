@@ -136,6 +136,38 @@ Fast-path latency is the wall time of one `AsyncExecutionEngine` tick (policy po
 
 ---
 
+## 📈 Phase 7: real-data model (`experiments/real_data*.py`, `docs/PROTOCOL.md`)
+
+The Phase 7 evaluation replaces the synthetic book with public Binance 1-minute bars and replaces the level-encoded QUBO with an exact binary encoding of one explicit cost model. Everything below is what the code computes.
+
+### 1. Real-data fill model (`ImpactFillModel`)
+No order book exists for these data. For a child order of $q$ lots in bar $k$ with mid proxy $m_k$ (bar VWAP), half spread $h_k$ (the bar's trade-sign estimate, or the development-profile value when it is missing) and realized volume $V_k$:
+
+$$q^{\text{fill}}_k=\min\!\left(q,\ \lfloor 0.25\,V_k\rfloor\right),\qquad p_k=m_k\left(1+s\,\frac{h_k+\beta\,q^{\text{fill}}_k/V_k}{10^4}\right),\quad s=\pm1 .$$
+
+Nothing fills when $V_k=0$; unfilled lots carry forward; the remainder after the last bar is a clean-up order at the same formula without the cap ($V_T$ replaced by the expected volume if zero), charged as opportunity cost. Impact is linear and temporary; there is no permanent impact and no fee (fees are the same per unit for every strategy).
+
+### 2. Cost model (`qexec.execution.cost_model.CostModel`)
+For an order of $N$ lots over minutes $k=1..K$ with development-day profiles $\bar V_k$ (expected volume), $\bar h_k$ (half spread, bps) and $\sigma_k$ (per-minute volatility, bps), schedule $q_k$, fractions $f_k=q_k/N$ and remaining fractions $R_k=\sum_{j\ge k} f_j$:
+
+$$E[\mathrm{IS}]=\sum_k f_k\left(\bar h_k+\beta N f_k/\bar V_k\right),\qquad \mathrm{Var}[\mathrm{IS}]=\sum_k \sigma_k^2 R_k^2,\qquad J=E+\lambda\,\mathrm{Var}\quad(\text{bps}).$$
+
+The primary analysis uses $\lambda=0$ (the primary metric is mean shortfall). **Discretized Almgren–Chriss (AC)** is the exact minimiser of $J$ on the minute grid over the simplex: for $\lambda=0$ it is water-filling, $f_k=\max(0,(\nu-\bar h_k)\bar V_k/(2\beta N))$ with $\nu$ found by bisection; for $\lambda>0$ a convex QP (SLSQP) started there. The integer schedule is obtained by largest-remainder rounding.
+
+### 3. Exact binary QUBO encoding (`qexec.optimization.slice_program`)
+The order is cut into $U$ equal units and the horizon into $T$ contiguous slices; slice $t$ trades $c_t=\sum_b 2^b z_{t,b}\in\{0,\dots,2^B-1\}$ units, spread over its minutes in proportion to $\bar V_k$. Then $f=Wc/U$ and $J(Wc/U)$ is quadratic in $z$. The QUBO is $E(z)=J(WEz/U)+P(\sum_t c_t-U)^2$ with $P=1.5\,J(c_{\text{ref}})$ for the balanced feasible allocation $c_{\text{ref}}$; since $J\ge0$ and every infeasible $z$ has penalty $\ge P>J(c_{\text{ref}})$, the QUBO minimisers are exactly the integer-program minimisers. The chain structure gives the exact integer optimum by dynamic programming (DP) in $O(TU2^B)$, used as ground truth. Frozen setting (tuned on development days, `results/real_data_tune`): $T=4$, $B=3$, $U=16$ (12 binary variables), SA with 1,000 sweeps and 16 restarts (geometric schedule, temperatures set from the QUBO's energy scale; `num_sweeps` is honoured). Because the slices are coarse, the QUBO optimum is a restricted version of the AC problem: its model cost can only be $\ge$ AC's.
+
+### 4. Hybrid (`AdaptiveQUBOStrategy`)
+Starts from the QUBO schedule; at $C$ evenly spaced checkpoints (frozen $C=1$) re-solves the remaining units over the remaining minutes after rescaling $\bar V$, $\bar h$, $\sigma$ by the ratios observed so far *in this order* (bars strictly before the checkpoint), clipped to $[0.5,2]$.
+
+### 5. Calibration (development days only, `qexec.market.calibration`)
+ADV = mean daily base volume; profiles on 96 fifteen-minute buckets; impact coefficient $\beta$ from the Kyle-style OLS through the origin $r_k=\beta\,SV_k/\bar V_k+e_k$ (1-minute log return in bps on signed volume over expected volume), with a day-block bootstrap standard error. The lot is a power of ten so the smallest order is at least 10,000 lots.
+
+### 6. Statistics
+Unit = window (symbol, day, start hour); the per-window difference is the mean over the four (size, horizon) cells of shortfall(strategy) − shortfall(baseline). Reported: mean, 95% percentile-bootstrap CI (10,000 resamples), a day-clustered bootstrap CI, two-sided Wilcoxon signed-rank p, and Holm-adjusted p over the 12 primary comparisons (the sensitivity family is Holm-adjusted jointly over its own comparisons).
+
+---
+
 ## 📐 Appendix: Key Mathematical Concepts Used
 
 ### 1. Linear Algebra (The Core)
